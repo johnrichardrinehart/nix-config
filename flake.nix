@@ -134,6 +134,9 @@
                     inherit inputs pkgs;
                     inherit (inputs.nixpkgs) lib;
                   };
+                  mycelium-tls = import ./nix/checks/mycelium-tls.nix {
+                    inherit pkgs;
+                  };
                   nebula-registry = import ./nix/checks/nebula-registry.nix {
                     inherit pkgs;
                     inherit (inputs.nixpkgs) lib;

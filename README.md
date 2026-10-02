@@ -60,6 +60,76 @@ Mycelium serves peers as `<peer>.mycelium.nebula.johnrinehart.dev` and
 `<peer>.mycelium.internal`. Peers route both zones to the lighthouse.
 Use `mycelium.registry` to configure its console port, upstream resolvers, and ACME credentials.
 
+### HTTP server certificates
+
+Enable `serverTLS` on each Mycelium HTTP server:
+
+```nix
+dev.johnrinehart.mycelium.serverTLS = {
+  enable = true;
+  name = "web";
+  group = "nginx";
+};
+```
+
+Set `name` to the host's Nebula certificate name.
+The module exposes `hostName = "<name>.mycelium.internal"`.
+The default runtime files are `/var/lib/mycelium-tls/server.crt` and `server.key`.
+Set `certFile` and `keyFile` to use existing deployment paths.
+Set `group` to the HTTP service group that reads the private key.
+The module maintains certificate mode `0444` and private key mode `0440`.
+
+The lighthouse registry automatically selects this private certificate through SNI.
+Its public hostname retains the ACME certificate.
+The registry still identifies each caller from its overlay source address.
+Missing configured certificates stop startup instead of disabling private HTTPS.
+
+Other HTTP servers use the same certificate paths.
+For Nginx, configure the application's private virtual host:
+
+```nix
+{ config, ... }:
+let
+  tls = config.dev.johnrinehart.mycelium.serverTLS;
+in
+{
+  services.nginx.virtualHosts.${tls.hostName} = {
+    onlySSL = true;
+    sslCertificate = tls.certFile;
+    sslCertificateKey = tls.keyFile;
+    listen = [{ addr = "10.77.0.7"; port = 443; ssl = true; }];
+    locations."/".proxyPass = "http://127.0.0.1:8080";
+  };
+}
+```
+
+Use the server's actual overlay address and application routes.
+Permit TCP 443 in the host's existing Mycelium inbound policy.
+Do not expose the private virtual host on a public interface.
+Native HTTP servers can use `certFile` and `keyFile` without an Nginx proxy.
+
+Issue certificates on the deployment machine:
+
+```console
+nix run .#mycelium-tls -- CA_CERT CA_KEY web.mycelium.internal OUTPUT_DIRECTORY
+```
+
+Append additional DNS names after `OUTPUT_DIRECTORY` when the server needs aliases.
+For an existing server, install its current key as `OUTPUT_DIRECTORY/server.key` before the first issuance.
+The signer creates a separate ECDSA P-256 server key and a server certificate valid for 365 days.
+It verifies each DNS name before replacing the certificate.
+Repeated issuance preserves the existing server key.
+Failed issuance preserves the existing certificate.
+
+Keep `CA_KEY` only on the deployment machine, outside Git and the Nix store.
+Install only `server.crt` and `server.key` on the HTTP server.
+Create their parent directory with access for the configured HTTP service group.
+Renew before the certificate expires.
+Repeat the signer command with the same output directory to retain the server key.
+Restart the HTTP service after certificate installation or renewal.
+Clients must trust the Mycelium TLS CA.
+
+
 ## SSH tmux sessions
 
 The laptop profile starts each interactive SSH shell in a new tmux session.

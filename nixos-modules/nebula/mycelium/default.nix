@@ -33,6 +33,7 @@ in
   imports = [
     ../dns.nix
     ../registry.nix
+    ./server-tls.nix
   ];
 
   options.dev.johnrinehart.mycelium = {

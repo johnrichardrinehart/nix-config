@@ -923,6 +923,28 @@ class HttpsServer(socketserver.ThreadingTCPServer):
         pass
 
 
+def tls_context(tls_config: dict[str, Any]) -> ssl.SSLContext:
+    """Preload the default certificate and hostname-specific SNI contexts."""
+    default = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    default.load_cert_chain(tls_config["certFile"], tls_config["keyFile"])
+    contexts: dict[str, ssl.SSLContext] = {}
+    for hostname, certificate in tls_config.get("extraCertificates", {}).items():
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(certificate["certFile"], certificate["keyFile"])
+        contexts[hostname.lower()] = context
+
+    def select_context(
+        connection: ssl.SSLSocket,
+        server_name: str | None,
+        initial_context: ssl.SSLContext,
+    ) -> None:
+        if server_name is not None:
+            connection.context = contexts.get(server_name.lower(), initial_context)
+
+    default.sni_callback = select_context
+    return default
+
+
 def https_handler(network: str, state: State) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "nebula-registry"
@@ -1035,9 +1057,10 @@ def main() -> None:
     upstreams = [(host, 53) for host in config.get("upstreamResolvers", [])]
 
     tls = None
-    if tls_config and Path(tls_config["certFile"]).exists():
-        tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        tls.load_cert_chain(tls_config["certFile"], tls_config["keyFile"])
+    if tls_config and (
+        tls_config.get("extraCertificates") or Path(tls_config["certFile"]).exists()
+    ):
+        tls = tls_context(tls_config)
     elif tls_config:
         log(
             f"no certificate at {tls_config['certFile']}; HTTPS disabled until it exists"

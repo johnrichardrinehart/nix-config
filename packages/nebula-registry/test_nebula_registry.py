@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 
+import http.client
+import json
 import socket
 import sqlite3
+import ssl
+import subprocess
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -10,6 +15,7 @@ from typing import Any
 from dnslib import QTYPE, RCODE, RR, DNSRecord
 
 from nebula_registry import (
+    HttpsServer,
     Observation,
     Registry,
     Snapshot,
@@ -21,10 +27,12 @@ from nebula_registry import (
     dns_records,
     find_caller,
     forward,
+    https_handler,
     is_local,
     parse_hostmap,
     parse_self,
     render_status,
+    tls_context,
     visible_peers,
 )
 
@@ -350,6 +358,189 @@ class VisibilityTests(unittest.TestCase):
         self.assertIsNone(
             find_caller([peer("framework", ["10.77.0.2/24"], 1)], "10.77.0.9")
         )
+
+
+class TlsTests(unittest.TestCase):
+    public_name = "lighthouse.mycelium.nebula.johnrinehart.dev"
+    private_name = "lighthouse.mycelium.internal"
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.directory = Path(temporary.name)
+        self.certificates: dict[str, dict[str, str]] = {}
+        self.identities: dict[str, bytes] = {}
+        for serial, hostname in enumerate((self.public_name, self.private_name), 1):
+            certificate = self.directory / f"{serial}.crt"
+            key = self.directory / f"{serial}.key"
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "ec",
+                    "-pkeyopt",
+                    "ec_paramgen_curve:prime256v1",
+                    "-nodes",
+                    "-days",
+                    "1",
+                    "-set_serial",
+                    str(serial),
+                    "-subj",
+                    f"/CN={hostname}",
+                    "-addext",
+                    f"subjectAltName=DNS:{hostname}",
+                    "-addext",
+                    "extendedKeyUsage=serverAuth",
+                    "-keyout",
+                    str(key),
+                    "-out",
+                    str(certificate),
+                ],
+                check=True,
+                capture_output=True,
+                timeout=10,
+            )
+            self.certificates[hostname] = {
+                "certFile": str(certificate),
+                "keyFile": str(key),
+            }
+            self.identities[hostname] = ssl.PEM_cert_to_DER_cert(
+                certificate.read_text()
+            )
+        self.config = {
+            **self.certificates[self.public_name],
+            "port": 0,
+            "extraCertificates": {
+                self.private_name.upper(): self.certificates[self.private_name]
+            },
+        }
+
+    def client(self, hostname: str, *, check_hostname: bool = True) -> ssl.SSLContext:
+        context = ssl.create_default_context(
+            cafile=self.certificates[hostname]["certFile"]
+        )
+        context.check_hostname = check_hostname
+        return context
+
+    def start_server(self, state: State | None = None) -> tuple[str, int]:
+        if state is None:
+            state = State()
+            state.set(
+                NETWORK,
+                Snapshot(
+                    [
+                        peer("local", ["127.0.0.1/32"], 1),
+                        peer("other-network", ["10.78.0.4/24"], 1),
+                    ],
+                    {},
+                    1,
+                ),
+            )
+        context = tls_context(self.config)
+        server = HttpsServer(("127.0.0.1", 0), https_handler(NETWORK, state))
+        self.addCleanup(server.server_close)
+        server.socket = context.wrap_socket(
+            server.socket, server_side=True, do_handshake_on_connect=False
+        )
+        thread = threading.Thread(
+            target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        )
+        thread.start()
+        self.addCleanup(thread.join, 3)
+        self.addCleanup(server.shutdown)
+        return server.server_address
+
+    def request(
+        self,
+        address: tuple[str, int],
+        context: ssl.SSLContext,
+        server_name: str | None,
+    ) -> tuple[bytes, int, bytes]:
+        with socket.create_connection(address, timeout=3) as raw:
+            with context.wrap_socket(raw, server_hostname=server_name) as connection:
+                identity = connection.getpeercert(binary_form=True)
+                connection.sendall(
+                    b"GET /api/peers HTTP/1.1\r\n"
+                    b"Host: unrelated.example\r\nConnection: close\r\n\r\n"
+                )
+                response = http.client.HTTPResponse(connection)
+                response.begin()
+                with response:
+                    return identity, response.status, response.read()
+
+    def test_public_and_private_names_validate_and_preserve_peer_authorization(
+        self,
+    ) -> None:
+        address = self.start_server()
+        for hostname in (
+            self.public_name,
+            self.private_name,
+            self.private_name.upper(),
+        ):
+            with self.subTest(hostname=hostname):
+                identity, status, body = self.request(
+                    address, self.client(hostname.lower()), hostname
+                )
+                self.assertEqual(identity, self.identities[hostname.lower()])
+                self.assertEqual(status, 200)
+                payload = json.loads(body)
+                self.assertEqual(payload["caller"], "local")
+                self.assertEqual([p["name"] for p in payload["peers"]], ["local"])
+
+    def test_unknown_and_absent_sni_use_preloaded_public_certificate(self) -> None:
+        public = self.client(self.public_name, check_hostname=False)
+        private = self.client(self.private_name)
+        address = self.start_server()
+        for certificate in self.certificates.values():
+            for filename in certificate.values():
+                Path(filename).unlink()
+        for hostname in (None, "unknown.mycelium.internal", self.public_name):
+            with self.subTest(hostname=hostname):
+                identity, status, _ = self.request(address, public, hostname)
+                self.assertEqual(identity, self.identities[self.public_name])
+                self.assertEqual(status, 200)
+        identity, status, _ = self.request(address, private, self.private_name)
+        self.assertEqual(identity, self.identities[self.private_name])
+        self.assertEqual(status, 200)
+
+    def test_trusted_certificate_does_not_validate_for_wrong_hostname(self) -> None:
+        address = self.start_server()
+        with self.assertRaises(ssl.SSLCertVerificationError) as failure:
+            self.request(
+                address, self.client(self.public_name), "wrong.mycelium.internal"
+            )
+        self.assertEqual(failure.exception.verify_code, 62)
+
+    def test_private_identity_requires_its_own_trusted_certificate(self) -> None:
+        address = self.start_server()
+        with self.assertRaises(ssl.SSLCertVerificationError):
+            self.request(address, self.client(self.public_name), self.private_name)
+
+    def test_unknown_peer_is_forbidden_even_with_trusted_private_tls(self) -> None:
+        address = self.start_server(State())
+        identity, status, body = self.request(
+            address, self.client(self.private_name), self.private_name
+        )
+        self.assertEqual(identity, self.identities[self.private_name])
+        self.assertEqual(status, 403)
+        self.assertEqual(body, b"unknown overlay peer\n")
+
+    def test_missing_configured_extra_certificate_or_key_fails_startup(self) -> None:
+        for field in ("certFile", "keyFile"):
+            with self.subTest(field=field):
+                config = {
+                    **self.config,
+                    "extraCertificates": {
+                        self.private_name: {
+                            **self.certificates[self.private_name],
+                            field: str(self.directory / "missing"),
+                        }
+                    },
+                }
+                with self.assertRaises(FileNotFoundError):
+                    tls_context(config)
 
 
 if __name__ == "__main__":

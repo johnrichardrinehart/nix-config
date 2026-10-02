@@ -37,6 +37,7 @@ let
       certFile = "/var/lib/acme/${certName}/fullchain.pem";
       keyFile = "/var/lib/acme/${certName}/key.pem";
       port = 443;
+      inherit (cfg.tls) extraCertificates;
     };
     networks = lib.mapAttrs (name: net: {
       inherit (net) address consolePort;
@@ -117,6 +118,24 @@ in
               type = lib.types.listOf lib.types.str;
               default = [ ];
               description = "Additional private DNS zones served by this registry.";
+            };
+          };
+        }
+      );
+    };
+    tls.extraCertificates = lib.mkOption {
+      default = { };
+      description = "Runtime TLS certificates selected by HTTPS SNI hostname.";
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            certFile = lib.mkOption {
+              type = lib.types.str;
+              description = "Path to the server certificate for this hostname.";
+            };
+            keyFile = lib.mkOption {
+              type = lib.types.str;
+              description = "Path to the private TLS key for this hostname.";
             };
           };
         }
