@@ -15,16 +15,50 @@ configuration repositories. It exposes:
 The companion host configuration repository is
 [`nixosConfigurations`](https://github.com/johnrichardrinehart/nixosConfigurations).
 
-## Nebula peer registry
+## Nebula and Mycelium
 
-`dev.johnrinehart.nebula.registry` tracks lighthouse peers and serves a private
-status page for each overlay. The page updates its counts and peer rows every
-second without a page reload. The registry poll interval controls when new
-Nebula observations become available.
+`nixosModules.nebula` imports `nixos-modules/nebula/default.nix`.
+Generic DNS and registry modules live in that directory.
+Mycelium policy lives in `nixos-modules/nebula/mycelium/`.
+`nixosModules.mycelium` imports only Mycelium and its generic dependencies.
 
-The registry also serves every peer as `<peer>.<network>.internal`. Nebula
-clients route that private zone to the lighthouse by default. Configure
-`aliases` on the registry and `dnsAliases` on clients for more private zones.
+Configure native networks through `services.nebula.networks.<name>`.
+Configure per-link DNS through `dev.johnrinehart.nebula.networks.<name>.dns`:
+set `enable`, `server`, and `domains`. Each network retains its own DNS routes.
+The generic modules do not select certificate groups, revocations, or TLS trust.
+
+Enable `dev.johnrinehart.mycelium.enable` and set `ca`, `cert`, and `key`.
+The default role is `peer`. Set `role = "lighthouse"` for the registry host.
+Mycelium configures discovery, relays, certificate groups, firewall rules,
+revocations, and the private DNS zones.
+Use `firewall.inbound` for host ports and `firewall.peerSshPorts` for outbound SSH.
+Set `firewall.allowPeerHTTPS = true` to permit HTTPS to other peers.
+
+Enabled Mycelium hosts trust the bundled public TLS CA by default:
+
+```nix
+dev.johnrinehart.mycelium.trustCA = {
+  enable = true;
+  bundle = ./mycelium-tls-ca.crt;
+};
+```
+
+Omit this assignment to use `nebula/mycelium/mycelium-tls-ca.crt`.
+Set `trustCA.enable = false` to exclude this module's CA from system trust.
+Independent `security.pki.certificateFiles` entries remain unchanged.
+The TLS CA differs from the Nebula CA supplied through `ca`.
+Never put private CA keys in the module bundle.
+
+`dev.johnrinehart.nebula.registry` tracks lighthouse peers and serves private
+DNS and a status page for each overlay. Configure its `parentDomain`,
+`networks`, and `acme` credentials. Configure additional private zones through
+each network's `aliases`. Callers configure their own Nebula admission rules.
+The page updates its counts and peer rows every second without a page reload.
+The registry poll interval controls when new Nebula observations become available.
+
+Mycelium serves peers as `<peer>.mycelium.nebula.johnrinehart.dev` and
+`<peer>.mycelium.internal`. Peers route both zones to the lighthouse.
+Use `mycelium.registry` to configure its console port, upstream resolvers, and ACME credentials.
 
 ## SSH tmux sessions
 

@@ -6,7 +6,7 @@
 }:
 let
   cfg = config.dev.johnrinehart.nebula.registry;
-  package = pkgs.callPackage ../packages/nebula-registry { };
+  package = pkgs.callPackage ../../packages/nebula-registry { };
   names = lib.attrNames cfg.networks;
   stateDir = "/var/lib/nebula-registry";
   # Nebula's console host key and per-network sshd config, readable by the
@@ -41,7 +41,7 @@ let
     networks = lib.mapAttrs (name: net: {
       inherit (net) address consolePort;
       domain = zone name;
-      aliases = [ "${name}.internal" ] ++ net.aliases;
+      inherit (net) aliases;
       site = site name;
     }) cfg.networks;
   };
@@ -90,18 +90,12 @@ in
     '';
     parentDomain = lib.mkOption {
       type = lib.types.str;
-      default = "nebula.johnrinehart.dev";
       description = "Each VPN is served as the zone `<network>.<parentDomain>`.";
     };
     siteLabel = lib.mkOption {
       type = lib.types.str;
       default = "lighthouse";
       description = "The HTTPS site is `<siteLabel>.<network>.<parentDomain>` on each VPN.";
-    };
-    peerGroup = lib.mkOption {
-      type = lib.types.str;
-      default = "peer";
-      description = "Certificate group allowed to use the registry's DNS and HTTPS.";
     };
     networks = lib.mkOption {
       default = { };
@@ -122,8 +116,7 @@ in
             aliases = lib.mkOption {
               type = lib.types.listOf lib.types.str;
               default = [ ];
-              example = [ "mycelium.internal" ];
-              description = "Additional private DNS zones beyond the default `<network>.internal` alias.";
+              description = "Additional private DNS zones served by this registry.";
             };
           };
         }
@@ -132,12 +125,10 @@ in
     acme = {
       dnsProvider = lib.mkOption {
         type = lib.types.str;
-        default = "cloudflare";
         description = "lego DNS provider for the DNS-01 challenge.";
       };
       environmentFile = lib.mkOption {
         type = lib.types.str;
-        default = "/var/lib/lighthouse-acme/cloudflare.env";
         description = ''
           Provider credentials (e.g. `CF_DNS_API_TOKEN=…`), placed on the host
           out of band. Until it exists the site serves a self-signed
@@ -272,42 +263,7 @@ in
               serviceConfig.ExecStart = lib.mkForce "${
                 lib.getExe' config.services.nebula.networks.${name}.package "nebula"
               } -config /etc/nebula/${name}.d";
-              # Hosts accept inbound traffic only from the peer group, so a
-              # lighthouse certificate carrying that group could open
-              # connections to every host. The certificate is installed out of
-              # band, so check it on every start.
-              serviceConfig.ExecStartPre = [
-                (pkgs.writeShellScript "nebula-${name}-lighthouse-not-peer" ''
-                  set -euo pipefail
-                  cert=${lib.escapeShellArg config.services.nebula.networks.${name}.cert}
-                  groups=$(${
-                    lib.getExe' config.services.nebula.networks.${name}.package "nebula-cert"
-                  } print -json -path "$cert" | ${lib.getExe pkgs.jq} -r '(if type == "array" then .[0] else . end).details.groups // [] | .[]')
-                  if printf '%s\n' "$groups" | grep -qxF ${lib.escapeShellArg cfg.peerGroup}; then
-                    echo "refusing to start: lighthouse certificate $cert is in group '${cfg.peerGroup}'; re-sign it without that group" >&2
-                    exit 1
-                  fi
-                '')
-              ];
             };
-          }) names
-        );
-        services.nebula.networks = lib.mkMerge (
-          map (name: {
-            ${name}.firewall.inbound = map (rule: rule // { group = cfg.peerGroup; }) [
-              {
-                port = "53";
-                proto = "udp";
-              }
-              {
-                port = "53";
-                proto = "tcp";
-              }
-              {
-                port = "443";
-                proto = "tcp";
-              }
-            ];
           }) names
         );
         networking.firewall.interfaces = lib.mkMerge (

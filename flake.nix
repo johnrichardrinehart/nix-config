@@ -130,6 +130,10 @@
                     inherit inputs pkgs;
                     inherit (inputs.nixpkgs) lib;
                   };
+                  mycelium-module = import ./nix/checks/mycelium-module.nix {
+                    inherit inputs pkgs;
+                    inherit (inputs.nixpkgs) lib;
+                  };
                   nebula-registry = import ./nix/checks/nebula-registry.nix {
                     inherit pkgs;
                     inherit (inputs.nixpkgs) lib;
@@ -155,10 +159,8 @@
             inherit inputs;
             inherit (inputs.nixpkgs) lib;
           };
-          # Self-contained, for hosts that do not import the whole JohnOS set
-          # (the lighthouse). Both are also part of `default`.
-          nebula-client = ./nixos-modules/nebula-client.nix;
-          nebula-registry = ./nixos-modules/nebula-registry.nix;
+          mycelium = ./nixos-modules/nebula/mycelium;
+          nebula = ./nixos-modules/nebula;
         };
 
         overlays = import ./overlays inputs;
