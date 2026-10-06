@@ -469,11 +469,6 @@ in
         # preventing oh-my-posh prompt garbling in scrollback.
         scrollback_pager less --raw-control-chars +INPUT_LINE_NUMBER
 
-        # Send legacy Ctrl+Z for claude-code suspend (kitty protocol workaround)
-        # See: https://github.com/anthropics/claude-code/issues/16895#issuecomment-3735957440
-        # TODO: Remove once https://github.com/anthropics/claude-code/issues/17377 is fixed
-        map ctrl+z send_text all \x1a
-
         # vim:ft=kitty
 
         ## name:     Catppuccin Kitty Macchiato
