@@ -79,11 +79,6 @@ in
           name = "pci-power-state-retry";
           patch = ../known_problems/thunderbolt-hibernate-displayport-failure/0001-PCI-Add-retry-logic-for-power-state-transitions.patch;
         }
-        # Fix NULL pointer dereference in Device Tree code when hotplug races with failed resume
-        {
-          name = "pci-of-null-check";
-          patch = ../known_problems/thunderbolt-hibernate-displayport-failure/0002-PCI-OF-Check-subordinate-before-accessing-bus-range.patch;
-        }
         # Enable PCI debug output (useful with dyndbg)
         {
           name = "pci-debug-config";
