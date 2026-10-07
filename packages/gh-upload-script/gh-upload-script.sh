@@ -11,6 +11,9 @@
 # in that one session, then logs out. The caller supplies the three variables; keep them
 # out of the shell's environment, e.g. by setting them only for this one command.
 #
+# Runs in quick succession work: each run records the 30 s authenticator step it used in
+# $XDG_STATE_HOME/gh-upload-script (default ~/.local/state), and the next run uses a later step.
+#
 # Flow (captured from the web editor over CDP):
 #   login  GET /login -> POST /session -> GET /sessions/two-factor/app -> POST TOTP code
 #   0. GET a repo page with a comment editor -> CSRF from input.js-data-upload-policy-url-csrf,
@@ -47,7 +50,7 @@ d=$(mktemp -d); chmod 700 "$d"; jar=$d/jar
 gh() { curl -sS -b "$jar" -c "$jar" "$@"; }
 
 # py form <html> <action-regex> [exclude...]: hidden/text inputs of the first matching form as name=value lines
-# py otp-field <html>: name of the one-time-code input; py totp: current code for $GH_UPLOAD_TOTP_SECRET
+# py otp-field <html>: name of the one-time-code input; py totp <step>: the code of a 30 s time step
 py() {
   python3 - "$@" <<'PY'
 import base64, hashlib, hmac, html, os, re, struct, sys, time
@@ -55,7 +58,7 @@ mode = sys.argv[1]
 if mode == "totp":
     s = os.environ["GH_UPLOAD_TOTP_SECRET"].replace(" ", "").upper()
     key = base64.b32decode(s + "=" * (-len(s) % 8))
-    h = hmac.new(key, struct.pack(">Q", int(time.time()) // 30), hashlib.sha1).digest()
+    h = hmac.new(key, struct.pack(">Q", int(sys.argv[2])), hashlib.sha1).digest()
     o = h[-1] & 15
     print(f"{(struct.unpack('>I', h[o:o + 4])[0] & 0x7FFFFFFF) % 1000000:06d}")
     sys.exit()
@@ -80,7 +83,39 @@ PY
 }
 form_args() { local kv; while IFS= read -r kv; do args+=(--data-urlencode "$kv"); done; }
 
+# --- TOTP time step ---
+# GitHub accepts each authenticator code once: after a login, it refuses the code of that 30 s
+# step and of every earlier step. It also accepts the code of the next step. So runs on this
+# machine record the last step they used, and a quick re-run uses the next step. A lock keeps
+# two runs from picking the same step.
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gh-upload-script
+mkdir -p "$state"
+account=$state/$(printf %s "$login" | tr '[:upper:]' '[:lower:]' | sha256sum | cut -c1-16)
+lock=$account.lock
+until mkdir "$lock" 2>/dev/null; do
+  holder=$(cat "$lock/pid" 2>/dev/null || true)
+  if [[ -n $holder ]] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$lock"; continue; fi
+  sleep 1
+done
+echo $$ >"$lock/pid"
+unlock() { [[ $(cat "$lock/pid" 2>/dev/null) != "$$" ]] || rm -rf "$lock"; }
+
+# pick_step: print the step to use; wait first if the next unused step is too far ahead.
+pick_step() {
+  local now last step wait
+  now=$(($(date +%s) / 30))
+  last=$(cat "$account.step" 2>/dev/null || echo 0)
+  step=$((last >= now ? last + 1 : now))
+  if ((step > now + 1)); then
+    wait=$(((step - 1) * 30 - $(date +%s)))
+    echo "gh-upload-script: an earlier run used the authenticator code of step $last; waiting ${wait}s until GitHub accepts the code of step $step" >&2
+    sleep "$wait"
+  fi
+  echo "$step"
+}
+
 logout() {
+  unlock
   if gh -o "$d/lo.html" https://github.com/logout && grep -q 'action="/logout"' "$d/lo.html"; then
     args=(); form_args < <(py form "$d/lo.html" '^/logout$')
     gh -o /dev/null "${args[@]}" https://github.com/logout || true
@@ -90,18 +125,27 @@ logout() {
 trap logout EXIT
 
 # --- login ---
-gh -o "$d/login.html" https://github.com/login
-args=(); form_args < <(py form "$d/login.html" '^/session$' login password) || die "no login form"
-args+=(--data-urlencode "login=$login" --data-urlencode "password=$GH_UPLOAD_PASSWORD")
-url=$(gh -L -o "$d/after.html" -w '%{url_effective}' "${args[@]}" https://github.com/session)
-case $url in
-  */sessions/two-factor*)
-    url=$(gh -L -o "$d/2fa.html" -w '%{url_effective}' https://github.com/sessions/two-factor/app)
-    field=$(py otp-field "$d/2fa.html") || die "no authenticator-app 2FA form at $url (app 2FA not enabled?)"
-    args=(); form_args < <(py form "$d/2fa.html" '^/sessions/two-factor' "$field") || die "no 2FA form"
-    args+=(--data-urlencode "$field=$(py totp)")
-    url=$(gh -L -o "$d/after.html" -w '%{url_effective}' "${args[@]}" https://github.com/sessions/two-factor) ;;
-esac
+# A rejected authenticator code means that a newer code was used elsewhere (a browser, another
+# tool, or a run without this machine's record). GitHub does not take a second code in the same
+# sign-in, so each attempt starts a new sign-in with the next step.
+for attempt in 1 2 3; do
+  : >"$jar"
+  gh -o "$d/login.html" https://github.com/login
+  args=(); form_args < <(py form "$d/login.html" '^/session$' login password) || die "no login form"
+  args+=(--data-urlencode "login=$login" --data-urlencode "password=$GH_UPLOAD_PASSWORD")
+  url=$(gh -L -o "$d/after.html" -w '%{url_effective}' "${args[@]}" https://github.com/session)
+  [[ $url == */sessions/two-factor* ]] || break
+  url=$(gh -L -o "$d/2fa.html" -w '%{url_effective}' https://github.com/sessions/two-factor/app)
+  field=$(py otp-field "$d/2fa.html") || die "no authenticator-app 2FA form at $url (app 2FA not enabled?)"
+  args=(); form_args < <(py form "$d/2fa.html" '^/sessions/two-factor' "$field") || die "no 2FA form"
+  step=$(pick_step)
+  args+=(--data-urlencode "$field=$(py totp "$step")")
+  url=$(gh -L -o "$d/after.html" -w '%{url_effective}' "${args[@]}" https://github.com/sessions/two-factor)
+  echo "$step" >"$account.step"
+  [[ $url == */sessions/two-factor* ]] || break
+  echo "gh-upload-script: GitHub rejected the authenticator code of step $step (attempt $attempt of 3)" >&2
+done
+[[ $url != */sessions/two-factor* ]] || die "GitHub rejected 3 authenticator codes. GitHub accepts each code once and refuses codes older than the newest one used. Check GH_UPLOAD_TOTP_SECRET and the clock of this machine."
 case $url in
   */sessions/verified-device*) die "GitHub wants an emailed device-verification code; not scriptable" ;;
   */login*|*/session|*/sessions/two-factor*) die "login rejected (at $url)" ;;
@@ -109,6 +153,7 @@ esac
 user=$(awk -F'\t' '$6 == "dotcom_user" {print $7}' "$jar")
 grep -q $'\tuser_session\t' "$jar" && [[ -n $user ]] || die "no session after login (at $url)"
 [[ $login == *@* || $(tr '[:upper:]' '[:lower:]' <<<"$user") == $(tr '[:upper:]' '[:lower:]' <<<"$login") ]] || die "logged in as $user, not $login"
+unlock
 
 # --- upload token: any repo page that renders the classic comment editor ---
 csrf= repo_id=
