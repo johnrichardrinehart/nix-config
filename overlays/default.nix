@@ -18,7 +18,10 @@ inputs: {
         // lib.mapAttrs (name: _: packageRoot + "/${name}") packageDirs;
       packageArgs = {
         brightness-sync.brightness-notify = johnPkgs.brightness-notify;
+        clipboard-store-notify.cliphist = johnPkgs.cliphist-master;
         clipboard-watch.clipboard-store-notify = johnPkgs.clipboard-store-notify;
+        cliphist-master.cliphist = prev.cliphist;
+        cliphist-picker.cliphist = johnPkgs.cliphist-master;
         codex-config-merged = {
           name = "codex-config-merged.toml";
           layers = [ ];

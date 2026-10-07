@@ -339,7 +339,7 @@ in
         pkgs.alacritty
         pkgs.brightnessctl
         cliphist-picker
-        pkgs.cliphist
+        pkgs.dev.johnrinehart.cliphist-master
         pkgs.dev.johnrinehart.fuzzel_1_15_0
         pkgs.grim
         pkgs.awww

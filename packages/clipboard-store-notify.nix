@@ -34,7 +34,8 @@ writeShellScriptBin "clipboard-store-notify" ''
       ;;
   esac
 
-  $cliphist store < "$tmpfile"
+  # cliphist master defaults to a 5 MB cap; full-resolution screenshots exceed it.
+  $cliphist -max-store-size 0 store < "$tmpfile"
 
   $mkdir -p "$state_dir"
   hash=$($sha256sum "$tmpfile" | $cut -d ' ' -f 1)
