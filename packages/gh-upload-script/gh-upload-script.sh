@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Upload files as GitHub user-attachments with curl only.
 #
-# Usage: gh-upload-script [-r <owner>/<repo>] <path>...
+# Usage: gh-upload-script [-r <owner>/<repo>] <path>...   (gh-upload-script --help for details)
 #   stdout: one line per path, "<path as given>\t<https://github.com/user-attachments/assets/...>"
 #   -r: repository the attachments belong to (they inherit its visibility);
 #       default: the GitHub `origin` of the git repository in the current directory.
@@ -26,10 +26,45 @@
 set -euo pipefail
 die() { echo "gh-upload-script: $*" >&2; exit 1; }
 
+usage() {
+  cat <<'EOF'
+usage: gh-upload-script [-r <owner>/<repo>] <path>...
+
+Upload files as GitHub user-attachments: the github.com/user-attachments/assets/... URLs
+that issue, PR and comment text embeds. Put a URL on its own line to embed it; a video
+then plays inline.
+
+Options:
+  -r <owner>/<repo>  the repository the attachments belong to; they get its visibility.
+                     Default: the GitHub `origin` of the git repository in the current
+                     directory.
+  -h, --help         show this help.
+
+Output: one line per path, "<path as given><TAB><URL>".
+
+Environment (required):
+  GH_UPLOAD_LOGIN        the GitHub user name or email
+  GH_UPLOAD_PASSWORD     the password of that account
+  GH_UPLOAD_TOTP_SECRET  the base32 seed of its authenticator-app 2FA
+Set them for this one command only, not in the shell's environment.
+
+The script logs in to the github.com web UI, uploads every path in that one session and
+logs out. GitHub accepts each authenticator code once. So each run records the 30 s code
+step it used in $XDG_STATE_HOME/gh-upload-script (default ~/.local/state/gh-upload-script),
+and the next run uses a later step. A run waits up to 30 s when an earlier run used the
+next step too.
+
+Example:
+  GH_UPLOAD_LOGIN=... GH_UPLOAD_PASSWORD=... GH_UPLOAD_TOTP_SECRET=... \
+    gh-upload-script -r octo-org/octo-repo demo.mp4 screenshot.png
+EOF
+}
+
 repo=
+case ${1:-} in -h | --help) usage; exit 0 ;; esac
 if [[ ${1:-} == -r ]]; then repo=${2:?-r needs <owner>/<repo>}; shift 2; fi
 [[ ${1:-} == -- ]] && shift
-(($#)) || { echo "usage: gh-upload-script [-r <owner>/<repo>] <path>..." >&2; exit 2; }
+(($#)) || { usage >&2; exit 2; }
 if [[ -z $repo ]]; then
   origin=$(git remote get-url origin 2>/dev/null) || die "not in a git repository with an origin; pass -r <owner>/<repo>"
   [[ $origin =~ github[^:/]*[:/]+([^/]+/[^/]+)$ ]] || die "origin is not a GitHub remote: $origin"
