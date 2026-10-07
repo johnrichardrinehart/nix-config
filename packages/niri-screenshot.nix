@@ -82,6 +82,10 @@ pkgs.writeShellScriptBin "niri-screenshot" ''
     set +e
     # GTK's dmabuf path leaves satty's GL canvas blank (white) under llvmpipe
     # (e.g. the QEMU guest); shm buffers render correctly everywhere.
+    # Technically obsolete for the mbp-apple-silicon guest: its
+    # udmabuf.size_limit_mb=256 kernel parameter (nixosConfigurations,
+    # nixos-configurations/mbp-apple-silicon/base.nix) fixes the cause, a
+    # canvas over udmabuf's default 64 MiB cap. Kept as a fallback.
     GDK_DISABLE=dmabuf $satty --fullscreen --disable-notifications --output-filename "$outfile" --copy-command "$wl_copy" -f "$input"
     status=$?
     set -e
