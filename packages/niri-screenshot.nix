@@ -8,6 +8,10 @@
 pkgs.writeShellScriptBin "niri-screenshot" ''
   set -euo pipefail
 
+  # Single instance: a held/stuck key must not stack slurp overlays.
+  exec 9>"''${XDG_RUNTIME_DIR:-/tmp}/niri-screenshot.lock"
+  ${lib.getExe' pkgs.util-linux "flock"} -n 9 || exit 0
+
   grim=${lib.getExe pkgs.grim}
   slurp=${lib.getExe pkgs.slurp}
   satty=${lib.getExe pkgs.satty}
@@ -148,13 +152,13 @@ pkgs.writeShellScriptBin "niri-screenshot" ''
       geometry=$($slurp) || exit 0
       tmpfile=$($mktemp /tmp/wormhole-screenshot-XXXXXX.png)
       $grim -g "$geometry" - | annotate_stdin "$tmpfile"
-      $wormhole_send "$tmpfile" &
+      $wormhole_send "$tmpfile" 9>&- &
       ;;
     "Fullscreen → Wormhole")
       output=$(get_focused_output)
       tmpfile=$($mktemp /tmp/wormhole-screenshot-XXXXXX.png)
       $grim -o "$output" - | annotate_stdin "$tmpfile"
-      $wormhole_send "$tmpfile" &
+      $wormhole_send "$tmpfile" 9>&- &
       ;;
   esac
 ''

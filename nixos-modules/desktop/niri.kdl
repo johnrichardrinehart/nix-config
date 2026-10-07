@@ -721,11 +721,11 @@ binds {
     // since it will switch twice upon pressing the hotkey (once by xkb, once by niri).
     // Mod+Space       { switch-layout "next"; }
     // Mod+Shift+Space { switch-layout "prev"; }
-    Mod+Shift+S {
+    Mod+Shift+S repeat=false {
         spawn "@niri_screenshot@" "region"
     }
     // Screenshot menu (fullscreen, delayed, wormhole send, etc.)
-    Mod+Ctrl+S {
+    Mod+Ctrl+S repeat=false {
         spawn "@niri_screenshot@"
     }
     // Send clipboard contents via wormhole
@@ -733,7 +733,7 @@ binds {
         spawn-sh "f=$(mktemp /tmp/wh-clip-XXXXXX) && wl-paste > \"$f\" && @wormhole_send@ \"$f\""
     }
     // Quick region screenshot + annotate + wormhole send
-    Mod+Alt+S {
+    Mod+Alt+S repeat=false {
         spawn "@niri_screenshot@" "region-wormhole"
     }
     // View clipboard history with automatic image previews.
