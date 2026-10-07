@@ -80,6 +80,7 @@ inputs: {
           inherit (johnPkgs) libmoonshine;
           onnxruntime = johnPkgs.onnxruntime-openvino;
         };
+        nebula.nebula = prev.nebula;
         niri-cycle-display-mode = {
           fuzzel = johnPkgs.fuzzel_1_15_0;
           inherit (final) niri;
