@@ -148,7 +148,7 @@ in
     lib.mkMerge [
       {
         services.nebula.networks.${network} = {
-          package = pkgs.dev.johnrinehart.nebula;
+          package = pkgs.callPackage ../../../packages/nebula.nix { };
           inherit (cfg) ca cert key;
           settings = lib.optionalAttrs (cfg.blocklist != [ ]) { pki.blocklist = cfg.blocklist; };
         };
