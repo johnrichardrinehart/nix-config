@@ -1001,10 +1001,21 @@ def https_handler(network: str, state: State) -> type[BaseHTTPRequestHandler]:
 
 
 class Console:
-    """Nebula's debug SSH console for one network, bound to localhost."""
+    """Nebula's debug SSH console for one network, bound to localhost.
+
+    Commands share one multiplexed SSH connection (ControlMaster), so polling
+    opens a channel per command, not a connection. Nebula < 1.11 leaks every
+    console connection it serves; a persistent one bounds that to one.
+    """
 
     def __init__(
-        self, ssh: str, key: Path, known_hosts: Path, user: str, port: int
+        self,
+        ssh: str,
+        key: Path,
+        known_hosts: Path,
+        control_path: Path,
+        user: str,
+        port: int,
     ) -> None:
         self.command = [
             ssh,
@@ -1024,6 +1035,14 @@ class Console:
             "StrictHostKeyChecking=yes",
             "-o",
             "ConnectTimeout=5",
+            "-o",
+            "ControlMaster=auto",
+            "-o",
+            f"ControlPath={control_path}",
+            "-o",
+            "ControlPersist=yes",
+            "-o",
+            "ServerAliveInterval=15",
             f"{user}@127.0.0.1",
         ]
 
@@ -1099,6 +1118,7 @@ def main() -> None:
             config["ssh"],
             state_dir / "client_key",
             state_dir / "known_hosts",
+            state_dir / f"console-{network}.sock",
             config["consoleUser"],
             net["consolePort"],
         )
