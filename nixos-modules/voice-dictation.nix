@@ -208,7 +208,6 @@ in
         inherit (cfg) startPhrase;
         inherit (cfg) stopPhrase;
         moonshineVoice = pkgs.dev.johnrinehart.moonshine-voice.override {
-          onnxruntime = onnxruntimePackage;
           libmoonshine = pkgs.dev.johnrinehart.libmoonshine.override {
             onnxruntime = onnxruntimePackage;
             inherit (cfg) executionProviders;

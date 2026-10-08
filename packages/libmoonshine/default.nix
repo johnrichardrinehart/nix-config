@@ -31,7 +31,7 @@
   },
 }:
 let
-  version = "0.1.5";
+  version = "0.1.6";
   providerNames = [
     "cpu"
     "openvino"
@@ -86,7 +86,7 @@ stdenv.mkDerivation {
     repo = "moonshine";
     tag = "v${version}";
     sparseCheckout = [ "core" ];
-    hash = "sha256-Zl1wOevuOGcvL6in1WOClF2kSPMVXyLaIwzjUjjDO1Y=";
+    hash = "sha256-NZdIb+ftIP3JSEhz8nk60xYt56Bh3T9sBK/GHLvICQo=";
   };
 
   patches = [ ./runtime-diarization-models.patch ];

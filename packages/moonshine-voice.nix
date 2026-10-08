@@ -1,38 +1,37 @@
 # moonshine-voice Python package using our custom libmoonshine.so
 # built with OpenVINO GPU support.
+#
+# Built from the upstream source tree rather than the PyPI wheel: the wheel is
+# just these pure-Python ctypes bindings plus a bundled libmoonshine.so and
+# libonnxruntime, both of which we replace, and PyPI lags the GitHub releases.
 {
   lib,
   python3,
-  fetchurl,
-  autoPatchelfHook,
-  stdenv,
+  fetchFromGitHub,
   libmoonshine,
-  onnxruntime,
 }:
-let
-  pname = "moonshine-voice";
-  version = "0.1.5";
-
-  wheel = fetchurl {
-    url = "https://files.pythonhosted.org/packages/a9/9d/228f738b48e0e7cc1de97c3f842b5470c6a3c5f7a0bffbf13c3d00eefb87/moonshine_voice-${version}-py3-none-manylinux_2_34_x86_64.whl";
-    hash = "sha256-HtngzPlL5IRdaef6hi3PTItYAadYeWlmSUxpT0gYRJY=";
-  };
-in
 python3.pkgs.buildPythonPackage {
-  inherit pname version;
-  format = "wheel";
+  pname = "moonshine-voice";
+  # The bindings load libmoonshine through its C ABI, so keep them in lockstep.
+  inherit (libmoonshine) version;
+  pyproject = true;
 
-  src = wheel;
+  src = fetchFromGitHub {
+    owner = "moonshine-ai";
+    repo = "moonshine";
+    tag = "v${libmoonshine.version}";
+    sparseCheckout = [ "language-bindings/python" ];
+    hash = "sha256-SgqRQYdIot8aXLdfri6KZvGShV6YBylVI8mt00NBSjk=";
+  };
 
-  nativeBuildInputs = [
-    autoPatchelfHook
+  sourceRoot = "source/language-bindings/python";
+
+  build-system = with python3.pkgs; [
+    setuptools
+    wheel
   ];
 
-  buildInputs = [
-    stdenv.cc.cc.lib # libstdc++
-  ];
-
-  propagatedBuildInputs = with python3.pkgs; [
+  dependencies = with python3.pkgs; [
     numpy
     sounddevice
     requests
@@ -42,36 +41,27 @@ python3.pkgs.buildPythonPackage {
     google-crc32c
   ];
 
-  # Replace the bundled native libs with our GPU-enabled build.
-  postInstall = ''
-    site=$out/${python3.sitePackages}
-
-    # Replace bundled libmoonshine.so with our OpenVINO-enabled build
-    rm -f $site/moonshine_voice/libmoonshine.so
-    ln -s ${libmoonshine}/lib/libmoonshine.so $site/moonshine_voice/libmoonshine.so
-
-    # Replace bundled libonnxruntime with the system one (has OpenVINO EP)
-    rm -f $site/moonshine_voice.libs/libonnxruntime*.so*
-    ln -s ${onnxruntime}/lib/libonnxruntime.so $site/moonshine_voice.libs/libonnxruntime.so.1
-
-    # Also remove the bundled macOS dylibs
-    rm -f $site/moonshine_voice/libmoonshine.dylib
-    rm -f $site/moonshine_voice/libonnxruntime*.dylib
-
-    # Performance: _parse_transcript runs on every update_transcription (~10/s)
-    # and rebuilds every accumulated line. Per line it copies the raw audio
-    # samples out of C one element at a time via ctypes (audio_data =
-    # list(audio_array)) plus per-word timing structs. That cost grows with the
-    # transcript, so a long session falls behind real time and dictation lags.
-    # Our consumer reads only line.text and the boolean flags, so skip both
-    # copies (audio_data and words stay None).
-    substituteInPlace $site/moonshine_voice/transcriber.py \
+  # Performance: _parse_transcript runs on every update_transcription (~10/s)
+  # and rebuilds every accumulated line. Per line it copies the raw audio
+  # samples out of C one element at a time via ctypes (audio_data =
+  # list(audio_array)) plus per-word timing structs. That cost grows with the
+  # transcript, so a long session falls behind real time and dictation lags.
+  # Our consumer reads only line.text and the boolean flags, so skip both
+  # copies (audio_data and words stay None).
+  postPatch = ''
+    substituteInPlace src/moonshine_voice/transcriber.py \
       --replace-fail \
         'if line_c.audio_data and line_c.audio_data_count > 0:' \
         'if False:  # JohnOS: skip unused audio_data copy (O(samples)/line/update)' \
       --replace-fail \
         'if line_c.words and line_c.word_count > 0:' \
         'if False:  # JohnOS: skip unused per-word timing copy'
+  '';
+
+  # moonshine_api.py loads libmoonshine.so from the package directory first;
+  # point it at our OpenVINO-enabled build (which carries its own ORT rpath).
+  postInstall = ''
+    ln -s ${libmoonshine}/lib/libmoonshine.so $out/${python3.sitePackages}/moonshine_voice/libmoonshine.so
   '';
 
   pythonImportsCheck = [ "moonshine_voice" ];

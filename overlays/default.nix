@@ -81,7 +81,6 @@ inputs: {
         };
         moonshine-voice = {
           inherit (johnPkgs) libmoonshine;
-          onnxruntime = johnPkgs.onnxruntime-openvino;
         };
         nebula.nebula = prev.nebula;
         niri-cycle-display-mode = {

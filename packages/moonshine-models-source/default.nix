@@ -40,7 +40,7 @@ let
 in
 stdenvNoCC.mkDerivation {
   pname = "moonshine-models-source";
-  version = "0.1.5";
+  version = "0.1.6";
 
   dontUnpack = true;
   dontBuild = true;
