@@ -44,7 +44,6 @@ in
         patch = null;
         structuredExtraConfig = with lib.kernel; {
           PCI_DEBUG = yes;
-          DYNAMIC_DEBUG = yes;
         };
       }
     ];
