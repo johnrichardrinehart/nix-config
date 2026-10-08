@@ -6,6 +6,7 @@
 }:
 let
   cfg = config.dev.johnrinehart.tmux.clipboard;
+  extendedKeysCfg = config.dev.johnrinehart.tmux.extendedKeys;
 
   terminalFeaturePatterns = if cfg.assumeAllTerminals then [ "*" ] else cfg.terminalPatterns;
 
@@ -74,30 +75,54 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = !cfg.assumeAllTerminals || cfg.terminalPatterns == [ ];
-        message = ''
-          dev.johnrinehart.tmux.clipboard.assumeAllTerminals is mutually
-          exclusive with dev.johnrinehart.tmux.clipboard.terminalPatterns.
-          Set terminalPatterns = [] when assumeAllTerminals = true.
-        '';
-      }
-    ];
+  options.dev.johnrinehart.tmux.extendedKeys.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = ''
+      Let applications in tmux panes request extended key reports.
 
-    programs.tmux = {
-      enable = lib.mkDefault true;
-      package = lib.mkDefault pkgs.dev.johnrinehart.tmux;
-      secureSocket = lib.mkDefault false;
-      extraConfig = lib.mkAfter ''
-        # Enable OSC 52 clipboard writes through tmux, including nested tmux.
-        # The local terminal emulator must support and allow OSC 52.
-        set -s set-clipboard on
-        ${lib.optionalString (
-          terminalFeaturePatterns != [ ]
-        ) "set -as terminal-features ',${terminalFeatures}'"}
-      '';
-    };
+      When enabled, tmux sets extended-keys to on. A pane application that
+      requests xterm modifyOtherKeys receives modified keys such as
+      Shift+Enter as distinct sequences, for example ESC [27;2;13~.
+      Applications that do not request the mode continue to receive the
+      standard keys, so Shift+Enter stays a plain carriage return.
+    '';
   };
+
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      assertions = [
+        {
+          assertion = !cfg.assumeAllTerminals || cfg.terminalPatterns == [ ];
+          message = ''
+            dev.johnrinehart.tmux.clipboard.assumeAllTerminals is mutually
+            exclusive with dev.johnrinehart.tmux.clipboard.terminalPatterns.
+            Set terminalPatterns = [] when assumeAllTerminals = true.
+          '';
+        }
+      ];
+
+      programs.tmux = {
+        enable = lib.mkDefault true;
+        package = lib.mkDefault pkgs.dev.johnrinehart.tmux;
+        secureSocket = lib.mkDefault false;
+        extraConfig = lib.mkAfter ''
+          # Enable OSC 52 clipboard writes through tmux, including nested tmux.
+          # The local terminal emulator must support and allow OSC 52.
+          set -s set-clipboard on
+          ${lib.optionalString (
+            terminalFeaturePatterns != [ ]
+          ) "set -as terminal-features ',${terminalFeatures}'"}
+        '';
+      };
+    })
+
+    (lib.mkIf extendedKeysCfg.enable {
+      programs.tmux.extraConfig = lib.mkAfter ''
+        # Pass modified keys such as Shift+Enter to pane applications that
+        # request xterm modifyOtherKeys.
+        set -s extended-keys on
+      '';
+    })
+  ];
 }
