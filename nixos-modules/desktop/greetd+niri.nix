@@ -26,6 +26,7 @@ let
     ./0000-version-report-downstream-patches.patch
     ./0001-overview-allow-targeting-active-output.patch
     ./0002-screencast-accept-remote-desktop-sessions.patch
+    ./0004-input-support-per-device-keyboard-settings.patch
   ];
   niriDependencyPatches = [
     ./0003-niri-pin-smithay-drm-extras-crtc-recovery.patch

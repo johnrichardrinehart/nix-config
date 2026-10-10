@@ -21,6 +21,12 @@ input {
         // Enable numlock on startup, omitting this setting disables it.
         numlock
     }
+    // The SliceMK firmware emits the selected layout directly.
+    keyboard "ZMK Project SliceMK ErgoDox Keyboard" {
+        xkb {
+            layout "us"
+        }
+    }
     // Next sections include libinput settings.
     // Omitting settings disables them, or leaves them at their default values.
     // All commented-out settings here are examples, not defaults.
