@@ -144,6 +144,13 @@ conversion and the session setup. Before switching the system, load the model
 and transcribe an audio clip. The package's unit tests do not exercise model
 inference.
 
+The Pulse capture backend requests 100 ms recording latency and a 20 ms
+processing interval. These settings are part of the pinned dictation package;
+no runtime service override is needed. After switching, use the normal
+RightCtrl leader and “start dictation” command to check first-text latency.
+Leader-key monitoring also survives USB and Bluetooth keyboard reconnects;
+there is no need to restart the service after changing keyboards.
+
 ## Nebula lighthouse installation
 
 `nixosConfigurations.nebula-lighthouse` defines the x86_64 DigitalOcean
