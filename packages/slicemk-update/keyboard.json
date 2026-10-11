@@ -185,7 +185,7 @@
           "Name": "",
           "Behavior": "&kp",
           "Notes": "",
-          "Args": ["DELETE"]
+          "Args": ["SLASH"]
         },
         {
           "Name": "Tab",
@@ -257,7 +257,7 @@
           "Name": "",
           "Behavior": "&kp",
           "Notes": "",
-          "Args": ["SINGLE_QUOTE"]
+          "Args": ["DELETE"]
         },
         {
           "Name": "",
