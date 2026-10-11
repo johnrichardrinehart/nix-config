@@ -28,7 +28,14 @@ let
     p.sounddevice
     p.numpy
     p.dbus-next
-    p.evdev
+    (p.evdev.overrideAttrs (old: {
+      # evdev's custom patchPhase does not apply its patches attribute.
+      src = pkgs.applyPatches {
+        name = "evdev-key-state-source";
+        inherit (old) src;
+        patches = [ ./evdev-key-state-errors.patch ];
+      };
+    }))
   ]);
 
   pythonPath = "${dictationLib}";

@@ -547,55 +547,90 @@ def _watch_leader_key():
         )
         return
 
-    devices = []
-    for path in evdev.list_devices():
-        try:
-            device = evdev.InputDevice(path)
-        except OSError:
-            continue
-        if _supports_key(device, key_code):
-            devices.append(device)
-        else:
-            device.close()
+    devices = {}
+    next_scan = 0.0
+    missing_notified = False
 
-    if not devices:
-        log_msg(f"no readable input device exposes leader key {LEADER_KEY}")
-        notify_msg(
-            "Moonshine leader key unavailable",
-            f"No readable input device exposes {LEADER_KEY}",
-            timeout=5000,
-            urgency="critical",
-        )
-        return
+    def discard(device):
+        nonlocal next_scan
+        devices.pop(device.path, None)
+        device.close()
+        next_scan = 0.0
+        log_msg(f"leader input disconnected: {device.path} ({device.name})")
 
-    _leader_available = True
-    device_names = ", ".join(f"{device.path} ({device.name})" for device in devices)
-    log_msg(f"watching leader key {LEADER_KEY} on {device_names}")
-    while True:
-        try:
-            readable, _, _ = select.select(devices, [], [], 0.25)
-        except OSError:
-            break
-        now = time.time()
-        for device in devices:
-            try:
-                if key_code in device.active_keys():
+    try:
+        while not _shutting_down:
+            if time.monotonic() >= next_scan:
+                for path in evdev.list_devices():
+                    if path in devices:
+                        continue
+                    try:
+                        device = evdev.InputDevice(path)
+                    except OSError:
+                        continue
+                    if _supports_key(device, key_code):
+                        devices[path] = device
+                        log_msg(
+                            f"watching leader key {LEADER_KEY} on "
+                            f"{device.path} ({device.name})"
+                        )
+                    else:
+                        device.close()
+                next_scan = time.monotonic() + 1.0
+                if not devices and not missing_notified:
+                    log_msg(f"no readable input device exposes leader key {LEADER_KEY}")
+                    notify_msg(
+                        "Moonshine leader key unavailable",
+                        f"No readable input device exposes {LEADER_KEY}",
+                        timeout=5000,
+                        urgency="critical",
+                    )
+                    missing_notified = True
+                elif devices:
+                    missing_notified = False
+
+            _leader_available = bool(devices)
+            if devices:
+                try:
+                    readable, _, _ = select.select(list(devices.values()), [], [], 0.25)
+                except OSError:
+                    readable = []
+            else:
+                time.sleep(0.25)
+                continue
+
+            now = time.time()
+            for device in list(devices.values()):
+                try:
+                    held = key_code in device.active_keys()
+                except OSError:
+                    discard(device)
+                    continue
+                if held:
                     _leader_last_seen = now
                     _leader_recent_until = now + LEADER_GRACE_SECONDS
-            except OSError:
-                pass
-        for device in readable:
-            try:
-                for event in device.read():
-                    if event.type == evdev.ecodes.EV_KEY and event.code == key_code:
-                        if event.value:
-                            now = time.time()
-                            _leader_last_seen = now
-                            _leader_recent_until = now + LEADER_GRACE_SECONDS
-                            if event.value == 1:
-                                log_msg(f"saw leader key {LEADER_KEY}")
-            except OSError:
-                pass
+
+            for device in readable:
+                if device.path not in devices:
+                    continue
+                try:
+                    for event in device.read():
+                        if event.type == evdev.ecodes.EV_KEY and event.code == key_code:
+                            if event.value:
+                                now = time.time()
+                                _leader_last_seen = now
+                                _leader_recent_until = now + LEADER_GRACE_SECONDS
+                                if event.value == 1:
+                                    log_msg(f"saw leader key {LEADER_KEY}")
+                except BlockingIOError:
+                    pass
+                except OSError:
+                    discard(device)
+            _leader_available = bool(devices)
+    finally:
+        _leader_available = False
+        for device in devices.values():
+            device.close()
 
 
 if LEADER_KEY is not None:

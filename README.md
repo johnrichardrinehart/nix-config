@@ -43,6 +43,11 @@ recording latency and a 20 ms processing interval from `pacat`. Reading
 100 ms chunks alone does not reduce `pacat`'s default two-second recording
 fragment, which delays the first visible text.
 
+Leader-key monitoring discovers newly connected keyboards once per second and
+removes disconnected devices without stopping the watcher. The dictation
+package patches evdev's key-state ioctl to report an `OSError` on device loss,
+so unplugging one keyboard cannot disable the leader key on all keyboards.
+
 ## Nebula and Mycelium
 
 `nixosModules.nebula` imports `nixos-modules/nebula/default.nix`.
