@@ -24,7 +24,10 @@
 #   3. PUT  /upload/assets/<id>     -> authenticity_token=asset_upload_authenticity_token  (200)
 #   logout POST /logout
 set -euo pipefail
-die() { echo "gh-upload-script: $*" >&2; exit 1; }
+die() {
+  echo "gh-upload-script: $*" >&2
+  exit 1
+}
 
 usage() {
   cat <<'EOF'
@@ -61,10 +64,20 @@ EOF
 }
 
 repo=
-case ${1:-} in -h | --help) usage; exit 0 ;; esac
-if [[ ${1:-} == -r ]]; then repo=${2:?-r needs <owner>/<repo>}; shift 2; fi
+case ${1:-} in -h | --help)
+  usage
+  exit 0
+  ;;
+esac
+if [[ ${1:-} == -r ]]; then
+  repo=${2:?-r needs <owner>/<repo>}
+  shift 2
+fi
 [[ ${1:-} == -- ]] && shift
-(($#)) || { usage >&2; exit 2; }
+(($#)) || {
+  usage >&2
+  exit 2
+}
 if [[ -z $repo ]]; then
   origin=$(git remote get-url origin 2>/dev/null) || die "not in a git repository with an origin; pass -r <owner>/<repo>"
   [[ $origin =~ github[^:/]*[:/]+([^/]+/[^/]+)$ ]] || die "origin is not a GitHub remote: $origin"
@@ -81,7 +94,9 @@ for v in GH_UPLOAD_LOGIN GH_UPLOAD_PASSWORD GH_UPLOAD_TOTP_SECRET; do
 done
 login=$GH_UPLOAD_LOGIN
 
-d=$(mktemp -d); chmod 700 "$d"; jar=$d/jar
+d=$(mktemp -d)
+chmod 700 "$d"
+jar=$d/jar
 gh() { curl -sS -b "$jar" -c "$jar" "$@"; }
 
 # py form <html> <action-regex> [exclude...]: hidden/text inputs of the first matching form as name=value lines
@@ -116,7 +131,10 @@ if mode == "form":
     sys.exit(1)
 PY
 }
-form_args() { local kv; while IFS= read -r kv; do args+=(--data-urlencode "$kv"); done; }
+form_args() {
+  local kv
+  while IFS= read -r kv; do args+=(--data-urlencode "$kv"); done
+}
 
 # --- TOTP time step ---
 # GitHub accepts each authenticator code once: after a login, it refuses the code of that 30 s
@@ -129,7 +147,10 @@ account=$state/$(printf %s "$login" | tr '[:upper:]' '[:lower:]' | sha256sum | c
 lock=$account.lock
 until mkdir "$lock" 2>/dev/null; do
   holder=$(cat "$lock/pid" 2>/dev/null || true)
-  if [[ -n $holder ]] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$lock"; continue; fi
+  if [[ -n $holder ]] && ! kill -0 "$holder" 2>/dev/null; then
+    rm -rf "$lock"
+    continue
+  fi
   sleep 1
 done
 echo $$ >"$lock/pid"
@@ -152,7 +173,8 @@ pick_step() {
 logout() {
   unlock
   if gh -o "$d/lo.html" https://github.com/logout && grep -q 'action="/logout"' "$d/lo.html"; then
-    args=(); form_args < <(py form "$d/lo.html" '^/logout$')
+    args=()
+    form_args < <(py form "$d/lo.html" '^/logout$')
     gh -o /dev/null "${args[@]}" https://github.com/logout || true
   fi
   rm -rf "$d"
@@ -166,13 +188,15 @@ trap logout EXIT
 for attempt in 1 2 3; do
   : >"$jar"
   gh -o "$d/login.html" https://github.com/login
-  args=(); form_args < <(py form "$d/login.html" '^/session$' login password) || die "no login form"
+  args=()
+  form_args < <(py form "$d/login.html" '^/session$' login password) || die "no login form"
   args+=(--data-urlencode "login=$login" --data-urlencode "password=$GH_UPLOAD_PASSWORD")
   url=$(gh -L -o "$d/after.html" -w '%{url_effective}' "${args[@]}" https://github.com/session)
   [[ $url == */sessions/two-factor* ]] || break
   url=$(gh -L -o "$d/2fa.html" -w '%{url_effective}' https://github.com/sessions/two-factor/app)
   field=$(py otp-field "$d/2fa.html") || die "no authenticator-app 2FA form at $url (app 2FA not enabled?)"
-  args=(); form_args < <(py form "$d/2fa.html" '^/sessions/two-factor' "$field") || die "no 2FA form"
+  args=()
+  form_args < <(py form "$d/2fa.html" '^/sessions/two-factor' "$field") || die "no 2FA form"
   step=$(pick_step)
   args+=(--data-urlencode "$field=$(py totp "$step")")
   url=$(gh -L -o "$d/after.html" -w '%{url_effective}' "${args[@]}" https://github.com/sessions/two-factor)
@@ -182,8 +206,8 @@ for attempt in 1 2 3; do
 done
 [[ $url != */sessions/two-factor* ]] || die "GitHub rejected 3 authenticator codes. GitHub accepts each code once and refuses codes older than the newest one used. Check GH_UPLOAD_TOTP_SECRET and the clock of this machine."
 case $url in
-  */sessions/verified-device*) die "GitHub wants an emailed device-verification code; not scriptable" ;;
-  */login*|*/session|*/sessions/two-factor*) die "login rejected (at $url)" ;;
+*/sessions/verified-device*) die "GitHub wants an emailed device-verification code; not scriptable" ;;
+*/login* | */session | */sessions/two-factor*) die "login rejected (at $url)" ;;
 esac
 user=$(awk -F'\t' '$6 == "dotcom_user" {print $7}' "$jar")
 grep -q $'\tuser_session\t' "$jar" && [[ -n $user ]] || die "no session after login (at $url)"
@@ -191,7 +215,7 @@ grep -q $'\tuser_session\t' "$jar" && [[ -n $user ]] || die "no session after lo
 unlock
 
 # --- upload token: any repo page that renders the classic comment editor ---
-csrf= repo_id=
+csrf='' repo_id=''
 for p in releases/new issues/1; do
   url=$(gh -L -o "$d/page.html" -w '%{url_effective}' "https://github.com/$repo/$p")
   [[ $url == */sso* ]] && die "org requires SAML SSO re-auth ($url)"
@@ -204,11 +228,14 @@ xhr=(-H 'Accept: application/json' -H 'X-Requested-With: XMLHttpRequest' -H 'Ori
 
 # --- uploads ---
 for p; do
-  name=$(basename "$p"); size=$(wc -c <"$p" | tr -d " "); ctype=$(file -b --mime-type "$p")
+  name=$(basename "$p")
+  size=$(wc -c <"$p" | tr -d " ")
+  ctype=$(file -b --mime-type "$p")
   gh --fail-with-body "${xhr[@]}" -o "$d/policy.json" https://github.com/upload/policies/assets \
-    -F "name=$name" -F "size=$size" -F "content_type=$ctype" -F "authenticity_token=$csrf" -F "repository_id=$repo_id" \
-    || die "upload policy rejected for $p: $(head -c 300 "$d/policy.json")"
-  s3=(); while IFS= read -r kv; do s3+=(--form-string "$kv"); done < <(jq -r '.form | to_entries[] | "\(.key)=\(.value)"' "$d/policy.json")
+    -F "name=$name" -F "size=$size" -F "content_type=$ctype" -F "authenticity_token=$csrf" -F "repository_id=$repo_id" ||
+    die "upload policy rejected for $p: $(head -c 300 "$d/policy.json")"
+  s3=()
+  while IFS= read -r kv; do s3+=(--form-string "$kv"); done < <(jq -r '.form | to_entries[] | "\(.key)=\(.value)"' "$d/policy.json")
   curl -sS --fail-with-body -o /dev/null "$(jq -r .upload_url "$d/policy.json")" "${s3[@]}" -F "file=@$p;type=$ctype;filename=$name"
   gh --fail-with-body -X PUT "${xhr[@]}" -o "$d/final.json" "https://github.com$(jq -r .asset_upload_url "$d/policy.json")" \
     -F "authenticity_token=$(jq -r .asset_upload_authenticity_token "$d/policy.json")"
