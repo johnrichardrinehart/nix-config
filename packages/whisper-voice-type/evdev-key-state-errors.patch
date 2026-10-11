@@ -1,0 +1,14 @@
+diff --git a/src/evdev/input.c b/src/evdev/input.c
+--- a/src/evdev/input.c
++++ b/src/evdev/input.c
+@@ -400,7 +400,9 @@ ioctl_EVIOCG_bits(PyObject *self, PyObject *args)
+     }
+ 
+-    if (ret == -1)
++    if (ret == -1) {
++        PyErr_SetFromErrno(PyExc_OSError);
+         return NULL;
++    }
+ 
+     PyObject* res = PyList_New(0);
+     for (int i=0; i<=max; i++) {
