@@ -84,6 +84,12 @@ Downstream flakes extend the host with
 provisioner as a package, so `nix build .#provision-mac` builds it without
 running it). Per-user additions go under `home-manager.users.john`.
 
+## Framework Bluetooth
+
+Framework disables the Bluetooth idle timer so keyboards can reconnect after sleep.
+BlueZ automatically enables the adapter through `[Policy] AutoEnable=true`.
+Framework does not power-cycle the adapter during resume.
+
 ## Framework voice dictation
 
 `framework` uses converted ONNX Moonshine models with OpenVINO. The

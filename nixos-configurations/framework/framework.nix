@@ -174,9 +174,8 @@ in
     deferNetworking.enable = true;
     deferNetworking.delaySeconds = 3;
 
-    # MEDIUM impact (~5-10s): Defer bluetooth reconnection attempts
-    deferBluetooth.enable = true;
-    deferBluetooth.delaySeconds = 5;
+    # Keep Bluetooth available while the keyboard reconnects.
+    deferBluetooth.enable = false;
 
     # MEDIUM impact (~10-15s): Prioritize compositor over system services
     prioritizeUserSession.enable = true;

@@ -29,6 +29,9 @@ in
 
   dev.johnrinehart.profiles.laptop.enable = true;
 
+  # Keep the radio available while the Bluetooth keyboard reconnects.
+  dev.johnrinehart.bluetooth.autoSuspend.enable = false;
+
   fonts.fontconfig.enable = lib.mkForce true;
 
   dev.johnrinehart.firmware.framework-ec.features = [ "F9-display-toggle" ];
