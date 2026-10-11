@@ -2,7 +2,7 @@
   description = "Reusable JohnOS NixOS modules, overlays, and packages";
 
   inputs = {
-    nixpkgs.url = "github:johnrichardrinehart/nixpkgs?ref=rock-5c-nixos-26.05";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
 
     flake-parts.url = "github:hercules-ci/flake-parts";
 
