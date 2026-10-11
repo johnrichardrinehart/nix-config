@@ -1,0 +1,379 @@
+--- a/app/include/dt-bindings/zmk/bt.h
++++ b/app/include/dt-bindings/zmk/bt.h
+@@ -10,6 +10,9 @@
+ #define BT_SEL_CMD 3
+ #define BT_CLR_ALL_CMD 4
+ #define BT_DISC_CMD 5
++#define BT_HOST_OFF_CMD 6
++#define BT_HOST_ON_CMD 7
++#define BT_HOST_TOG_CMD 8
+ 
+ /*
+ Note: Some future commands will include additional parameters, so we
+@@ -22,3 +25,6 @@
+ #define BT_SEL BT_SEL_CMD
+ #define BT_CLR_ALL BT_CLR_ALL_CMD 0
+ #define BT_DISC BT_DISC_CMD
++#define BT_HOST_OFF BT_HOST_OFF_CMD 0
++#define BT_HOST_ON BT_HOST_ON_CMD 0
++#define BT_HOST_TOG BT_HOST_TOG_CMD 0
+--- a/app/include/zmk/ble.h
++++ b/app/include/zmk/ble.h
+@@ -27,6 +27,10 @@
+ void zmk_ble_clear_all_bonds(void);
+ int zmk_ble_prof_disconnect(uint8_t index);
+ 
++/* Host-only runtime policy; enabled on reboot. Split peripheral links are unaffected. */
++bool zmk_ble_host_is_enabled(void);
++int zmk_ble_host_set_enabled(bool enabled);
++
+ int zmk_ble_active_profile_index(void);
+ int zmk_ble_profile_index(const bt_addr_le_t *addr);
+ 
+--- a/app/src/behaviors/behavior_bt.c
++++ b/app/src/behaviors/behavior_bt.c
+@@ -42,6 +42,21 @@
+         .display_name = "Clear Selected Profile",
+         .type = BEHAVIOR_PARAMETER_VALUE_TYPE_VALUE,
+         .value = BT_CLR_CMD,
++    },
++    {
++        .display_name = "Disable Host Bluetooth",
++        .type = BEHAVIOR_PARAMETER_VALUE_TYPE_VALUE,
++        .value = BT_HOST_OFF_CMD,
++    },
++    {
++        .display_name = "Enable Host Bluetooth",
++        .type = BEHAVIOR_PARAMETER_VALUE_TYPE_VALUE,
++        .value = BT_HOST_ON_CMD,
++    },
++    {
++        .display_name = "Toggle Host Bluetooth",
++        .type = BEHAVIOR_PARAMETER_VALUE_TYPE_VALUE,
++        .value = BT_HOST_TOG_CMD,
+     },
+ };
+ 
+@@ -105,6 +120,12 @@
+         return 0;
+     case BT_DISC_CMD:
+         return zmk_ble_prof_disconnect(binding->param2);
++    case BT_HOST_OFF_CMD:
++        return zmk_ble_host_set_enabled(false);
++    case BT_HOST_ON_CMD:
++        return zmk_ble_host_set_enabled(true);
++    case BT_HOST_TOG_CMD:
++        return zmk_ble_host_set_enabled(!zmk_ble_host_is_enabled());
+     default:
+         LOG_ERR("Unknown BT command: %d", binding->param1);
+     }
+--- a/app/src/ble.c
++++ b/app/src/ble.c
+@@ -14,6 +14,7 @@
+ 
+ #include <zephyr/settings/settings.h>
+ #include <zephyr/sys/ring_buffer.h>
++#include <zephyr/sys/atomic.h>
+ #include <zephyr/bluetooth/bluetooth.h>
+ #include <zephyr/bluetooth/conn.h>
+ #include <zephyr/bluetooth/hci.h>
+@@ -51,7 +52,12 @@
+     ZMK_ADV_NONE,
+     ZMK_ADV_DIR,
+     ZMK_ADV_CONN,
+-} advertising_status;
++};
++
++static enum advertising_type advertising_status;
++static atomic_t advertising_stopped;
++static atomic_t host_enabled = ATOMIC_INIT(1);
++K_MUTEX_DEFINE(advertising_lock);
+ 
+ #define CURR_ADV(adv) (adv << 4)
+ 
+@@ -95,6 +101,8 @@
+ 
+ K_WORK_DEFINE(raise_profile_changed_event_work, raise_profile_changed_event_callback);
+ 
++bool zmk_ble_host_is_enabled(void) { return atomic_get(&host_enabled) != 0; }
++
+ bool zmk_ble_active_profile_is_open(void) {
+     return !bt_addr_le_cmp(&profiles[active_profile].peer, BT_ADDR_LE_ANY);
+ }
+@@ -115,6 +123,10 @@
+ }
+ 
+ bool zmk_ble_active_profile_is_connected(void) {
++    if (!zmk_ble_host_is_enabled()) {
++        return false;
++    }
++
+     struct bt_conn *conn;
+     struct bt_conn_info info;
+     bt_addr_le_t *addr = zmk_ble_active_profile_addr();
+@@ -133,7 +145,9 @@
+ 
+ #define CHECKED_ADV_STOP()                                                                         \
+     err = bt_le_adv_stop();                                                                        \
+-    advertising_status = ZMK_ADV_NONE;                                                             \
++    if (!err) {                                                                                    \
++        advertising_status = ZMK_ADV_NONE;                                                         \
++    }                                                                                              \
+     if (err) {                                                                                     \
+         LOG_ERR("Failed to stop advertising (err %d)", err);                                       \
+         return err;                                                                                \
+@@ -163,7 +177,19 @@
+     }                                                                                              \
+     advertising_status = ZMK_ADV_CONN;
+ 
+-int update_advertising(void) {
++static int update_advertising_locked(void) {
++    int err = 0;
++
++    if (atomic_set(&advertising_stopped, 0) || !zmk_ble_host_is_enabled()) {
++        // A late callback may describe an older advertiser. Stop the current one
++        // before recomputing desired advertising instead of trusting that notification.
++        CHECKED_ADV_STOP();
++
++        if (!zmk_ble_host_is_enabled()) {
++            return 0;
++        }
++    }
++
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+ #if !IS_ENABLED(CONFIG_ZMK_BLE_PROFILE_ADVERTISING)
+     LOG_INF("skipping advertising since profile advertising is disabled");
+@@ -171,7 +197,6 @@
+ #endif
+ #endif
+ 
+-    int err = 0;
+     bt_addr_le_t *addr;
+     struct bt_conn *conn;
+     enum advertising_type desired_adv = ZMK_ADV_NONE;
+@@ -215,9 +240,82 @@
+     return 0;
+ };
+ 
++int update_advertising(void) {
++    k_mutex_lock(&advertising_lock, K_FOREVER);
++    int err = update_advertising_locked();
++    k_mutex_unlock(&advertising_lock);
++    return err;
++}
++
+ static void update_advertising_callback(struct k_work *work) { update_advertising(); }
+ 
+ K_WORK_DEFINE(update_advertising_work, update_advertising_callback);
++
++static int disconnect_host_conn(struct bt_conn *conn) {
++    int err = bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
++    if (err == -ENOTCONN) {
++        return 0; // The peer may already have disconnected.
++    }
++    if (err) {
++        LOG_ERR("Failed to disconnect host (err %d)", err);
++    }
++    return err;
++}
++
++static void disconnect_host(struct bt_conn *conn, void *data) {
++    int *result = data;
++    struct bt_conn_info info;
++    int err = bt_conn_get_info(conn, &info);
++
++    if (!err && info.role == BT_CONN_ROLE_PERIPHERAL &&
++        info.state == BT_CONN_STATE_CONNECTED) {
++        // Split peripherals are outgoing, central-role connections: leave them alone.
++        err = disconnect_host_conn(conn);
++    }
++    if (err && !*result) {
++        *result = err;
++    }
++}
++
++static bool reject_disabled_host(struct bt_conn *conn) {
++    struct bt_conn_info info;
++    if (zmk_ble_host_is_enabled() || bt_conn_get_info(conn, &info) ||
++        info.role != BT_CONN_ROLE_PERIPHERAL) {
++        return false;
++    }
++    disconnect_host_conn(conn);
++    return true;
++}
++
++int zmk_ble_host_set_enabled(bool enabled) {
++    if (IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)) {
++        return -ENOTSUP; // A split peripheral's advertiser is its keyboard link.
++    }
++    if (enabled && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&
++        !IS_ENABLED(CONFIG_ZMK_BLE_PROFILE_ADVERTISING)) {
++        return -ENOTSUP;
++    }
++
++    k_mutex_lock(&advertising_lock, K_FOREVER);
++    bool changed = zmk_ble_host_is_enabled() != enabled;
++    // The policy stays applied on errors; disabled hosts cannot send reports or pair.
++    atomic_set(&host_enabled, enabled);
++    int err = update_advertising_locked();
++    if (!enabled) {
++        // Iterate connections, not just bonds, so an unpaired/in-flight host is included.
++        int disconnect_err = 0;
++        bt_conn_foreach(BT_CONN_TYPE_LE, disconnect_host, &disconnect_err);
++        if (!err) {
++            err = disconnect_err;
++        }
++    }
++    k_mutex_unlock(&advertising_lock);
++
++    if (changed) {
++        raise_profile_changed_event();
++    }
++    return err;
++}
+ 
+ static void clear_profile_bond(uint8_t profile) {
+     if (bt_addr_le_cmp(&profiles[profile].peer, BT_ADDR_LE_ANY)) {
+@@ -328,6 +426,10 @@
+ bt_addr_le_t *zmk_ble_active_profile_addr(void) { return &profiles[active_profile].peer; }
+ 
+ struct bt_conn *zmk_ble_active_profile_conn(void) {
++    if (!zmk_ble_host_is_enabled()) {
++        return NULL;
++    }
++
+     struct bt_conn *conn;
+     bt_addr_le_t *addr = zmk_ble_active_profile_addr();
+ 
+@@ -352,16 +454,21 @@
+         LOG_ERR("Failed to set new device name (err %d)", err);
+         return err;
+     }
++    k_mutex_lock(&advertising_lock, K_FOREVER);
+     if (advertising_status == ZMK_ADV_CONN) {
+-        // Stop current advertising so it can restart with new name
++        // Stop current advertising so it can restart with the new name.
+         err = bt_le_adv_stop();
+-        advertising_status = ZMK_ADV_NONE;
+-        if (err) {
++        if (!err) {
++            advertising_status = ZMK_ADV_NONE;
++        } else {
+             LOG_ERR("Failed to stop advertising (err %d)", err);
+-            return err;
+-        }
+-    }
+-    return update_advertising();
++        }
++    }
++    if (!err) {
++        err = update_advertising_locked();
++    }
++    k_mutex_unlock(&advertising_lock);
++    return err;
+ }
+ 
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+@@ -499,17 +606,19 @@
+     }
+ 
+     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+-    advertising_status = ZMK_ADV_NONE;
++    atomic_set(&advertising_stopped, 1);
++    k_work_submit(&update_advertising_work);
+ 
+     if (err) {
+         LOG_WRN("Failed to connect to %s (%u)", addr, err);
+-        update_advertising();
+         return;
+     }
+ 
+     LOG_DBG("Connected %s", addr);
+ 
+-    update_advertising();
++    if (reject_disabled_host(conn)) {
++        return;
++    }
+ 
+     if (is_conn_active_profile(conn)) {
+         LOG_DBG("Active profile connected");
+@@ -543,6 +652,10 @@
+ }
+ 
+ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_security_err err) {
++    if (reject_disabled_host(conn)) {
++        return;
++    }
++
+     char addr[BT_ADDR_LE_STR_LEN];
+ 
+     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+@@ -583,6 +696,10 @@
+ #if IS_ENABLED(CONFIG_ZMK_BLE_PASSKEY_ENTRY)
+ 
+ static void auth_passkey_entry(struct bt_conn *conn) {
++    if (reject_disabled_host(conn)) {
++        return;
++    }
++
+     char addr[BT_ADDR_LE_STR_LEN];
+ 
+     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+@@ -623,7 +740,8 @@
+     bt_conn_get_info(conn, &info);
+ 
+     LOG_DBG("role %d, open? %s", info.role, zmk_ble_active_profile_is_open() ? "yes" : "no");
+-    if (info.role == BT_CONN_ROLE_PERIPHERAL && !pairing_allowed_for_current_profile(conn)) {
++    if (info.role == BT_CONN_ROLE_PERIPHERAL &&
++        (!zmk_ble_host_is_enabled() || !pairing_allowed_for_current_profile(conn))) {
+         LOG_WRN("Rejecting pairing request to taken profile %d", active_profile);
+         return BT_SECURITY_ERR_PAIR_NOT_ALLOWED;
+     }
+@@ -644,6 +762,11 @@
+         return;
+     }
+ 
++    // A pairing completion can race Off. Never unpair an existing bond in that case.
++    if (reject_disabled_host(conn)) {
++        return;
++    }
++
+     if (!pairing_allowed_for_current_profile(conn)) {
+         LOG_ERR("Pairing completed but current profile is not open: %s", addr);
+         bt_unpair(BT_ID_DEFAULT, dst);
+@@ -651,7 +774,7 @@
+     }
+ 
+     set_profile_address(active_profile, dst);
+-    update_advertising();
++    k_work_submit(&update_advertising_work);
+ };
+ 
+ static struct bt_conn_auth_cb zmk_ble_auth_cb_display = {
+@@ -770,6 +893,10 @@
+     zmk_key_t key = event->keycode;
+ 
+     LOG_DBG("key %d", key);
++    if (!zmk_ble_host_is_enabled()) {
++        return ZMK_EV_EVENT_BUBBLE;
++    }
++
+ 
+     if (!auth_passkey_entry_conn) {
+         LOG_DBG("No connection for passkey entry");
+--- a/app/src/endpoints.c
++++ b/app/src/endpoints.c
+@@ -297,6 +297,13 @@
+         return ZMK_TRANSPORT_USB;
+     }
+ 
++#if IS_ENABLED(CONFIG_ZMK_USB) && IS_ENABLED(CONFIG_ZMK_BLE)
++    if (!zmk_ble_host_is_enabled()) {
++        // Keep BLE deselected while host Bluetooth is off, even before USB enumerates.
++        return ZMK_TRANSPORT_USB;
++    }
++#endif
++
+     LOG_DBG("No endpoint transports are ready.");
+     return DEFAULT_TRANSPORT;
+ }

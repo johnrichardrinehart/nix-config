@@ -872,10 +872,10 @@
           "Args": ["&rgb_ug RGB_EFF"]
         },
         {
-          "Name": "",
-          "Behavior": "&none",
-          "Notes": "",
-          "Args": []
+          "Name": "Host Bluetooth toggle",
+          "Behavior": "$custom",
+          "Notes": "Fn + USB Output toggles host Bluetooth without clearing pairings or disabling the split link.",
+          "Args": ["&bt BT_HOST_TOG"]
         },
         {
           "Name": "",

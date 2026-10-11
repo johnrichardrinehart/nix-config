@@ -112,7 +112,7 @@ Connect only the left half by USB.
 With the keys facing up and USB-C facing you, press the right reset button twice within 500 ms.
 The green LEDs indicate bootloader mode.
 The app uses `sudo` when it must mount the drive or obtain write access.
-It checks the board ID before copying the bundled firmware.
+It checks the board ID before copying the firmware built from the current configuration.
 Both halves report the same board ID, so the app cannot distinguish the left half from the right half.
 Do not connect the right half in bootloader mode.
 The bootloader can disconnect during the final filesystem sync.
@@ -127,13 +127,38 @@ Do not hold Fn or clear Bluetooth profiles during the update.
 `packages/slicemk-update/dongle.json` contains the separate dongle configuration.
 Both configurations use native Dvorak, plain Tab, phone profile 0, and Framie profile 1.
 The separate Caps Lock key remains available.
-The app installs only `firmware/zmk-left.uf2`; it does not change the right half or dongle.
-`firmware/zmk-dongle.uf2` contains the matching prepared dongle build.
+On the right half, the key immediately right of L sends `/`.
+Hold Shift for `?`.
+The key immediately right of S sends Delete.
+The QWERTY overlay retains Delete on its top letter row and apostrophe on its home row.
+The left half controls Bluetooth profiles and USB/Bluetooth output in dongleless mode.
+No dongle is required.
+The app installs only the custom left-half firmware.
+It does not flash the right half or dongle.
 Changing between dongle and dongleless roles requires the documented firmware and bond-reset procedure.
 
-After editing a JSON configuration, import it into [the SliceMK configurator](https://config.slicemk.com/zmk/).
-Build the firmware and replace the corresponding bundled UF2 file.
-Build both configurations with ZMK revision `2f28b9f2d3959cb6bdd9f1afed058ebf1f5e09bc`.
+Hold Fn and tap USB Output to toggle host Bluetooth.
+USB Output is the inner key of the upper pair of small keys in the left thumb cluster.
+Host Bluetooth Off stops host advertising and disconnects phones and computers.
+It preserves the wireless split link and all saved pairings.
+USB typing remains available.
+Select a host profile before enabling host Bluetooth to choose the reconnection target.
+Profile selection and Bluetooth Output do not enable host Bluetooth while it is off.
+The keyboard enables host Bluetooth after reboot.
+
+The firmware uses the public SliceMK ZMK source and the local host-only Bluetooth patch.
+`packages/slicemk-update/firmware.nix` pins the firmware sources, Zephyr modules, and build tools.
+`render-keymap.py` generates the devicetree keymap directly from each JSON configuration.
+After editing a JSON configuration, rebuild the firmware:
+
+```console
+nix build .#slicemk-firmware
+# result/zmk.uf2 is the left-half firmware.
+nix build .#slicemk-dongle-firmware
+# result/zmk.uf2 is the dongle firmware.
+```
+
+The vendor configurator cannot build the custom host Bluetooth commands.
 Use [SliceMK's firmware guide](https://docs.slicemk.com/firmware/zmk/wireless/guide/) for hardware and role changes.
 
 ## Framework voice dictation
