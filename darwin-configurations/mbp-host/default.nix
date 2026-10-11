@@ -85,8 +85,8 @@ in
     (import ../../packages/spice-quartz-overlay.nix)
     # repo-manager's flake only exposes Linux packages; its overlay is
     # system-independent, so build it here from the same source.
-    inputs.nixosModules.inputs.repo-manager.inputs.rust-overlay.overlays.default
-    inputs.nixosModules.inputs.repo-manager.overlays.default
+    inputs.repo-manager.inputs.rust-overlay.overlays.default
+    inputs.repo-manager.overlays.default
   ];
 
   system.stateVersion = 6;

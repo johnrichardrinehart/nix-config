@@ -1,7 +1,7 @@
 inputs:
 let
-  inherit (inputs.nixosModules) lib;
-  johnosModules = inputs.nixosModules;
+  inherit (inputs.self) lib;
+  johnosModules = inputs.self;
 in
 lib.mapAttrs (
   dir: _:

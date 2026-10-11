@@ -50,7 +50,7 @@ in
       # The same floating wrapper the NixOS machines install
       # (nixosModules agentTools.omp): it `nix run`s llm-agents.nix's omp,
       # rechecked hourly, with the context-mode extension.
-      (inputs.nixosModules.packages.aarch64-darwin.omp.withPlugins (p: [ p.context-mode ]))
+      (inputs.self.packages.aarch64-darwin.omp.withPlugins (p: [ p.context-mode ]))
     ];
 
     # One full-screen editor for both: every program honors at least one.
@@ -145,7 +145,7 @@ in
     programs.oh-my-posh = {
       enable = true;
       settings = builtins.fromJSON (
-        builtins.readFile "${inputs.nixosModules}/home-configurations/home-manager/oh-my-posh.json"
+        builtins.readFile "${inputs.self.outPath}/home-configurations/home-manager/oh-my-posh.json"
       );
     };
 

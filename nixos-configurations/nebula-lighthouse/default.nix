@@ -12,7 +12,7 @@ in
   imports = [
     (modulesPath + "/virtualisation/digital-ocean-config.nix")
     inputs.disko.nixosModules.disko
-    inputs.nixosModules.nixosModules.mycelium
+    inputs.self.nixosModules.mycelium
     ./disko.nix
   ];
 

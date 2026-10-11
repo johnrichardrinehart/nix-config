@@ -1,17 +1,26 @@
-# nixosConfigurations
+# nix-config
 
-JohnOS host-specific NixOS system configurations.
+Unified JohnOS NixOS and nix-darwin configurations, reusable modules,
+overlays, packages, Home Manager modules, and supporting assets.
 
-This repository depends on
-[`nixosModules`](https://github.com/johnrichardrinehart/nixosModules) for the
-shared modules, overlays, packages, Home Manager modules, and static assets.
+The flake exposes:
 
-It exposes `nixosConfigurations` for the managed hosts:
+- `nixosConfigurations` for managed NixOS hosts
+- `darwinConfigurations.mbp-host`
+- reusable `nixosModules` and `darwinModules`
+- `overlays.default`
+- per-system `packages` and `legacyPackages`
+- `apps.aarch64-darwin`
+- shared `lib` functions
+
+Managed NixOS hosts:
 
 - `framework`
 - `gce`
 - `hp_spectre_x360`
-- `mbp`
+- `mbp-apple-silicon`
+- `mbp-apple-silicon-bootstrap`
+- `mbp-intel-silicon`
 - `nebula-lighthouse`
 - `rock5c-nas`
 - `thinkpad_w510`
@@ -62,7 +71,7 @@ this one command:
 
 ```bash
 nix --extra-experimental-features 'nix-command flakes' \
-  run github:johnrichardrinehart/nixosConfigurations#provision-mac
+  run github:johnrichardrinehart/nix-config#provision-mac
 ```
 
 Run it as the primary user; it asks for sudo. It builds the system, retires
@@ -90,10 +99,47 @@ Framework disables the Bluetooth idle timer so keyboards can reconnect after sle
 BlueZ automatically enables the adapter through `[Policy] AutoEnable=true`.
 Framework does not power-cycle the adapter during resume.
 
+## SliceMK firmware
+
+On Linux, update the SliceMK ErgoDox 202207 Green left half:
+
+```console
+nix run .#slicemk-update
+```
+
+The app prints preparation instructions and waits for Enter in an interactive terminal.
+Connect only the left half by USB.
+With the keys facing up and USB-C facing you, press the right reset button twice within 500 ms.
+The green LEDs indicate bootloader mode.
+The app uses `sudo` when it must mount the drive or obtain write access.
+It checks the board ID before copying the bundled firmware.
+Both halves report the same board ID, so the app cannot distinguish the left half from the right half.
+Do not connect the right half in bootloader mode.
+The bootloader can disconnect during the final filesystem sync.
+For a disconnect error after copying, the app waits up to ten seconds for the same USB serial to return as a ZMK keyboard.
+The app reports success only when that device returns.
+Earlier write errors and unconfirmed disconnects remain failures.
+After the transfer, test typing and hold Tab to check that Caps Lock stays unchanged.
+This update does not clear saved Bluetooth pairings.
+Do not hold Fn or clear Bluetooth profiles during the update.
+
+`packages/slicemk-update/keyboard.json` contains the dongleless configuration.
+`packages/slicemk-update/dongle.json` contains the separate dongle configuration.
+Both configurations use native Dvorak, plain Tab, phone profile 0, and Framie profile 1.
+The separate Caps Lock key remains available.
+The app installs only `firmware/zmk-left.uf2`; it does not change the right half or dongle.
+`firmware/zmk-dongle.uf2` contains the matching prepared dongle build.
+Changing between dongle and dongleless roles requires the documented firmware and bond-reset procedure.
+
+After editing a JSON configuration, import it into [the SliceMK configurator](https://config.slicemk.com/zmk/).
+Build the firmware and replace the corresponding bundled UF2 file.
+Build both configurations with ZMK revision `2f28b9f2d3959cb6bdd9f1afed058ebf1f5e09bc`.
+Use [SliceMK's firmware guide](https://docs.slicemk.com/firmware/zmk/wireless/guide/) for hardware and role changes.
+
 ## Framework voice dictation
 
 `framework` uses converted ONNX Moonshine models with OpenVINO. The
-nixosModules `libmoonshine` and `moonshine-models-onnx` packages handle the
+`nix-config` packages `libmoonshine` and `moonshine-models-onnx` handle the
 conversion and the session setup. Before switching the system, load the model
 and transcribe an audio clip. The package's unit tests do not exercise model
 inference.
@@ -130,7 +176,7 @@ in the template.
 
 The Nebula network is named `mycelium` (tun device `nebula.mycelium`, unit
 `nebula@mycelium`). Its CA only signs addresses in `10.77.0.0/24`. Hosts use
-the nixosModules `dev.johnrinehart.mycelium` module. The lighthouse sets
+the `nix-config` `dev.johnrinehart.mycelium` module. The lighthouse sets
 `role = "lighthouse"` to run the registry and relay.
 
 Certificates carry the identity: the name becomes the host's DNS label and
@@ -185,7 +231,7 @@ The private hostname uses `dev.johnrinehart.mycelium.serverTLS`.
 Install its Mycelium-CA certificate at `/var/lib/mycelium-tls/server.crt`.
 Install its separate server key at `/var/lib/mycelium-tls/server.key`, owned by root with group `nebula-registry` and mode `0440`.
 Give that group access to the parent directory.
-Use the reusable `mycelium-tls` signer documented in the nixosModules README.
+Use the reusable `mycelium-tls` signer from `packages/mycelium-tls`.
 Keep the CA signing key on the deployment machine.
 Restart `nebula-registry.service` after certificate renewal.
 
