@@ -145,6 +145,12 @@
                     inherit pkgs;
                     inherit (inputs.nixpkgs) lib;
                   };
+                  slicemk-update = pkgs.runCommand "slicemk-update-check" { } ''
+                    export PYTHONDONTWRITEBYTECODE=1
+                    cd ${./packages/slicemk-update}
+                    ${pkgs.python3}/bin/python3 -m unittest -v test_update
+                    touch "$out"
+                  '';
                 };
 
                 formatter = treefmtEval.config.build.wrapper;
@@ -181,6 +187,13 @@
         in
         {
           packages = import ./packages { inherit pkgs; };
+          apps = inputs.nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+            slicemk-update = {
+              type = "app";
+              program = "${pkgs.dev.johnrinehart.slicemk-update}/bin/slicemk-update";
+              meta.description = pkgs.dev.johnrinehart.slicemk-update.meta.description;
+            };
+          };
           legacyPackages = pkgs;
         };
     };

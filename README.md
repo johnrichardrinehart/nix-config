@@ -35,6 +35,43 @@ The Niri configuration uses plain US host mapping for `SliceMK Kbd Keyboard`.
 The keyboard firmware supplies Dvorak output.
 USB and Bluetooth device names require separate keyboard entries.
 
+## SliceMK firmware
+
+On Linux, update the SliceMK ErgoDox 202207 Green left half:
+
+```console
+nix run .#slicemk-update
+```
+
+The app prints preparation instructions and waits for Enter in an interactive terminal.
+Connect only the left half by USB.
+With the keys facing up and USB-C facing you, press the right reset button twice within 500 ms.
+The green LEDs indicate bootloader mode.
+The app uses `sudo` when it must mount the drive or obtain write access.
+It checks the board ID before copying the bundled firmware.
+Both halves report the same board ID, so the app cannot distinguish the left half from the right half.
+Do not connect the right half in bootloader mode.
+The bootloader can disconnect during the final filesystem sync.
+For a disconnect error after copying, the app waits up to ten seconds for the same USB serial to return as a ZMK keyboard.
+The app reports success only when that device returns.
+Earlier write errors and unconfirmed disconnects remain failures.
+After the transfer, test typing and hold Tab to check that Caps Lock stays unchanged.
+This update does not clear saved Bluetooth pairings.
+Do not hold Fn or clear Bluetooth profiles during the update.
+
+`packages/slicemk-update/keyboard.json` contains the dongleless configuration.
+`packages/slicemk-update/dongle.json` contains the separate dongle configuration.
+Both configurations use native Dvorak, plain Tab, phone profile 0, and Framie profile 1.
+The separate Caps Lock key remains available.
+The app installs only `firmware/zmk-left.uf2`; it does not change the right half or dongle.
+`firmware/zmk-dongle.uf2` contains the matching prepared dongle build.
+Changing between dongle and dongleless roles requires the documented firmware and bond-reset procedure.
+
+After editing a JSON configuration, import it into [the SliceMK configurator](https://config.slicemk.com/zmk/).
+Build the firmware and replace the corresponding bundled UF2 file.
+Build both configurations with ZMK revision `2f28b9f2d3959cb6bdd9f1afed058ebf1f5e09bc`.
+Use [SliceMK's firmware guide](https://docs.slicemk.com/firmware/zmk/wireless/guide/) for hardware and role changes.
+
 ## Voice dictation
 
 `dev.johnrinehart.voice-dictation.enable` installs the Moonshine dictation
