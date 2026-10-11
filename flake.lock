@@ -364,11 +364,11 @@
         "sops-nix": "sops-nix"
       },
       "locked": {
-        "lastModified": 1791697707,
-        "narHash": "sha256-AS5/qQX/N2Cl/qcPHaIJhGtUYb7wAH8029qjt/ztUEo=",
+        "lastModified": 1791730284,
+        "narHash": "sha256-KqBvrAD/1ZgrLA/p7KlDj+T7Nw6sx65Z9Se1qXxOLCY=",
         "owner": "johnrichardrinehart",
         "repo": "nixosModules",
-        "rev": "dbe908eb08ea1014e2a1e63c909de2aa26fd9b11",
+        "rev": "355d238c064f20640b38cd5645d8c16705d1b5e2",
         "type": "github"
       },
       "original": {
@@ -379,16 +379,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1791468683,
-        "narHash": "sha256-UaeZMSv0r+xWoPdauUYQdNW7Dhyk0O0Mabg1ciTaVZE=",
-        "owner": "johnrichardrinehart",
+        "lastModified": 1791662279,
+        "narHash": "sha256-xI8L+UwJLIg75yVJwLPsY+AUEP1teCT3FyuvodyJu2Y=",
+        "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "0bcd25d5af6684cbb98a76d981f21e92d88321de",
+        "rev": "6fcc160353f63555b560f25588925133c8f61f2a",
         "type": "github"
       },
       "original": {
-        "owner": "johnrichardrinehart",
-        "ref": "rock-5c-nixos-26.05",
+        "owner": "NixOS",
+        "ref": "nixos-26.05",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -470,11 +470,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1783353564,
-        "narHash": "sha256-zCSsrf4Ft3bCBB5AMWAW7gFhvt7JxuZH95EO4HoWgUU=",
+        "lastModified": 1791730267,
+        "narHash": "sha256-S5zVlYB/CkVCvXzIqvNtezFa29Xr//QGvI/r8xS0O8Y=",
         "owner": "johnrichardrinehart",
         "repo": "rock5c-nixos",
-        "rev": "ec61d586f256c93900445db18b3e660a0c9647a9",
+        "rev": "7dfde318328d4fc53e063a351b7f0b9623f888ca",
         "type": "github"
       },
       "original": {

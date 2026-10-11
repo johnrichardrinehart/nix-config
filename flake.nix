@@ -11,7 +11,7 @@
     nixosModules.url = "github:johnrichardrinehart/nixosModules";
     nixosModules.inputs.nixpkgs.follows = "nixpkgs";
 
-    nixpkgs.url = "github:johnrichardrinehart/nixpkgs?ref=rock-5c-nixos-26.05";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
 
     home-manager = {
       # release-26.05 plus nix-community/home-manager#10006 (overwriteBackup
