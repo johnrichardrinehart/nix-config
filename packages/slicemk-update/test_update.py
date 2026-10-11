@@ -1,4 +1,5 @@
 import errno
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -50,7 +51,7 @@ class UpdateTests(unittest.TestCase):
             (volume / "INFO_UF2.TXT").write_text(
                 f"Model: SliceMK\nBoard-ID: {BOARD_ID}\n"
             )
-            firmware = Path(__file__).parent / "firmware" / "zmk-left.uf2"
+            firmware = Path(os.environ["SLICEMK_FIRMWARE"])
             flash(volume, firmware)
             self.assertEqual(
                 (volume / "zmk-left.uf2").read_bytes(), firmware.read_bytes()
@@ -60,7 +61,7 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             volume = Path(directory)
             (volume / "INFO_UF2.TXT").write_text(f"Board-ID: {BOARD_ID}\n")
-            firmware = Path(__file__).parent / "firmware" / "zmk-left.uf2"
+            firmware = Path(os.environ["SLICEMK_FIRMWARE"])
             usb = volume / "usb"
             usb.mkdir()
             keyboard = usb / "1-1"
@@ -91,7 +92,7 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             volume = Path(directory)
             (volume / "INFO_UF2.TXT").write_text(f"Board-ID: {BOARD_ID}\n")
-            firmware = Path(__file__).parent / "firmware" / "zmk-left.uf2"
+            firmware = Path(os.environ["SLICEMK_FIRMWARE"])
             with (
                 patch(
                     "update.shutil.copyfileobj",
@@ -106,7 +107,7 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             volume = Path(directory)
             (volume / "INFO_UF2.TXT").write_text(f"Board-ID: {BOARD_ID}\n")
-            firmware = Path(__file__).parent / "firmware" / "zmk-left.uf2"
+            firmware = Path(os.environ["SLICEMK_FIRMWARE"])
             with (
                 patch(
                     "update.os.fsync", side_effect=OSError(errno.ENOSPC, "disk full")
