@@ -148,7 +148,8 @@ in
         "com.apple.sound.beep.volume" = 0.0;
       };
 
-      # U.S. plus Dvorak, typing in Dvorak.
+      # Keep macOS on U.S. Karabiner maps only the built-in keyboard to Dvorak,
+      # so firmware-native external keyboards pass through unchanged.
       "com.apple.HIToolbox" = {
         AppleEnabledInputSources = [
           {
@@ -160,17 +161,12 @@ in
             InputSourceKind = "Non Keyboard Input Method";
             "Bundle ID" = "com.apple.CharacterPaletteIM";
           }
-          {
-            InputSourceKind = "Keyboard Layout";
-            "KeyboardLayout ID" = 16300;
-            "KeyboardLayout Name" = "Dvorak";
-          }
         ];
         AppleSelectedInputSources = [
           {
             InputSourceKind = "Keyboard Layout";
-            "KeyboardLayout ID" = 16300;
-            "KeyboardLayout Name" = "Dvorak";
+            "KeyboardLayout ID" = 0;
+            "KeyboardLayout Name" = "U.S.";
           }
           {
             InputSourceKind = "Non Keyboard Input Method";
