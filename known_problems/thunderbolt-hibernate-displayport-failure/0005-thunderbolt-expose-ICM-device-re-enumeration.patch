@@ -1,0 +1,138 @@
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Fri, 10 Jul 2026 20:00:00 -0400
+Subject: [PATCH] thunderbolt: expose ICM device re-enumeration through sysfs
+
+ICM firmware occasionally drops a connected router while restoring from S4
+and does not subsequently emit another device-connected event. In that state
+the domain remains alive, but there is no downstream router or DP resource for
+the existing USB4 port rescan interfaces to operate on.
+
+Add a connection-manager rescan operation and expose it as a write-only
+attribute on Thunderbolt domains. For firmware-managed domains, writing 1
+re-sends DRIVER_READY so ICM reports the currently attached routers again.
+Keep the domain runtime-active around the request and serialize it with other
+connection-manager operations.
+
+Signed-off-by: John Rinehart <johnrichardrinehart@gmail.com>
+---
+
+--- a/drivers/thunderbolt/domain.c
++++ b/drivers/thunderbolt/domain.c
+@@ -273,10 +273,39 @@
+ }
+ static DEVICE_ATTR_RO(security);
+ 
++static ssize_t rescan_store(struct device *dev, struct device_attribute *attr,
++			    const char *buf, size_t count)
++{
++	struct tb *tb = container_of(dev, struct tb, dev);
++	bool rescan;
++	int ret;
++
++	ret = kstrtobool(buf, &rescan);
++	if (ret)
++		return ret;
++	if (!rescan)
++		return count;
++
++	ret = pm_runtime_resume_and_get(dev);
++	if (ret < 0)
++		return ret;
++
++	mutex_lock(&tb->lock);
++	ret = tb->cm_ops->rescan(tb);
++	mutex_unlock(&tb->lock);
++
++	pm_runtime_mark_last_busy(dev);
++	pm_runtime_put_autosuspend(dev);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_WO(rescan);
++
+ static struct attribute *domain_attrs[] = {
+ 	&dev_attr_boot_acl.attr,
+ 	&dev_attr_deauthorization.attr,
+ 	&dev_attr_iommu_dma_protection.attr,
++	&dev_attr_rescan.attr,
+ 	&dev_attr_security.attr,
+ 	NULL,
+ };
+@@ -287,6 +316,9 @@
+ 	struct device *dev = kobj_to_dev(kobj);
+ 	struct tb *tb = container_of(dev, struct tb, dev);
+ 
++	if (attr == &dev_attr_rescan.attr && !tb->cm_ops->rescan)
++		return 0;
++
+ 	if (attr == &dev_attr_boot_acl.attr) {
+ 		if (tb->nboot_acl &&
+ 		    tb->cm_ops->get_boot_acl &&
+--- a/drivers/thunderbolt/icm.c
++++ b/drivers/thunderbolt/icm.c
+@@ -2144,6 +2144,15 @@
+ 	queue_delayed_work(tb->wq, &icm->rescan_work, msecs_to_jiffies(500));
+ }
+ 
++static int icm_rescan(struct tb *tb)
++{
++	if (tb->nhi->going_away)
++		return -ENODEV;
++
++	tb_info(tb, "requesting device re-enumeration\n");
++	return __icm_driver_ready(tb, NULL, NULL, NULL, NULL);
++}
++
+ static int icm_runtime_suspend(struct tb *tb)
+ {
+ 	nhi_mailbox_cmd(tb->nhi, NHI_MAILBOX_DRV_UNLOADS, 0);
+@@ -2388,6 +2397,7 @@
+ 	.stop = icm_stop,
+ 	.suspend = icm_suspend,
+ 	.complete = icm_complete,
++	.rescan = icm_rescan,
+ 	.handle_event = icm_handle_event,
+ 	.approve_switch = icm_fr_approve_switch,
+ 	.add_switch_key = icm_fr_add_switch_key,
+@@ -2404,6 +2414,7 @@
+ 	.stop = icm_stop,
+ 	.suspend = icm_suspend,
+ 	.complete = icm_complete,
++	.rescan = icm_rescan,
+ 	.runtime_suspend = icm_runtime_suspend,
+ 	.runtime_resume = icm_runtime_resume,
+ 	.runtime_suspend_switch = icm_runtime_suspend_switch,
+@@ -2426,6 +2437,7 @@
+ 	.stop = icm_stop,
+ 	.suspend = icm_suspend,
+ 	.complete = icm_complete,
++	.rescan = icm_rescan,
+ 	.runtime_suspend = icm_runtime_suspend,
+ 	.runtime_resume = icm_runtime_resume,
+ 	.runtime_suspend_switch = icm_runtime_suspend_switch,
+@@ -2450,6 +2462,7 @@
+ 	.start = icm_start,
+ 	.stop = icm_stop,
+ 	.complete = icm_complete,
++	.rescan = icm_rescan,
+ 	.runtime_suspend = icm_runtime_suspend,
+ 	.runtime_resume = icm_runtime_resume,
+ 	.handle_event = icm_handle_event,
+--- a/drivers/thunderbolt/tb.h
++++ b/drivers/thunderbolt/tb.h
+@@ -483,6 +483,7 @@
+  * @complete: Connection manager specific complete
+  * @runtime_suspend: Connection manager specific runtime_suspend
+  * @runtime_resume: Connection manager specific runtime_resume
++ * @rescan: Ask the connection manager to re-enumerate attached devices
+  * @runtime_suspend_switch: Runtime suspend a switch
+  * @runtime_resume_switch: Runtime resume a switch
+  * @handle_event: Handle thunderbolt event
+@@ -517,6 +518,7 @@
+ 	void (*complete)(struct tb *tb);
+ 	int (*runtime_suspend)(struct tb *tb);
+ 	int (*runtime_resume)(struct tb *tb);
++	int (*rescan)(struct tb *tb);
+ 	int (*runtime_suspend_switch)(struct tb_switch *sw);
+ 	int (*runtime_resume_switch)(struct tb_switch *sw);
+ 	void (*handle_event)(struct tb *tb, enum tb_cfg_pkg_type,

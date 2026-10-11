@@ -1,0 +1,116 @@
+# Thunderbolt and PCI power management debugging module
+#
+# Enables verbose logging for diagnosing Thunderbolt/USB4 DisplayPort tunnel
+# failures during suspend/hibernate. Useful for capturing diagnostic data
+# to share with kernel developers.
+#
+# Usage:
+#   dev.johnrinehart.thunderbolt-debug.enable = true;
+#
+# When enabled:
+#   - CONFIG_PCI_DEBUG is set in the kernel
+#   - Dynamic debug (dyndbg) params for PCI/TB are available (commented by default)
+#   - Runtime debug can be enabled via /proc/dynamic_debug/control
+#
+# To enable verbose logging at runtime:
+#   echo "file drivers/pci/pci.c +p" | sudo tee /proc/dynamic_debug/control
+#   echo "module thunderbolt +p" | sudo tee /proc/dynamic_debug/control
+#
+# To enable at boot, set bootVerbose = true (adds ~1-5MB to journal per suspend cycle)
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.dev.johnrinehart.thunderbolt-debug;
+in
+{
+  options.dev.johnrinehart.thunderbolt-debug = {
+    enable = lib.mkEnableOption "Thunderbolt/PCI power management debugging";
+
+    bootVerbose = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Enable verbose PCI/Thunderbolt logging at boot time via kernel command line.
+        This will significantly increase journal size during suspend/resume cycles.
+        Usually you want to leave this false and enable debugging at runtime when needed.
+      '';
+    };
+
+    kernelPatches = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Apply kernel patches that add retry logic for PCI power state transitions.
+        These fix Thunderbolt DisplayPort tunnel failures after suspend/hibernate.
+      '';
+    };
+
+    icmFirmwareRescan = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Expose a Thunderbolt-domain rescan trigger that asks Intel Connection
+        Manager firmware to report attached routers again. This recovers the
+        S4 failure where the domain survives but its downstream router vanishes.
+      '';
+    };
+
+    recoverFailedSuspend = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Restart the Thunderbolt domain control channel when the platform NHI
+        suspend operation fails after the driver already stopped that channel.
+      '';
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    # Kernel config for PCI debugging
+    boot.kernelPatches =
+      lib.optionals cfg.kernelPatches [
+        # Fix D3cold->D0 and D0->D3hot transition failures (hibernate/suspend)
+        # Adds retry logic with exponential backoff (~10s total) for Thunderbolt
+        {
+          name = "pci-power-state-retry";
+          patch = ../known_problems/thunderbolt-hibernate-displayport-failure/0001-PCI-Add-retry-logic-for-power-state-transitions.patch;
+        }
+        # Enable PCI debug output (useful with dyndbg)
+        {
+          name = "pci-debug-config";
+          patch = null;
+          structuredExtraConfig = with lib.kernel; {
+            PCI_DEBUG = yes;
+          };
+        }
+      ]
+      ++ lib.optionals cfg.icmFirmwareRescan [
+        {
+          name = "thunderbolt-icm-firmware-rescan";
+          patch = ../known_problems/thunderbolt-hibernate-displayport-failure/0005-thunderbolt-expose-ICM-device-re-enumeration.patch;
+        }
+      ]
+      ++ lib.optionals cfg.recoverFailedSuspend [
+        {
+          name = "thunderbolt-restart-domain-after-failed-nhi-suspend";
+          patch = ../known_problems/thunderbolt-hibernate-displayport-failure/0006-thunderbolt-restart-domain-after-failed-NHI-suspend.patch;
+        }
+      ];
+
+    # Kernel command line parameters for boot-time verbose logging
+    boot.kernelParams = lib.optionals cfg.bootVerbose [
+      # Enable dynamic debug for PCI power management, Thunderbolt, ASPM, and PCIe hotplug
+      ''dyndbg="file drivers/pci/pci.c +p; file drivers/pci/pcie/aspm.c +p; file drivers/thunderbolt/* +p; file pciehp* +p"''
+      "loglevel=7"
+    ];
+
+    # Convenience script to enable/disable debug at runtime
+    environment.systemPackages = [
+      pkgs.dev.johnrinehart.tb-debug
+    ];
+  };
+}

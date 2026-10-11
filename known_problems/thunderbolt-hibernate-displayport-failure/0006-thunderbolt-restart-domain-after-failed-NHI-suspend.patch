@@ -1,0 +1,57 @@
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Fri, 21 Aug 2026 12:00:00 -0400
+Subject: [PATCH] thunderbolt: restart domain after failed NHI suspend
+
+tb_domain_suspend_noirq() stops the control channel before the platform NHI
+suspend operation runs. The PM core does not resume a device when its own
+suspend callback fails.
+
+A platform mailbox timeout therefore leaves the control channel stopped.
+Later ICM commands fail, and domain rescans cannot recover the controller.
+
+Restart the domain control channel before returning the platform error. This
+restores the state changed earlier in the same callback.
+
+Signed-off-by: John Rinehart <johnrichardrinehart@gmail.com>
+---
+ drivers/thunderbolt/nhi.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+--- a/drivers/thunderbolt/nhi.c
++++ b/drivers/thunderbolt/nhi.c
+@@ -974,20 +974,30 @@
+ 
+ static int __nhi_suspend_noirq(struct device *dev, bool wakeup)
+ {
+ 	struct tb *tb = dev_get_drvdata(dev);
+ 	struct tb_nhi *nhi = tb->nhi;
+-	int ret;
++	int ret, resume_ret;
+ 
+ 	ret = tb_domain_suspend_noirq(tb);
+ 	if (ret)
+ 		return ret;
+ 
+ 	if (nhi->ops->suspend_noirq) {
+ 		ret = nhi->ops->suspend_noirq(tb->nhi, wakeup);
+-		if (ret)
++		if (ret) {
++			/*
++			 * The PM core does not call resume_noirq() for the device
++			 * whose suspend callback failed. Restart the domain control
++			 * channel that tb_domain_suspend_noirq() already stopped.
++			 */
++			resume_ret = tb_domain_resume_noirq(tb);
++			if (resume_ret)
++				dev_warn(dev, "failed to restart domain after aborted suspend: %d\n",
++					 resume_ret);
+ 			return ret;
++		}
+ 	}
+ 
+ 	return 0;
+ }
+ 
+
+-- 
+2.51.0

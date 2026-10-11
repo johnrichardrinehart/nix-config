@@ -1,0 +1,17 @@
+{
+  "curve": "CURVE25519",
+  "details": {
+    "groups": null,
+    "isCa": false,
+    "issuer": "5f4cc459a75f45941905aa59d57b15a498bfcb4661da814a26adb0dc293b9fdb",
+    "name": "lighthouse",
+    "networks": ["10.77.0.1/24"],
+    "notAfter": "2027-09-25T12:52:29Z",
+    "notBefore": "2026-09-27T20:36:28Z",
+    "unsafeNetworks": null
+  },
+  "fingerprint": "397b70762d39a3a7f480abc0453bd2ea9930e21f26063c6df1a7b94fae9dacad",
+  "publicKey": "483cee218e26515ad4b1795db9204da8022ab3226b7c77cd1a9675d863894b62",
+  "signature": "caf71bc6a0e8faf2289b461f881324488586941f5f5e0772786ec73b438222b64f1ae38e7d9ddbf1c5dbfe2b77d65234a7875691840603d0709909f8b34f9e04",
+  "version": 2
+}

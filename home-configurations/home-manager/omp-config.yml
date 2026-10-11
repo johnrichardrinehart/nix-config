@@ -1,0 +1,9 @@
+setupVersion: 2
+modelRoles:
+  smol: openai-codex/gpt-5.6-sol
+  default: openai-codex/gpt-5.6-sol
+defaultThinkingLevel: auto
+colorBlindMode: true
+statusLine:
+  compactThinkingLevel: false
+treeFilterMode: all
