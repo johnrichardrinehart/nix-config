@@ -1,0 +1,30 @@
+From: John Rinehart <john@johnrinehart.com>
+Subject: [PATCH] dbus: accept remote desktop screencast sessions
+
+The companion RemoteDesktop service owns and validates remote-control
+sessions. Let GNOME's portal associate an authorized screencast with that
+session instead of rejecting the standard association property.
+---
+ src/dbus/mutter_screen_cast.rs | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/src/dbus/mutter_screen_cast.rs b/src/dbus/mutter_screen_cast.rs
+index 77a45434..14633be5 100644
+--- a/src/dbus/mutter_screen_cast.rs
++++ b/src/dbus/mutter_screen_cast.rs
+@@ -108,12 +108,6 @@ impl ScreenCast {
+         #[zbus(object_server)] server: &ObjectServer,
+-        properties: HashMap<&str, Value<'_>>,
++        _properties: HashMap<&str, Value<'_>>,
+     ) -> fdo::Result<OwnedObjectPath> {
+-        if properties.contains_key("remote-desktop-session-id") {
+-            return Err(fdo::Error::Failed(
+-                "there are no remote desktop sessions".to_owned(),
+-            ));
+-        }
+-
+         let session_id = CastSessionId::next();
+         let path = format!("/org/gnome/Mutter/ScreenCast/Session/u{}", session_id.get());
+         let path = OwnedObjectPath::try_from(path).unwrap();
+--
+2.51.0

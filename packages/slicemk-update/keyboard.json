@@ -1,0 +1,1868 @@
+{
+  "Modified": "2026-10-10T14:56:51.130Z",
+  "Keyboard": "ergodox",
+  "Board": "slicemk_ergodox_202207_green_left",
+  "Shield": "slicemk_ergodox_leftcentral",
+  "Peripheral": 40100,
+  "Kconfig": {
+    "CONFIG_ZMK_KEYBOARD_NAME": "\"SliceMK Kbd\""
+  },
+  "Advanced": {
+    "Logging": "",
+    "KRO": "",
+    "MouseMove": "",
+    "MouseScroll": "",
+    "BTParams": ""
+  },
+  "Layers": [
+    {
+      "Name": "dvorak",
+      "Notes": "Native Dvorak base derived from Moonlander layer 3",
+      "Keys": [
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["GRAVE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_1"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_2"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_3"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_4"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_5"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["MINUS"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["BACKSLASH"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_6"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_7"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_8"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_9"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_0"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["EQUAL"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["LEFT_GUI"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["SINGLE_QUOTE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["COMMA"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["PERIOD"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["P"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["Y"]
+        },
+        {
+          "Name": "PgUp / Home",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&home_pgup HOME PAGE_UP"]
+        },
+        {
+          "Name": "PgDn / End",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&end_pgdn END PAGE_DOWN"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["G"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["C"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["R"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["L"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["DELETE"]
+        },
+        {
+          "Name": "Tab",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["TAB"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["A"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["O"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["E"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["U"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["I"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["D"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["H"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["T"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["N"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["S"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["SINGLE_QUOTE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["LEFT_SHIFT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["SEMICOLON"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["Q"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["J"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["K"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["X"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mo",
+          "Notes": "",
+          "Args": ["mouse"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["CAPSLOCK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["B"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["M"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["W"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["V"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["Z"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["RIGHT_SHIFT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["LEFT_CONTROL"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["LEFT_ALT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mo",
+          "Notes": "",
+          "Args": ["fn"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["UP_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["DOWN_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["LEFT_BRACKET"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["RIGHT_BRACKET"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["RIGHT_CONTROL"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["ESCAPE"]
+        },
+        {
+          "Name": "Framework USB",
+          "Behavior": "&out",
+          "Notes": "Send output to the USB host",
+          "Args": ["OUT_USB"]
+        },
+        {
+          "Name": "Android / BT 0",
+          "Behavior": "&bt",
+          "Notes": "Select Bluetooth profile 0",
+          "Args": ["BT_SEL 0"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["ESCAPE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["SPACE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["BACKSPACE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&tog",
+          "Notes": "",
+          "Args": ["qwerty"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["BACKSPACE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["RETURN"]
+        },
+        {
+          "Name": "Bluetooth output",
+          "Behavior": "&out",
+          "Notes": "Send output to the active Bluetooth profile",
+          "Args": ["OUT_BLE"]
+        },
+        {
+          "Name": "Framie / BT 1",
+          "Behavior": "&bt",
+          "Notes": "Select Bluetooth profile 1 for Framie",
+          "Args": ["BT_SEL 1"]
+        }
+      ]
+    },
+    {
+      "Name": "fn",
+      "Notes": "Ported from Moonlander layer 1",
+      "Keys": [
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["ESCAPE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F6"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F7"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F8"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F9"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F10"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F11"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F9"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F10"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F11"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F12"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["PIPE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["UP_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_7"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["UP_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_9"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["ASTERISK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F12"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F5"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F6"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F7"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F8"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["GRAVE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["DOWN_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["LEFT_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["DOWN_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["RIGHT_ARROW"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["KP_PLUS"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F1"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F2"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F3"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F4"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["TILDE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["AMPERSAND"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_1"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_2"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_3"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["BACKSLASH"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["COMMA"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&bootloader",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "Mouse TT",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&tt_mouse 2 0"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["PERIOD"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["NUMBER_0"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["EQUAL"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "RGB_MODE_FORWARD",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&rgb_ug RGB_EFF"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "RGB_TOG",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&rgb_ug RGB_TOG"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "RGB_VAI",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&rgb_ug RGB_BRI"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "RGB_SLD",
+          "Behavior": "$custom",
+          "Notes": "Closest ZMK action: cycle effect",
+          "Args": ["&rgb_ug RGB_EFF"]
+        },
+        {
+          "Name": "RGB_HUD",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&rgb_ug RGB_HUD"]
+        },
+        {
+          "Name": "RGB_HUI",
+          "Behavior": "$custom",
+          "Notes": "",
+          "Args": ["&rgb_ug RGB_HUI"]
+        },
+        {
+          "Name": "Clear Android / BT 0",
+          "Behavior": "&bt",
+          "Notes": "Clear the selected Bluetooth profile",
+          "Args": ["BT_CLR"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
+        }
+      ]
+    },
+    {
+      "Name": "mouse",
+      "Notes": "Ported from Moonlander layer 2",
+      "Keys": [
+        {
+          "Name": "AU_TOGG",
+          "Behavior": "&none",
+          "Notes": "Unsupported: SliceMK has no audio hardware",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&bootloader",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "MU_TOGG",
+          "Behavior": "&none",
+          "Notes": "Unsupported: SliceMK has no audio hardware",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_UP"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_UP"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "MU_NEXT",
+          "Behavior": "&none",
+          "Notes": "Unsupported: SliceMK has no audio hardware",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_LEFT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_DOWN"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_RIGHT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_LEFT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_DOWN"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mmv",
+          "Notes": "",
+          "Args": ["MOVE_RIGHT"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["C_PLAY_PAUSE"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mkp",
+          "Notes": "",
+          "Args": ["LCLK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mkp",
+          "Notes": "",
+          "Args": ["MCLK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mkp",
+          "Notes": "",
+          "Args": ["RCLK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&mkp",
+          "Notes": "",
+          "Args": ["LCLK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&mkp",
+          "Notes": "",
+          "Args": ["RCLK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["C_AC_BACK"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
+        }
+      ]
+    },
+    {
+      "Name": "qwerty",
+      "Notes": "QWERTY toggle layer derived from Moonlander layer 0",
+      "Keys": [
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["Q"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["W"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["E"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["R"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["T"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["Y"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["U"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["I"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["O"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["P"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["TAB"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["S"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["D"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["F"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["G"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["H"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["J"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["K"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["L"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["SEMICOLON"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["Z"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["X"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["C"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["V"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["B"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["N"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["COMMA"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["PERIOD"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&kp",
+          "Notes": "",
+          "Args": ["SLASH"]
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        },
+        {
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "",
+          "Args": []
+        }
+      ]
+    }
+  ],
+  "Custom": "/ {\n    behaviors {\n        home_pgup: home_pgup {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"hold-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&kp>, <&kp>;\n        };\n\n        end_pgdn: end_pgdn {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"hold-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&kp>, <&kp>;\n        };\n\n        tt_mouse: tt_mouse {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"tap-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&mo>, <&td_mouse>;\n        };\n\n        td_mouse: td_mouse {\n            compatible = \"zmk,behavior-tap-dance\";\n            #binding-cells = <0>;\n            tapping-term-ms = <250>;\n            bindings = <&none>, <&none>, <&none>, <&none>, <&tog 2>;\n        };\n    };\n};"
+}

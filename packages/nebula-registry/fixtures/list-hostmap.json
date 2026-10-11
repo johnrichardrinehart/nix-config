@@ -1,0 +1,36 @@
+[
+  {
+    "vpnAddrs": ["10.77.0.2"],
+    "localIndex": 551467716,
+    "remoteIndex": 2122363663,
+    "remoteAddrs": [
+      "[2001:db8::80]:55065",
+      "[2001:db8::27]:55065",
+      "203.0.113.10:55065",
+      "198.51.100.80:55065",
+      "198.51.100.10:55065",
+      "192.0.2.27:55065"
+    ],
+    "cert": {
+      "curve": "CURVE25519",
+      "details": {
+        "groups": ["peer"],
+        "isCa": false,
+        "issuer": "5f4cc459a75f45941905aa59d57b15a498bfcb4661da814a26adb0dc293b9fdb",
+        "name": "framework",
+        "networks": ["10.77.0.2/24"],
+        "notAfter": "2027-09-25T12:52:29Z",
+        "notBefore": "2026-09-27T20:36:28Z",
+        "unsafeNetworks": null
+      },
+      "fingerprint": "98a6e67f33118958f8b98f9f4e7b4a5660e64761722fe0f56aad9b6e136ceeb4",
+      "publicKey": "451f2d90cedcc4dc0d5ee73112f13bce9bc4bcd0f2a450591cfe0b68cd4a3070",
+      "signature": "95bd686cde33e04a8db94190ca47d5841c024c64bc51eabd723921522e0b3a6397fc8ffb580721396c1f3b24690ef6903631ff3615e012e7edff457d2445aa01",
+      "version": 2
+    },
+    "messageCounter": 5,
+    "currentRemote": "203.0.113.10:55065",
+    "currentRelaysToMe": [],
+    "currentRelaysThroughMe": []
+  }
+]

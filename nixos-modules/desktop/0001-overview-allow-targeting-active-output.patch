@@ -1,0 +1,467 @@
+diff --git a/docs/wiki/Overview.md b/docs/wiki/Overview.md
+index f9bb94a3..b60794bf 100644
+--- a/docs/wiki/Overview.md
++++ b/docs/wiki/Overview.md
+@@ -12,6 +12,18 @@ https://github.com/user-attachments/assets/379a5d1f-acdb-4c11-b36c-e85fd91f0995
+ </video>
+ 
+ Open it with the `toggle-overview` bind, via the top-left hot corner, or using a touchpad four-finger swipe up.
++On a multi-output setup, `toggle-overview` and `open-overview` include every output by default.
++Set `all-outputs=false` on an action to target only the active output:
++
++```kdl
++binds {
++    Mod+O { toggle-overview all-outputs=false; }
++    Mod+Shift+O { toggle-overview; }
++}
++```
++
++<sup>Since: next release</sup>
++
+ While in the overview, all keyboard shortcuts keep working, while pointing devices get easier:
+ 
+ - Mouse: left click and drag windows to move them, right click and drag to scroll workspaces left/right, scroll to switch workspaces (no holding Mod required).
+diff --git a/niri-config/src/binds.rs b/niri-config/src/binds.rs
+index e1a6a546..4a8c028d 100644
+--- a/niri-config/src/binds.rs
++++ b/niri-config/src/binds.rs
+@@ -362,8 +362,8 @@ pub enum Action {
+     ClearDynamicCastTarget,
+     #[knuffel(skip)]
+     StopCast(u64),
+-    ToggleOverview,
+-    OpenOverview,
++    ToggleOverview(#[knuffel(property(name = "all-outputs"), default = true)] bool),
++    OpenOverview(#[knuffel(property(name = "all-outputs"), default = true)] bool),
+     CloseOverview,
+     #[knuffel(skip)]
+     ToggleWindowUrgent(u64),
+@@ -697,8 +697,8 @@ impl From<niri_ipc::Action> for Action {
+             }
+             niri_ipc::Action::ClearDynamicCastTarget {} => Self::ClearDynamicCastTarget,
+             niri_ipc::Action::StopCast { session_id } => Self::StopCast(session_id),
+-            niri_ipc::Action::ToggleOverview {} => Self::ToggleOverview,
+-            niri_ipc::Action::OpenOverview {} => Self::OpenOverview,
++            niri_ipc::Action::ToggleOverview { all_outputs } => Self::ToggleOverview(all_outputs),
++            niri_ipc::Action::OpenOverview { all_outputs } => Self::OpenOverview(all_outputs),
+             niri_ipc::Action::CloseOverview {} => Self::CloseOverview,
+             niri_ipc::Action::ToggleWindowUrgent { id } => Self::ToggleWindowUrgent(id),
+             niri_ipc::Action::SetWindowUrgent { id } => Self::SetWindowUrgent(id),
+diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
+index 77f07967..1c9ba856 100644
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -648,6 +648,23 @@ mod tests {
+         assert_eq!(config.input.keyboard.repeat_rate, 25);
+     }
+ 
++    #[test]
++    fn overview_action_scope() {
++        let config = Config::parse_mem(
++            "binds { Mod+O { toggle-overview all-outputs=false; }; Mod+Shift+O { toggle-overview; }; }",
++        )
++        .unwrap();
++
++        assert_eq!(
++            config.binds.0[0].action,
++            binds::Action::ToggleOverview(false)
++        );
++        assert_eq!(
++            config.binds.0[1].action,
++            binds::Action::ToggleOverview(true)
++        );
++    }
++
+     #[track_caller]
+     fn do_parse(text: &str) -> Config {
+         Config::parse_mem(text)
+diff --git a/niri-ipc/src/lib.rs b/niri-ipc/src/lib.rs
+index 218e532c..f7487f6b 100644
+--- a/niri-ipc/src/lib.rs
++++ b/niri-ipc/src/lib.rs
+@@ -183,6 +183,10 @@ pub struct PickedColor {
+     pub rgb: [f64; 3],
+ }
+ 
++const fn default_true() -> bool {
++    true
++}
++
+ /// Actions that niri can perform.
+ // Variants in this enum should match the spelling of the ones in niri-config. Most, but not all,
+ // variants from niri-config should be present here.
+@@ -909,9 +913,25 @@ pub enum Action {
+         session_id: u64,
+     },
+     /// Toggle (open/close) the Overview.
+-    ToggleOverview {},
++    ToggleOverview {
++        /// Whether the Overview includes every output.
++        #[serde(default = "default_true")]
++        #[cfg_attr(
++            feature = "clap",
++            arg(long, action = clap::ArgAction::Set, default_value_t = true)
++        )]
++        all_outputs: bool,
++    },
+     /// Open the Overview.
+-    OpenOverview {},
++    OpenOverview {
++        /// Whether the Overview includes every output.
++        #[serde(default = "default_true")]
++        #[cfg_attr(
++            feature = "clap",
++            arg(long, action = clap::ArgAction::Set, default_value_t = true)
++        )]
++        all_outputs: bool,
++    },
+     /// Close the Overview.
+     CloseOverview {},
+     /// Toggle urgent status of a window.
+diff --git a/src/input/mod.rs b/src/input/mod.rs
+index 50567530..de552a67 100644
+--- a/src/input/mod.rs
++++ b/src/input/mod.rs
+@@ -2271,12 +2271,12 @@ impl State {
+             Action::StopCast(session_id) => {
+                 self.niri.stop_cast(CastSessionId::from(session_id));
+             }
+-            Action::ToggleOverview => {
+-                self.niri.layout.toggle_overview();
++            Action::ToggleOverview(all_outputs) => {
++                self.niri.layout.toggle_overview(all_outputs);
+                 self.niri.queue_redraw_all();
+             }
+-            Action::OpenOverview => {
+-                if self.niri.layout.open_overview() {
++            Action::OpenOverview(all_outputs) => {
++                if self.niri.layout.open_overview(all_outputs) {
+                     self.niri.queue_redraw_all();
+                 }
+             }
+@@ -2631,7 +2631,7 @@ impl State {
+                     .with_grab(|_, grab| grab_allows_hot_corner(grab))
+                     .unwrap_or(true)
+             {
+-                self.niri.layout.toggle_overview();
++                self.niri.layout.toggle_overview(true);
+             }
+             self.niri.pointer_inside_hot_corner = true;
+         }
+@@ -2718,7 +2718,7 @@ impl State {
+                     .with_grab(|_, grab| grab_allows_hot_corner(grab))
+                     .unwrap_or(true)
+             {
+-                self.niri.layout.toggle_overview();
++                self.niri.layout.toggle_overview(true);
+             }
+             self.niri.pointer_inside_hot_corner = true;
+         }
+@@ -4737,7 +4737,7 @@ fn hardcoded_overview_bind(raw: Keysym, mods: ModifiersState) -> Option<Bind> {
+     let action = match raw {
+         Keysym::Escape | Keysym::Return => {
+             repeat = false;
+-            Action::ToggleOverview
++            Action::ToggleOverview(true)
+         }
+         Keysym::Left => Action::FocusColumnLeft,
+         Keysym::Right => Action::FocusColumnRight,
+diff --git a/src/layout/mod.rs b/src/layout/mod.rs
+index 5c4dd639..d266ea08 100644
+--- a/src/layout/mod.rs
++++ b/src/layout/mod.rs
+@@ -364,6 +364,8 @@ pub struct Layout<W: LayoutElement> {
+     overview_open: bool,
+     /// The overview zoom progress.
+     overview_progress: Option<OverviewProgress>,
++    /// Output targeted by the current overview session, or none for all outputs.
++    overview_output: Option<Output>,
+     /// Configurable properties of the layout.
+     options: Rc<Options>,
+ }
+@@ -703,6 +705,7 @@ impl<W: LayoutElement> Layout<W> {
+             update_render_elements_time: Duration::ZERO,
+             overview_open: false,
+             overview_progress: None,
++            overview_output: None,
+             options: Rc::new(options),
+         }
+     }
+@@ -728,6 +731,7 @@ impl<W: LayoutElement> Layout<W> {
+             update_render_elements_time: Duration::ZERO,
+             overview_open: false,
+             overview_progress: None,
++            overview_output: None,
+             options: opts,
+         }
+     }
+@@ -799,7 +803,7 @@ impl<W: LayoutElement> Layout<W> {
+ 
+                 let ws_id_to_activate = self.last_active_workspace_id.remove(&output.name());
+ 
+-                let mut monitor = Monitor::new(
++                let monitor = Monitor::new(
+                     output,
+                     workspaces,
+                     ws_id_to_activate,
+@@ -807,8 +811,6 @@ impl<W: LayoutElement> Layout<W> {
+                     self.options.clone(),
+                     layout_config,
+                 );
+-                monitor.overview_open = self.overview_open;
+-                monitor.set_overview_progress(self.overview_progress.as_ref());
+                 monitors.push(monitor);
+ 
+                 MonitorSet::Normal {
+@@ -820,7 +822,7 @@ impl<W: LayoutElement> Layout<W> {
+             MonitorSet::NoOutputs { workspaces } => {
+                 let ws_id_to_activate = self.last_active_workspace_id.remove(&output.name());
+ 
+-                let mut monitor = Monitor::new(
++                let monitor = Monitor::new(
+                     output,
+                     workspaces,
+                     ws_id_to_activate,
+@@ -828,16 +830,14 @@ impl<W: LayoutElement> Layout<W> {
+                     self.options.clone(),
+                     layout_config,
+                 );
+-                monitor.overview_open = self.overview_open;
+-                monitor.set_overview_progress(self.overview_progress.as_ref());
+-
+                 MonitorSet::Normal {
+                     monitors: vec![monitor],
+                     primary_idx: 0,
+                     active_monitor_idx: 0,
+                 }
+             }
+-        }
++        };
++        self.set_monitors_overview_state();
+     }
+ 
+     pub fn remove_output(&mut self, output: &Output) {
+@@ -2501,11 +2501,17 @@ impl<W: LayoutElement> Layout<W> {
+                 "monitor base options must be synchronized with layout"
+             );
+ 
+-            assert_eq!(self.overview_open, monitor.overview_open);
+-            assert_eq!(
+-                self.overview_progress.as_ref().map(|p| p.value()),
+-                monitor.overview_progress_value()
+-            );
++            let participates = self
++                .overview_output
++                .as_ref()
++                .is_none_or(|output| monitor.output == *output);
++            assert_eq!(self.overview_open && participates, monitor.overview_open);
++            let overview_progress = if participates {
++                self.overview_progress.as_ref().map(|p| p.value())
++            } else {
++                None
++            };
++            assert_eq!(overview_progress, monitor.overview_progress_value());
+ 
+             monitor.verify_invariants();
+ 
+@@ -2709,10 +2715,11 @@ impl<W: LayoutElement> Layout<W> {
+             }
+         }
+ 
++        self.set_monitors_overview_state();
++
+         match &mut self.monitor_set {
+             MonitorSet::Normal { monitors, .. } => {
+                 for mon in monitors {
+-                    mon.set_overview_progress(self.overview_progress.as_ref());
+                     mon.advance_animations();
+                 }
+             }
+@@ -2810,7 +2817,17 @@ impl<W: LayoutElement> Layout<W> {
+                 let is_active = self.is_active
+                     && idx == *active_monitor_idx
+                     && !matches!(self.interactive_move, Some(InteractiveMoveState::Moving(_)));
+-                mon.set_overview_progress(self.overview_progress.as_ref());
++                let participates = self
++                    .overview_output
++                    .as_ref()
++                    .is_none_or(|output| mon.output == *output);
++                let progress = if participates {
++                    self.overview_progress.as_ref()
++                } else {
++                    None
++                };
++                mon.overview_open = self.overview_open && participates;
++                mon.set_overview_progress(progress);
+                 mon.update_render_elements(is_active);
+             }
+         }
+@@ -3721,6 +3738,7 @@ impl<W: LayoutElement> Layout<W> {
+ 
+     pub fn overview_gesture_begin(&mut self) {
+         self.overview_open = true;
++        self.overview_output = None;
+ 
+         let value = self.overview_progress.take().map_or(0., |p| p.value());
+         let gesture = OverviewGesture {
+@@ -4583,18 +4601,45 @@ impl<W: LayoutElement> Layout<W> {
+     }
+ 
+     pub fn set_monitors_overview_state(&mut self) {
+-        let MonitorSet::Normal { monitors, .. } = &mut self.monitor_set else {
++        let MonitorSet::Normal {
++            monitors,
++            active_monitor_idx,
++            ..
++        } = &mut self.monitor_set
++        else {
+             return;
+         };
+ 
+-        for mon in monitors {
+-            mon.overview_open = self.overview_open;
+-            mon.set_overview_progress(self.overview_progress.as_ref());
++        if self
++            .overview_output
++            .as_ref()
++            .is_some_and(|output| monitors.iter().all(|mon| mon.output != *output))
++        {
++            self.overview_output = Some(monitors[*active_monitor_idx].output.clone());
++        }
++
++        for mon in monitors.iter_mut() {
++            let participates = self
++                .overview_output
++                .as_ref()
++                .is_none_or(|output| mon.output == *output);
++            mon.overview_open = self.overview_open && participates;
++            let progress = if participates {
++                self.overview_progress.as_ref()
++            } else {
++                None
++            };
++            mon.set_overview_progress(progress);
+         }
+     }
+ 
+-    pub fn toggle_overview(&mut self) {
++    pub fn toggle_overview(&mut self, all_outputs: bool) {
+         self.overview_open = !self.overview_open;
++        if self.overview_open {
++            self.overview_output = (!all_outputs)
++                .then(|| self.active_output().cloned())
++                .flatten();
++        }
+ 
+         let from = self.overview_progress.take().map_or(0., |p| p.value());
+         let to = if self.overview_open { 1. } else { 0. };
+@@ -4610,12 +4655,12 @@ impl<W: LayoutElement> Layout<W> {
+         self.set_monitors_overview_state();
+     }
+ 
+-    pub fn open_overview(&mut self) -> bool {
++    pub fn open_overview(&mut self, all_outputs: bool) -> bool {
+         if self.overview_open {
+             return false;
+         }
+ 
+-        self.toggle_overview();
++        self.toggle_overview(all_outputs);
+         true
+     }
+ 
+@@ -4624,7 +4669,7 @@ impl<W: LayoutElement> Layout<W> {
+             return false;
+         }
+ 
+-        self.toggle_overview();
++        self.toggle_overview(false);
+         true
+     }
+ 
+@@ -4633,7 +4678,7 @@ impl<W: LayoutElement> Layout<W> {
+         if let Some(mon) = self.active_monitor() {
+             mon.activate_workspace_with_anim_config(ws_idx, Some(config));
+         }
+-        self.toggle_overview();
++        self.toggle_overview(false);
+     }
+ 
+     pub fn start_open_animation_for_window(&mut self, window: &W::Id) {
+diff --git a/src/layout/tests.rs b/src/layout/tests.rs
+index 31265dd9..c74359b0 100644
+--- a/src/layout/tests.rs
++++ b/src/layout/tests.rs
+@@ -1615,7 +1615,7 @@ impl Op {
+                 layout.interactive_resize_end(&window);
+             }
+             Op::ToggleOverview => {
+-                layout.toggle_overview();
++                layout.toggle_overview(true);
+             }
+             Op::UpdateConfig { layout_config } => {
+                 let options = Options {
+@@ -3697,6 +3697,41 @@ fn expel_pending_left_from_fullscreen_tabbed_column() {
+     check_ops(ops);
+ }
+ 
++#[test]
++fn overview_can_target_only_active_output() {
++    let ops = [Op::AddOutput(1), Op::AddOutput(2)];
++
++    let mut active_only_layout = check_ops(ops.clone());
++    active_only_layout.toggle_overview(false);
++    active_only_layout.update_render_elements(None);
++    let MonitorSet::Normal {
++        monitors,
++        active_monitor_idx,
++        ..
++    } = &active_only_layout.monitor_set
++    else {
++        unreachable!()
++    };
++    for (idx, mon) in monitors.iter().enumerate() {
++        assert_eq!(mon.overview_open, idx == *active_monitor_idx);
++        assert_eq!(
++            mon.overview_progress_value().is_some(),
++            idx == *active_monitor_idx
++        );
++    }
++
++    let mut all_outputs_layout = check_ops(ops);
++    all_outputs_layout.toggle_overview(true);
++    all_outputs_layout.update_render_elements(None);
++    let MonitorSet::Normal { monitors, .. } = &all_outputs_layout.monitor_set else {
++        unreachable!()
++    };
++    assert!(monitors.iter().all(|mon| mon.overview_open));
++    assert!(monitors
++        .iter()
++        .all(|mon| mon.overview_progress_value().is_some()));
++}
++
+ #[test]
+ fn workspace_render_geo_at_fractional_scale() {
+     let ops = [
+diff --git a/src/ui/hotkey_overlay.rs b/src/ui/hotkey_overlay.rs
+index 34bc3955..ef749046 100644
+--- a/src/ui/hotkey_overlay.rs
++++ b/src/ui/hotkey_overlay.rs
+@@ -257,7 +257,7 @@ fn collect_actions(config: &Config) -> Vec<&Action> {
+         &Action::ConsumeOrExpelWindowRight,
+         &Action::ToggleWindowFloating,
+         &Action::SwitchFocusBetweenFloatingAndTiling,
+-        &Action::ToggleOverview,
++        &Action::ToggleOverview(true),
+     ]);
+ 
+     // Screenshot is not as important, can omit if not bound.
+@@ -478,7 +478,7 @@ fn action_name(action: &Action) -> String {
+         Action::SwitchFocusBetweenFloatingAndTiling => {
+             String::from("Switch Focus Between Floating and Tiling")
+         }
+-        Action::ToggleOverview => String::from("Open the Overview"),
++        Action::ToggleOverview(_) => String::from("Open the Overview"),
+         Action::Screenshot(_, _) => String::from("Take a Screenshot"),
+         Action::Spawn(args) => format!(
+             "Spawn <span face='monospace' bgcolor='#000000'>{}</span>",

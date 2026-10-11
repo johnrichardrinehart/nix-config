@@ -1,0 +1,3 @@
+{ kitkat-rs, system }:
+
+kitkat-rs.packages.${system}."low-rss"

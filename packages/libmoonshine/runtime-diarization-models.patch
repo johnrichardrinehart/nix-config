@@ -1,0 +1,35 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -203,6 +203,10 @@
+     )
+ endif()
+
++add_compile_definitions(
++    MOONSHINE_DIARIZATION_MODEL_DIR="${MOONSHINE_DIARIZATION_MODEL_DIR}"
++)
++
+ set_target_properties(moonshine PROPERTIES
+     CXX_STANDARD 20
+     CXX_STANDARD_REQUIRED YES
+--- a/transcriber.cpp
++++ b/transcriber.cpp
+@@ -76,7 +76,9 @@
+   if (!explicit_model.path.empty()) {
+     return explicit_model;
+   }
+-  if (model_dir.empty()) {
++  const std::string effective_model_dir =
++      model_dir.empty() ? MOONSHINE_DIARIZATION_MODEL_DIR : model_dir;
++  if (effective_model_dir.empty()) {
+     throw std::runtime_error(
+         std::string("identify_speakers needs the diarization models, which are "
+                     "downloaded rather than built in. Set the "
+@@ -86,7 +88,7 @@
+         filename + ". See docs/diarization-models.md.");
+   }
+   SpeakerDiarizerModel resolved;
+-  resolved.path = (std::filesystem::path(model_dir) / filename).string();
++  resolved.path = (std::filesystem::path(effective_model_dir) / filename).string();
+   if (!std::filesystem::exists(resolved.path)) {
+     throw std::runtime_error("Diarization model not found: " + resolved.path +
+                              ". Download it with the manifest from "

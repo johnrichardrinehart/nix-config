@@ -1,0 +1,289 @@
+From e8a6ec130bd7906b94bf4d4af025d9805e64b5c3 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 3 Sep 2026 09:22:06 -0400
+Subject: [PATCH 3/3] sprite: add kitty block shade patterns
+
+---
+ src/App.zig               |  1 +
+ src/Config.zig            | 10 ++++++
+ src/Font.zig              | 10 +++++-
+ src/sprite.zig            | 29 ++++++++++++---
+ src/sprite/draw/block.zig | 75 +++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 119 insertions(+), 6 deletions(-)
+
+diff --git a/src/App.zig b/src/App.zig
+index d17d6f1..4924ebd 100644
+--- a/src/App.zig
++++ b/src/App.zig
+@@ -472,6 +472,7 @@ fn fontOptions(config: Config) Font.Options {
+         .weight = config.font_weight,
+         .synthetic_italic = config.synthetic_italic,
+         .synthetic_italic_weight = config.synthetic_italic_weight,
++        .block_shade_style = config.block_shade_style,
+     };
+ }
+ 
+diff --git a/src/Config.zig b/src/Config.zig
+index bf072b1..0eb2032 100644
+--- a/src/Config.zig
++++ b/src/Config.zig
+@@ -88,6 +88,10 @@ pub const MetricModifier = union(enum) {
+     }
+ };
+ 
++pub const BlockShadeStyle = enum {
++    default,
++    kitty,
++};
+ pub const FontWeight = enum {
+     default,
+     medium,
+@@ -108,6 +112,7 @@ font_size: FontSize = .{ .points = 12 },
+ /// Signed physical-pixel or percentage adjustment to the font's natural cell
+ /// height. Unset preserves the natural metrics.
+ adjust_cell_height: ?MetricModifier = null,
++block_shade_style: BlockShadeStyle = .default,
+ /// Minimum window padding in logical pixels. One configured value applies to
+ /// both sides; two values are left/right for X and top/bottom for Y.
+ window_padding_x: WindowPadding = .{},
+@@ -261,6 +266,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+         self.font_size = try parseFontSize(value);
+     } else if (std.mem.eql(u8, key, "adjust-cell-height")) {
+         self.adjust_cell_height = try parseMetricModifier(value);
++    } else if (std.mem.eql(u8, key, "block-shade-style")) {
++        self.block_shade_style = std.meta.stringToEnum(BlockShadeStyle, value) orelse return error.InvalidValue;
+     } else if (std.mem.eql(u8, key, "window-padding-x")) {
+         self.window_padding_x = try parseWindowPadding(value);
+     } else if (std.mem.eql(u8, key, "window-padding-y")) {
+@@ -562,6 +569,7 @@ test "defaults" {
+     try std.testing.expect(!config.synthetic_italic);
+     try std.testing.expectEqual(SyntheticItalicWeight.regular, config.synthetic_italic_weight);
+     try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
++    try std.testing.expectEqual(BlockShadeStyle.default, config.block_shade_style);
+     try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
+     try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
+     try std.testing.expectEqual(@as(?Command, null), config.command);
+@@ -615,6 +623,7 @@ test "parse config" {
+         \\synthetic-italic = true
+         \\synthetic-italic-weight = bold
+         \\font-size = 14.5
++        \\block-shade-style = kitty
+         \\window-padding-x = 4
+         \\window-padding-y = 6, 10
+         \\command = /usr/bin/fish --login
+@@ -654,6 +663,7 @@ test "parse config" {
+     try std.testing.expectEqual(SyntheticItalicWeight.bold, config.synthetic_italic_weight);
+     // invalid re-assignment keeps the previous valid value
+     try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
++    try std.testing.expectEqual(BlockShadeStyle.kitty, config.block_shade_style);
+     try std.testing.expectEqual(WindowPadding{ .first = 4, .second = 4 }, config.window_padding_x);
+     try std.testing.expectEqual(WindowPadding{ .first = 6, .second = 10 }, config.window_padding_y);
+     try std.testing.expectEqualStrings("/usr/bin/fish --login", config.command.?.shell);
+diff --git a/src/Font.zig b/src/Font.zig
+index 995761d..69c7a1d 100644
+--- a/src/Font.zig
++++ b/src/Font.zig
+@@ -123,6 +123,7 @@ pub const Options = struct {
+     weight: Config.FontWeight = .default,
+     synthetic_italic: bool = false,
+     synthetic_italic_weight: Config.SyntheticItalicWeight = .regular,
++    block_shade_style: Config.BlockShadeStyle = .default,
+ };
+ 
+ /// Immutable Fontconfig results. Rasterizers need independent FreeType,
+@@ -1218,7 +1219,14 @@ pub fn spriteGlyph(
+     if (gop.found_existing) return gop.value_ptr;
+     errdefer _ = self.sprite_glyphs.remove(key);
+ 
+-    const g = try sprite.render(alloc, cp, self.sprite_metrics, self.baseline, cell_span);
++    const g = try sprite.render(
++        alloc,
++        cp,
++        self.sprite_metrics,
++        self.baseline,
++        cell_span,
++        self.discovery_data.options.block_shade_style == .kitty,
++    );
+     gop.value_ptr.* = .{
+         .bitmap = g.bitmap,
+         .fully_opaque = alphaBitmapOpaque(g.bitmap),
+diff --git a/src/sprite.zig b/src/sprite.zig
+index 4c74f4a..dab4332 100644
+--- a/src/sprite.zig
++++ b/src/sprite.zig
+@@ -13,6 +13,7 @@ const z2d = @import("z2d");
+ const canvas_mod = @import("sprite/canvas.zig");
+ const metrics_mod = @import("sprite/metrics.zig");
+ const special = @import("sprite/draw/special.zig");
++const block = @import("sprite/draw/block.zig");
+ 
+ const log = std.log.scoped(.sprite);
+ 
+@@ -145,8 +146,11 @@ pub fn render(
+     metrics: Metrics,
+     baseline: u31,
+     cell_span: u2,
++    kitty_block_shades: bool,
+ ) !Glyph {
+     std.debug.assert(cell_span >= 1);
++    if (kitty_block_shades and cp >= 0x2591 and cp <= 0x2593)
++        return renderWith(alloc, block.kittyShade, cp, metrics, baseline, cell_span, metrics.cell_height);
+     const draw = getDrawFn(cp) orelse unreachable; // covers() gates this
+     return renderWith(alloc, draw, cp, metrics, baseline, cell_span, metrics.cell_height);
+ }
+@@ -247,7 +251,7 @@ test "render box drawing sprites" {
+ 
+     // Horizontal line: full cell width, thin, vertically centered.
+     {
+-        const g = try render(alloc, 0x2500, test_metrics, 15, 1);
++        const g = try render(alloc, 0x2500, test_metrics, 15, 1, false);
+         defer alloc.free(g.bitmap);
+         try std.testing.expectEqual(@as(u31, 10), g.width);
+         try std.testing.expect(g.height < 5);
+@@ -258,7 +262,7 @@ test "render box drawing sprites" {
+ 
+     // Wide variants use the occupied cell span while preserving vertical metrics.
+     {
+-        const g = try render(alloc, 0x2500, test_metrics, 15, 2);
++        const g = try render(alloc, 0x2500, test_metrics, 15, 2, false);
+         defer alloc.free(g.bitmap);
+         try std.testing.expectEqual(@as(u31, 20), g.width);
+         try std.testing.expect(g.height < 5);
+@@ -269,7 +273,7 @@ test "render box drawing sprites" {
+ 
+     // Full block: covers the whole cell exactly.
+     {
+-        const g = try render(alloc, 0x2588, test_metrics, 15, 1);
++        const g = try render(alloc, 0x2588, test_metrics, 15, 1, false);
+         defer alloc.free(g.bitmap);
+         try std.testing.expectEqual(@as(u31, 10), g.width);
+         try std.testing.expectEqual(@as(u31, 20), g.height);
+@@ -280,7 +284,7 @@ test "render box drawing sprites" {
+ 
+     // Rounded corner: uses the z2d path rasterizer.
+     {
+-        const g = try render(alloc, 0x256D, test_metrics, 15, 1); // ╭
++        const g = try render(alloc, 0x256D, test_metrics, 15, 1, false); // ╭
+         defer alloc.free(g.bitmap);
+         var sum: usize = 0;
+         for (g.bitmap) |px| sum += px;
+@@ -296,7 +300,7 @@ test "render box drawing sprites" {
+         .cursor_height = 23,
+     };
+     inline for (&.{ 0x1FB98, 0x1FB99, 0x1CC1F, 0x1CC20 }) |cp| {
+-        const g = try render(alloc, cp, odd_metrics, 17, 1);
++        const g = try render(alloc, cp, odd_metrics, 17, 1, false);
+         defer alloc.free(g.bitmap);
+         var sum: usize = 0;
+         for (g.bitmap) |px| sum += px;
+@@ -304,6 +308,21 @@ test "render box drawing sprites" {
+     }
+ }
+ 
++test "render KiTTY block shade patterns" {
++    const alloc = std.testing.allocator;
++    const expected_opaque = [_]usize{ 50, 100, 150 };
++    for (0x2591..0x2594, expected_opaque) |cp, expected| {
++        const g = try render(alloc, @intCast(cp), test_metrics, 15, 1, true);
++        defer alloc.free(g.bitmap);
++        try std.testing.expectEqual(expected, std.mem.count(u8, g.bitmap, &.{255}));
++        for (g.bitmap) |alpha| try std.testing.expect(alpha == 0 or alpha == 255);
++    }
++
++    const smooth = try render(alloc, 0x2591, test_metrics, 15, 1, false);
++    defer alloc.free(smooth.bitmap);
++    for (smooth.bitmap) |alpha| try std.testing.expectEqual(@as(u8, 0x40), alpha);
++}
++
+ test "render decorations" {
+     const alloc = std.testing.allocator;
+     inline for (@typeInfo(Decoration).@"enum".fields) |field| {
+diff --git a/src/sprite/draw/block.zig b/src/sprite/draw/block.zig
+index 9b585e1..cca6efc 100644
+--- a/src/sprite/draw/block.zig
++++ b/src/sprite/draw/block.zig
+@@ -155,6 +155,81 @@ pub fn fullBlockShade(
+         @as(sprite.Color, @enumFromInt(@intFromEnum(shade))),
+     );
+ }
++/// Draw U+2591..U+2593 with KiTTY's spatial shade masks.
++pub fn kittyShade(
++    cp: u32,
++    canvas: *sprite.Canvas,
++    width: u32,
++    height: u32,
++    metrics: font.Metrics,
++) !void {
++    _ = metrics;
++    std.debug.assert(cp >= 0x2591 and cp <= 0x2593);
++
++    const light = cp != 0x2592;
++    const invert = cp == 0x2593;
++    const xnum: u32 = 12;
++    const square_width = @max(1, width / xnum);
++    const square_height = square_width;
++    var columns = width / square_width;
++    var rows = height / square_height;
++    if (columns > 1 and columns % 2 != xnum % 2) columns -= 1;
++    if (rows > 1 and rows % 2 != 0) rows -= 1;
++
++    const excess_columns = width - square_width * columns;
++    const excess_rows = height - square_height * rows;
++    var previous_extra_y: u32 = 0;
++    for (0..rows) |row_usize| {
++        const row: u32 = @intCast(row_usize);
++        const extra_y = ceilRatio(row * excess_rows, rows);
++        const has_extra_row = extra_y != previous_extra_y;
++        var previous_extra_x: u32 = 0;
++
++        for (0..columns) |column_usize| {
++            const column: u32 = @intCast(column_usize);
++            const extra_x = ceilRatio(column * excess_columns, columns);
++            const has_extra_column = extra_x != previous_extra_x;
++
++            if (has_extra_row) {
++                const alpha: u8 = if (light)
++                    if (invert)
++                        if (column % 2 == 1) 255 else 70
++                    else if (column % 2 == 1) 0 else 70
++                else if ((column % 2 == 1) == invert) 120 else 30;
++                for (0..square_width) |dx|
++                    canvas.pixel(@intCast(column * square_width + @as(u32, @intCast(dx)) + extra_x), @intCast(row * square_height + previous_extra_y), @enumFromInt(alpha));
++            }
++
++            if (has_extra_column) {
++                const alpha: u8 = if (light)
++                    if (invert)
++                        if (row % 2 == 1) 255 else 70
++                    else if (row % 2 == 1) 0 else 70
++                else if ((row % 2 == 1) == invert) 120 else 30;
++                for (0..square_height) |dy|
++                    canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + @as(u32, @intCast(dy)) + extra_y), @enumFromInt(alpha));
++            }
++
++            if (has_extra_row and has_extra_column)
++                canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + previous_extra_y), @enumFromInt(50));
++
++            const blank = invert != ((row % 2 != column % 2) or (light and row % 2 == 1));
++            if (!blank) canvas.box(
++                @intCast(column * square_width + extra_x),
++                @intCast(row * square_height + extra_y),
++                @intCast((column + 1) * square_width + extra_x),
++                @intCast((row + 1) * square_height + extra_y),
++                .on,
++            );
++            previous_extra_x = extra_x;
++        }
++        previous_extra_y = extra_y;
++    }
++}
++
++fn ceilRatio(numerator: u32, denominator: u32) u32 {
++    return (numerator + denominator - 1) / denominator;
++}
+ 
+ fn quadrant(
+     metrics: font.Metrics,
+-- 
+2.54.0
+
