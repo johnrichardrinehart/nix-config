@@ -15,13 +15,20 @@
                     "type": "frontmost_application_if"
                   },
                   {
-                    "input_sources": [{ "input_source_id": "^com\\.apple\\.keylayout\\.Dvorak$" }],
+                    "input_sources": [
+                      {
+                        "input_source_id": "^com\\.apple\\.keylayout\\.Dvorak$"
+                      }
+                    ],
                     "type": "input_source_if"
                   }
                 ],
                 "from": {
                   "key_code": "j",
-                  "modifiers": { "mandatory": ["command"], "optional": ["caps_lock"] }
+                  "modifiers": {
+                    "mandatory": ["command"],
+                    "optional": ["caps_lock"]
+                  }
                 },
                 "to": [{ "key_code": "vk_none" }],
                 "type": "basic"
@@ -35,13 +42,20 @@
                     "type": "frontmost_application_if"
                   },
                   {
-                    "input_sources": [{ "input_source_id": "^com\\.apple\\.keylayout\\.Dvorak$" }],
+                    "input_sources": [
+                      {
+                        "input_source_id": "^com\\.apple\\.keylayout\\.Dvorak$"
+                      }
+                    ],
                     "type": "input_source_unless"
                   }
                 ],
                 "from": {
                   "key_code": "h",
-                  "modifiers": { "mandatory": ["command"], "optional": ["caps_lock"] }
+                  "modifiers": {
+                    "mandatory": ["command"],
+                    "optional": ["caps_lock"]
+                  }
                 },
                 "to": [{ "key_code": "vk_none" }],
                 "type": "basic"

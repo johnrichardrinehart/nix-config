@@ -235,7 +235,7 @@
       };
 
       flake = {
-        overlays = overlays;
+        inherit overlays;
         lib = unifiedLib // {
           inherit mkMbpHost mkProvisionMac mkProvisionMacPackage;
         };
