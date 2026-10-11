@@ -38,7 +38,8 @@ assert
   };
 assert service.serviceConfig.ExecStart != null;
 assert cfg.systemd.user.services.wl-gammarelay.serviceConfig.ExecStart != null;
-assert builtins.elem pkgs.dev.johnrinehart.daylight-display cfg.environment.systemPackages;
+assert builtins.elem evaluated.pkgs.dev.johnrinehart.daylight-display
+  cfg.environment.systemPackages;
 pkgs.runCommand "daylight-display-module-evaluation" { } ''
   export PYTHONDONTWRITEBYTECODE=1
   export PYTHONPATH=${../../packages/daylight-display}

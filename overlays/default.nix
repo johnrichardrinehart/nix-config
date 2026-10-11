@@ -5,11 +5,27 @@ inputs: {
       inherit (inputs.nixpkgs) lib;
       packageRoot = ../packages;
       packageEntries = builtins.readDir packageRoot;
+      configurationPackageEntries = [
+        "display-mode"
+        "mbp-apple-silicon-qemu-vm.nix"
+        "nixos-installer-boot.nix"
+        "provision-mac.nix"
+        "secretspec"
+        "serial-provisioner.nix"
+        "shotedit"
+        "spice-quartz-overlay.nix"
+        "spice-vdagent-wayland.nix"
+      ];
+      isReusablePackage = name: !builtins.elem name configurationPackageEntries;
       packageFiles = lib.filterAttrs (
-        name: type: type == "regular" && lib.hasSuffix ".nix" name && name != "default.nix"
+        name: type:
+        isReusablePackage name && type == "regular" && lib.hasSuffix ".nix" name && name != "default.nix"
       ) packageEntries;
       packageDirs = lib.filterAttrs (
-        name: type: type == "directory" && builtins.pathExists (packageRoot + "/${name}/default.nix")
+        name: type:
+        isReusablePackage name
+        && type == "directory"
+        && builtins.pathExists (packageRoot + "/${name}/default.nix")
       ) packageEntries;
       packagePaths =
         lib.mapAttrs' (

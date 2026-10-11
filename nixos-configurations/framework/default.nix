@@ -6,7 +6,7 @@
   ...
 }:
 let
-  breakpoint = inputs.nixosModules.lib.daylightDisplay.breakpoint;
+  breakpoint = inputs.self.lib.daylightDisplay.breakpoint;
 in
 {
   imports = [

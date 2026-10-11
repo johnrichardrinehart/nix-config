@@ -11,7 +11,7 @@
     (modulesPath + "/profiles/minimal.nix")
   ];
 
-  nixpkgs.overlays = [ inputs.nixosModules.overlays.default ];
+  nixpkgs.overlays = [ inputs.self.overlays.default ];
 
   system.stateVersion = "24.05";
   documentation.enable = false;

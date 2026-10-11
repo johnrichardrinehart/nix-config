@@ -153,7 +153,8 @@ stdenv.mkDerivation {
   meta = {
     description = "Voice dictation using Moonshine speech recognition";
     license = lib.licenses.mit;
-    platforms = lib.platforms.linux;
+    # It runs Moonshine, so it builds wherever Moonshine does.
+    inherit (moonshineVoice.meta) platforms;
     mainProgram = name;
   };
 }

@@ -67,7 +67,7 @@ in
       type = lib.types.nonEmptyListOf breakpointType;
       example = lib.literalExpression ''
         let
-          breakpoint = inputs.nixosModules.lib.daylightDisplay.breakpoint;
+          breakpoint = inputs.self.lib.daylightDisplay.breakpoint;
         in
         [
           (breakpoint "sunrise" 45 95 6250)

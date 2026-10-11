@@ -1,25 +1,45 @@
 {
-  description = "JohnOS NixOS system configurations";
+  description = "Unified JohnOS Nix configuration, modules, overlays, and packages";
 
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
+
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
+
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixosModules.url = "github:johnrichardrinehart/nixosModules";
-    nixosModules.inputs.nixpkgs.follows = "nixpkgs";
+    display-layout = {
+      url = "github:johnrichardrinehart/display-layout";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
-    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
+    git-meld = {
+      url = "github:johnrichardrinehart/git-meld";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     home-manager = {
-      # release-26.05 plus nix-community/home-manager#10006 (overwriteBackup
-      # removes a read-only backup without prompting). The PR is merged into
-      # master only. Return to upstream's release-26.05 once it is backported.
+      # release-26.05 plus nix-community/home-manager#10006.
       url = "github:johnrichardrinehart/home-manager/release-26.05-overwrite-backup-rm-f";
-      flake = true;
-      inputs.nixpkgs.follows = "nixosModules/nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    home-manager-nixos = {
+      url = "github:nix-community/home-manager/release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    kitkat-rs = {
+      url = "github:johnrichardrinehart/kitkat-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    monstar = {
+      url = "github:rockorager/monstar";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     nix-darwin = {
@@ -27,33 +47,145 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-hardware = {
-      url = "github:NixOS/nixos-hardware";
-      inputs.nixpkgs.follows = "nixosModules/nixpkgs";
-    };
-
     nixos-generators = {
       url = "github:nix-community/nixos-generators";
-      inputs.nixpkgs.follows = "nixosModules/nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nixos-hardware = {
+      url = "github:NixOS/nixos-hardware";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    repo-manager = {
+      url = "github:johnrichardrinehart/repo-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     rock5c-nixos = {
       url = "github:johnrichardrinehart/rock5c-nixos";
-      inputs.nixpkgs.follows = "nixosModules/nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     sops-nix = {
       url = "github:mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixosModules/nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
   outputs =
-    inputs@{ flake-parts, ... }:
+    inputs@{
+      self,
+      flake-parts,
+      ...
+    }:
+    let
+      systems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-linux"
+      ];
+      inherit (inputs.nixpkgs) lib;
+
+      moduleInputs = inputs // {
+        home-manager = inputs.home-manager-nixos;
+      };
+      overlays = import ./overlays moduleInputs;
+      reusableNixosModules = {
+        default = import ./nixos-modules {
+          inputs = moduleInputs;
+          inherit lib;
+        };
+        mycelium = ./nixos-modules/nebula/mycelium;
+        nebula = ./nixos-modules/nebula;
+      };
+      unifiedLib = lib // {
+        daylightDisplay = import ./lib/daylight-display.nix;
+      };
+
+      allowUnfreePackages =
+        pkg:
+        builtins.elem (lib.getName pkg) [
+          "arm-trusted-firmware-rk3588"
+          "context-mode"
+          "moonshine-models-source"
+        ];
+      mkPkgs =
+        system: extraOverlays:
+        import inputs.nixpkgs {
+          inherit system;
+          overlays = [ overlays.default ] ++ extraOverlays;
+          config.allowUnfreePredicate = allowUnfreePackages;
+        };
+      pkgsBySystem = lib.genAttrs systems (system: mkPkgs system [ ]);
+      reusablePackages = lib.mapAttrs (_: pkgs: import ./packages { inherit pkgs; }) pkgsBySystem;
+      linuxApps = lib.genAttrs [ "aarch64-linux" "x86_64-linux" ] (
+        system:
+        let
+          package = pkgsBySystem.${system}.dev.johnrinehart.slicemk-update;
+        in
+        {
+          slicemk-update = {
+            type = "app";
+            program = "${package}/bin/slicemk-update";
+            meta.description = package.meta.description;
+          };
+        }
+      );
+      aarch64DarwinPkgs = mkPkgs "aarch64-darwin" [
+        (import ./packages/spice-quartz-overlay.nix)
+      ];
+
+      bootstrapIso = aarch64DarwinPkgs.fetchurl {
+        url = "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1082427.b4fd65b198c5/nixos-minimal-26.11pre1082427.b4fd65b198c5-aarch64-linux.iso";
+        hash = "sha256-muUaIkjXmRRsz8xzHSeBEXd0+6xto1HMZT+xqh4RvVU=";
+      };
+      guestFlake = "path:${self.outPath}";
+      installerBoot = aarch64DarwinPkgs.callPackage ./packages/nixos-installer-boot.nix {
+        inherit bootstrapIso;
+      };
+      serialProvisioner = aarch64DarwinPkgs.callPackage ./packages/serial-provisioner.nix {
+        inherit guestFlake;
+      };
+      vmArgs = {
+        inherit
+          bootstrapIso
+          guestFlake
+          installerBoot
+          serialProvisioner
+          ;
+      };
+      mbpAppleSiliconQemuVm = aarch64DarwinPkgs.callPackage ./packages/mbp-apple-silicon-qemu-vm.nix vmArgs;
+
+      mbpHostModule = import ./darwin-configurations/mbp-host {
+        inherit inputs;
+      };
+      mkMbpHost =
+        {
+          modules ? [ ],
+        }:
+        inputs.nix-darwin.lib.darwinSystem {
+          modules = [ mbpHostModule ] ++ modules;
+        };
+      mkProvisionMacPackage =
+        darwinConfiguration:
+        aarch64DarwinPkgs.callPackage ./packages/provision-mac.nix {
+          inherit darwinConfiguration;
+        };
+      mkProvisionMac = darwinConfiguration: {
+        type = "app";
+        program = "${mkProvisionMacPackage darwinConfiguration}/bin/provision-mac";
+      };
+      mbpHost = mkMbpHost { };
+      configurationPackages = {
+        mbp-apple-silicon-qemu-vm = mbpAppleSiliconQemuVm;
+        provision-mac = mkProvisionMacPackage mbpHost;
+      };
+    in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ inputs.flake-parts.flakeModules.partitions ];
 
-      systems = [ "x86_64-linux" ];
+      inherit systems;
 
       partitionedAttrs = {
         checks = "dev";
@@ -69,31 +201,32 @@
             perSystem =
               { system, ... }:
               let
-                pkgs = inputs.nixosModules.legacyPackages.${system};
-                treefmtEval = inputs."treefmt-nix".lib.evalModule pkgs ./treefmt.nix;
-                preCommitCheck = inputs."git-hooks".lib.${system}.run {
+                pkgs = pkgsBySystem.${system};
+                treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+                preCommitCheck = inputs.git-hooks.lib.${system}.run {
                   src = ./.;
-                  hooks = {
-                    treefmt-nix = {
-                      enable = true;
-                      name = "treefmt";
-                      entry = "${treefmtEval.config.build.wrapper}/bin/treefmt --fail-on-change";
-                      language = "system";
-                      pass_filenames = false;
-                    };
+                  hooks.treefmt-nix = {
+                    enable = true;
+                    name = "treefmt";
+                    entry = "${treefmtEval.config.build.wrapper}/bin/treefmt --fail-on-change";
+                    language = "system";
+                    pass_filenames = false;
                   };
+                };
+                functionalChecks = import ./nix/checks {
+                  inputs = moduleInputs;
+                  inherit pkgs;
                 };
               in
               {
                 devShells = import ./dev-shells.nix {
-                  inherit pkgs;
-                  inherit preCommitCheck;
+                  inherit pkgs preCommitCheck;
                   treefmtBin = treefmtEval.config.build.wrapper;
                 };
 
-                checks = {
+                checks = functionalChecks // {
                   pre-commit = preCommitCheck;
-                  formatting = treefmtEval.config.build.check inputs.self;
+                  formatting = treefmtEval.config.build.check self;
                 };
 
                 formatter = treefmtEval.config.build.wrapper;
@@ -101,100 +234,53 @@
           };
       };
 
-      flake =
-        let
-          aarch64DarwinPkgs = import inputs.nixpkgs {
-            system = "aarch64-darwin";
-            overlays = [ (import ./packages/spice-quartz-overlay.nix) ];
-          };
-          bootstrapIso = aarch64DarwinPkgs.fetchurl {
-            url = "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1082427.b4fd65b198c5/nixos-minimal-26.11pre1082427.b4fd65b198c5-aarch64-linux.iso";
-            hash = "sha256-muUaIkjXmRRsz8xzHSeBEXd0+6xto1HMZT+xqh4RvVU=";
-          };
-          guestFlake =
-            if inputs.self ? rev then
-              "github:johnrichardrinehart/nixosConfigurations/${inputs.self.rev}"
-            else
-              "github:johnrichardrinehart/nixosConfigurations/main";
-          installerBoot = aarch64DarwinPkgs.callPackage ./packages/nixos-installer-boot.nix {
-            inherit bootstrapIso;
-          };
-          serialProvisioner = aarch64DarwinPkgs.callPackage ./packages/serial-provisioner.nix {
-            inherit guestFlake;
-          };
-          vmArgs = {
-            inherit
-              bootstrapIso
-              guestFlake
-              installerBoot
-              serialProvisioner
-              ;
-          };
-          mbpAppleSiliconQemuVm = aarch64DarwinPkgs.callPackage ./packages/mbp-apple-silicon-qemu-vm.nix vmArgs;
+      flake = {
+        overlays = overlays;
+        lib = unifiedLib // {
+          inherit mkMbpHost mkProvisionMac mkProvisionMacPackage;
+        };
 
-          # The Mac host itself. Downstream flakes add their own modules with
-          # `mkMbpHost { modules = [ ... ]; }` and get a matching provisioner
-          # from `mkProvisionMacPackage` (the derivation, to build) and
-          # `mkProvisionMac` (the app, to run).
-          mbpHostModule = import ./darwin-configurations/mbp-host { inherit inputs; };
-          mkMbpHost =
+        nixosModules = reusableNixosModules // {
+          mbp-intel-silicon = {
+            imports = [
+              reusableNixosModules.default
+              ./nixos-configurations/mbp-intel-silicon
+            ];
+            nixpkgs.overlays = [ overlays.default ];
+          };
+
+          mbp-apple-silicon =
+            { lib, ... }:
             {
-              modules ? [ ],
-            }:
-            inputs.nix-darwin.lib.darwinSystem { modules = [ mbpHostModule ] ++ modules; };
-          mkProvisionMacPackage =
-            darwinConfiguration:
-            aarch64DarwinPkgs.callPackage ./packages/provision-mac.nix {
-              inherit darwinConfiguration;
-            };
-          mkProvisionMac = darwinConfiguration: {
-            type = "app";
-            program = "${mkProvisionMacPackage darwinConfiguration}/bin/provision-mac";
-          };
-          mbpHost = mkMbpHost { };
-        in
-        {
-          nixosConfigurations = (import ./nixos-configurations inputs) // {
-            nebula-lighthouse = inputs.nixosModules.lib.nixosSystem {
-              modules = [ ./nixos-configurations/nebula-lighthouse ];
-              specialArgs = { inherit inputs; };
-            };
-            mbp-apple-silicon-bootstrap = inputs.nixosModules.lib.nixosSystem {
-              modules = [ ./nixos-configurations/mbp-apple-silicon/bootstrap.nix ];
-              specialArgs = { inherit inputs; };
-            };
-          };
-
-          nixosModules = {
-            mbp-intel-silicon = {
               imports = [
-                inputs.nixosModules.nixosModules.default
-                ./nixos-configurations/mbp-intel-silicon
+                reusableNixosModules.default
+                ./nixos-configurations/mbp-apple-silicon
               ];
-              nixpkgs.overlays = [ inputs.nixosModules.overlays.default ];
+              nixpkgs.overlays = [ overlays.default ];
+              _module.args.inputs = lib.mkDefault inputs;
             };
+        };
 
-            mbp-apple-silicon =
-              { lib, ... }:
-              {
-                imports = [
-                  inputs.nixosModules.nixosModules.default
-                  ./nixos-configurations/mbp-apple-silicon
-                ];
-                nixpkgs.overlays = [ inputs.nixosModules.overlays.default ];
-                _module.args.inputs = lib.mkDefault inputs;
-              };
+        nixosConfigurations = (import ./nixos-configurations inputs) // {
+          nebula-lighthouse = unifiedLib.nixosSystem {
+            modules = [ ./nixos-configurations/nebula-lighthouse ];
+            specialArgs = { inherit inputs; };
           };
-          darwinModules.mbp-host = mbpHostModule;
-          darwinConfigurations.mbp-host = mbpHost;
-
-          lib = { inherit mkMbpHost mkProvisionMac mkProvisionMacPackage; };
-
-          packages.aarch64-darwin = {
-            mbp-apple-silicon-qemu-vm = mbpAppleSiliconQemuVm;
-            provision-mac = mkProvisionMacPackage mbpHost;
+          mbp-apple-silicon-bootstrap = unifiedLib.nixosSystem {
+            modules = [ ./nixos-configurations/mbp-apple-silicon/bootstrap.nix ];
+            specialArgs = { inherit inputs; };
           };
-          apps.aarch64-darwin = {
+        };
+
+        darwinModules.mbp-host = mbpHostModule;
+        darwinConfigurations.mbp-host = mbpHost;
+
+        legacyPackages = pkgsBySystem;
+        packages = reusablePackages // {
+          aarch64-darwin = reusablePackages.aarch64-darwin // configurationPackages;
+        };
+        apps = linuxApps // {
+          aarch64-darwin = {
             mbp-apple-silicon-qemu-vm = {
               type = "app";
               program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
@@ -202,5 +288,6 @@
             provision-mac = mkProvisionMac mbpHost;
           };
         };
+      };
     };
 }
