@@ -66,12 +66,6 @@ in
   config = lib.mkIf cfg.enable {
     hardware.bluetooth = {
       enable = true;
-      settings = {
-        General = {
-          Enable = "Source,Sink,Media,Socket";
-          AutoEnable = false;
-        };
-      };
     };
 
     services.blueman.enable = true;

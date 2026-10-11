@@ -15,6 +15,22 @@ configuration repositories. It exposes:
 The companion host configuration repository is
 [`nixosConfigurations`](https://github.com/johnrichardrinehart/nixosConfigurations).
 
+## Bluetooth
+
+Enable `dev.johnrinehart.bluetooth.enable` to configure BlueZ and Blueman.
+NixOS controls automatic adapter power through `hardware.bluetooth.powerOnBoot`
+and the BlueZ `[Policy] AutoEnable` setting.
+
+`dev.johnrinehart.bluetooth.autoSuspend.enable` enables the idle timer.
+The timer checks for connected devices every minute.
+It powers off the adapter after `autoSuspend.idleMinutes` idle checks.
+Disable this timer when Bluetooth keyboards must reconnect after sleep.
+
+With Bluetooth enabled, `dev.johnrinehart.hibernate-resume-optimization.deferBluetooth.enable`
+creates the resume service.
+The service uses Nix store executables to power off the adapter, wait for
+`deferBluetooth.delaySeconds`, and power on the adapter.
+
 ## Nebula and Mycelium
 
 `nixosModules.nebula` imports `nixos-modules/nebula/default.nix`.

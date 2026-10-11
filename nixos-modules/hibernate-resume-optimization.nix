@@ -279,7 +279,7 @@ in
       })
 
       # Defer bluetooth reconnection
-      (lib.mkIf cfg.deferBluetooth.enable {
+      (lib.mkIf (cfg.deferBluetooth.enable && config.hardware.bluetooth.enable) {
         # Service to defer bluetooth after resume
         systemd.services.bluetooth-resume-defer = {
           description = "Defer bluetooth reconnection after hibernate resume";
@@ -296,19 +296,14 @@ in
           serviceConfig = {
             Type = "oneshot";
             ExecStart = pkgs.writeShellScript "bluetooth-resume-defer" ''
-              # Check if bluetooth is available
-              if ! command -v bluetoothctl &>/dev/null; then
-                exit 0
-              fi
-
               # Briefly power off bluetooth to stop reconnection attempts
-              bluetoothctl power off 2>/dev/null || true
+              ${pkgs.bluez}/bin/bluetoothctl power off 2>/dev/null || true
 
               # Wait for user session to stabilize
-              sleep ${toString cfg.deferBluetooth.delaySeconds}
+              ${pkgs.coreutils}/bin/sleep ${toString cfg.deferBluetooth.delaySeconds}
 
               # Re-enable bluetooth
-              bluetoothctl power on 2>/dev/null || true
+              ${pkgs.bluez}/bin/bluetoothctl power on 2>/dev/null || true
             '';
           };
         };
