@@ -31,6 +31,10 @@ creates the resume service.
 The service uses Nix store executables to power off the adapter, wait for
 `deferBluetooth.delaySeconds`, and power on the adapter.
 
+The Niri configuration uses plain US host mapping for `SliceMK Kbd Keyboard`.
+The keyboard firmware supplies Dvorak output.
+USB and Bluetooth device names require separate keyboard entries.
+
 ## Voice dictation
 
 `dev.johnrinehart.voice-dictation.enable` installs the Moonshine dictation
