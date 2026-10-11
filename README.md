@@ -31,6 +31,14 @@ creates the resume service.
 The service uses Nix store executables to power off the adapter, wait for
 `deferBluetooth.delaySeconds`, and power on the adapter.
 
+## Voice dictation
+
+`dev.johnrinehart.voice-dictation.enable` installs the Moonshine dictation
+package and its user service. The Pulse capture backend requests 100 ms
+recording latency and a 20 ms processing interval from `pacat`. Reading
+100 ms chunks alone does not reduce `pacat`'s default two-second recording
+fragment, which delays the first visible text.
+
 ## Nebula and Mycelium
 
 `nixosModules.nebula` imports `nixos-modules/nebula/default.nix`.

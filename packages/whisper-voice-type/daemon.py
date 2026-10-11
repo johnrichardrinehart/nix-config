@@ -808,6 +808,8 @@ def _pulse_reader():
         "--format=float32le",
         f"--rate={SAMPLE_RATE}",
         "--channels=1",
+        "--latency-msec=100",
+        "--process-time-msec=20",
     ]
     if INPUT_DEVICE is not None:
         cmd.append(f"--device={INPUT_DEVICE}")
