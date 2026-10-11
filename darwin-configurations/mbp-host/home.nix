@@ -11,6 +11,7 @@ let
   cfg = config.dev.johnrinehart.mbp-host;
   # One build for PATH and the activation step below.
   displayMode = pkgs.callPackage ../../packages/display-mode/package.nix { };
+  karabinerJson = (pkgs.formats.json { }).generate "karabiner.json" (import ./karabiner.nix);
 in
 {
   options.dev.johnrinehart.mbp-host.github.personalSshKey = lib.mkOption {
@@ -287,17 +288,14 @@ in
     # Karabiner rewrites its file on GUI edits, replacing the link with a
     # file; `force` lets the next switch put the declared version back.
     xdg.configFile = {
-      # The Cmd+H rule is for QEMU's cocoa window, whose menu hides it.
-      # (Spicy.app has no menu: GDK hands it Cmd+H, which goes to the
-      # guest.) It matches the frontmost app's executable by regex:
-      # /nix/store/<32-char nix-base32 hash>-qemu-<version>/bin/
-      # qemu-system-aarch64, also in the .qemu-system-aarch64-wrapped form
-      # nixpkgs' wrapper gives the real binary. Any hash and version match,
-      # so a rebuild or upgrade keeps it working. Karabiner matches physical
-      # keys, so the rule swallows whichever key types "h" in the selected
-      # layout: J under Dvorak (also for Command shortcuts), H otherwise.
+      # Keep macOS on U.S. and map only the built-in keyboard to Dvorak.
+      # Firmware-native external keyboards pass through unchanged.
+      #
+      # QEMU's cocoa window has a menu that handles Cmd+H. Swallow the
+      # physical Dvorak H key on the built-in keyboard and H on external
+      # keyboards. Spicy.app has no menu and sends Cmd+H to the guest.
       "karabiner/karabiner.json" = {
-        source = ./karabiner.json;
+        source = karabinerJson;
         force = true;
       };
       # spicy is the SPICE viewer the VM launcher opens. The launcher runs it
