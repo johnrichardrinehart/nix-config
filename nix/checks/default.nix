@@ -15,6 +15,13 @@ in
   mycelium-module = import ./mycelium-module.nix { inherit inputs lib pkgs; };
   mycelium-tls = import ./mycelium-tls.nix { inherit pkgs; };
   nebula-registry = import ./nebula-registry.nix { inherit lib pkgs; };
+  slicemk-update = pkgs.runCommand "slicemk-update-check" { } ''
+    export PYTHONDONTWRITEBYTECODE=1
+    export SLICEMK_FIRMWARE=${pkgs.dev.johnrinehart.slicemk-firmware}/zmk.uf2
+    cd ${../../packages/slicemk-update}
+    ${pkgs.python3}/bin/python3 -m unittest -v test_update
+    touch "$out"
+  '';
   ssh-session = import ./ssh-session.nix { inherit lib pkgs; };
 
 }
@@ -26,11 +33,4 @@ in
       patches = pkgs.dev.johnrinehart.slicemk-firmware.patches;
     };
   };
-  slicemk-update = pkgs.runCommand "slicemk-update-check" { } ''
-    export PYTHONDONTWRITEBYTECODE=1
-    export SLICEMK_FIRMWARE=${pkgs.dev.johnrinehart.slicemk-firmware}/zmk.uf2
-    cd ${../../packages/slicemk-update}
-    ${pkgs.python3}/bin/python3 -m unittest -v test_update
-    touch "$out"
-  '';
 }

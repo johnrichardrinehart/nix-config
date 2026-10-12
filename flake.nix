@@ -119,7 +119,7 @@
         };
       pkgsBySystem = lib.genAttrs systems (system: mkPkgs system [ ]);
       reusablePackages = lib.mapAttrs (_: pkgs: import ./packages { inherit pkgs; }) pkgsBySystem;
-      linuxApps = lib.genAttrs [ "aarch64-linux" "x86_64-linux" ] (
+      slicemkApps = lib.genAttrs [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ] (
         system:
         let
           package = pkgsBySystem.${system}.dev.johnrinehart.slicemk-update;
@@ -279,8 +279,8 @@
         packages = reusablePackages // {
           aarch64-darwin = reusablePackages.aarch64-darwin // configurationPackages;
         };
-        apps = linuxApps // {
-          aarch64-darwin = {
+        apps = slicemkApps // {
+          aarch64-darwin = slicemkApps.aarch64-darwin // {
             mbp-apple-silicon-qemu-vm = {
               type = "app";
               program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";

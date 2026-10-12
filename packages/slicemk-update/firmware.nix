@@ -163,7 +163,10 @@ stdenv.mkDerivation {
     runHook preConfigure
     export HOME="$TMPDIR/home"
     export XDG_CACHE_HOME="$TMPDIR/cache"
-    mkdir -p "$HOME" "$XDG_CACHE_HOME" generated-config generated-modules
+    # Zephyr caches compiler checks under the user cache directory. On macOS it
+    # looks for ~/Library/Caches, which the build's $HOME lacks, and then falls
+    # back to its own read-only source tree, so name the directory outright.
+    mkdir -p "$HOME" "$XDG_CACHE_HOME/zephyr" generated-config generated-modules
     ${lib.concatMapStringsSep "\n" (
       module: "ln -s ${module.source} generated-modules/${module.name}"
     ) modules}
@@ -215,6 +218,7 @@ stdenv.mkDerivation {
         lib.concatStringsSep ";" (map (module: "$PWD/generated-modules/${module.name}") modules)
       }" \
       -DPYTHON_EXECUTABLE=${python}/bin/python \
+      -DUSER_CACHE_DIR="$XDG_CACHE_HOME/zephyr" \
       -DBUILD_VERSION=${sourceRevision} \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     runHook postConfigure
