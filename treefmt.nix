@@ -54,6 +54,7 @@
         rules.line-length.ignore = [
           "secrets/nebula-ca.yaml"
           "secrets/nebula-framework.yaml"
+          "secrets/share-webdav.yaml"
         ];
       };
     };

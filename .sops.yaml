@@ -2,6 +2,10 @@
 keys:
   - &framework age1g4e49re2f34y0a2u2k69mumhy6cvv39ck6u4kmaahjtv0emh358s8fq67e
 creation_rules:
+  - path_regex: secrets/share-webdav\.yaml$
+    key_groups:
+      - age:
+          - *framework
   - path_regex: secrets/nebula-ca\.yaml$
     key_groups:
       - age:
