@@ -10,6 +10,7 @@ let
 in
 {
   imports = [
+    ./framie.nix
     ./framework.nix
     ./nebula.nix
     ./share-webdav.nix
