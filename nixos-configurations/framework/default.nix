@@ -33,6 +33,12 @@ in
   # Keep the radio available while the Bluetooth keyboard reconnects.
   dev.johnrinehart.bluetooth.autoSuspend.enable = false;
 
+  # Keep a week of redacted HCI history to diagnose keyboard pairing failures.
+  dev.johnrinehart.bluetooth.capture = {
+    enable = true;
+    retention = "7d";
+  };
+
   fonts.fontconfig.enable = lib.mkForce true;
 
   dev.johnrinehart.firmware.framework-ec.features = [ "F9-display-toggle" ];
