@@ -157,17 +157,33 @@ class UpdateTests(unittest.TestCase):
                 darwin_bootloader_volume([self.darwin_volume(**overrides)])
 
     def test_darwin_serial_comes_from_the_device_that_holds_the_disk(self):
+        # The shape ioreg reports for the SliceMK bootloader: its interfaces
+        # and mass-storage nubs repeat the device's idVendor.
         bootloader = {
+            "IOObjectClass": "IOUSBHostDevice",
             "idVendor": 0x239A,
-            "idProduct": 0x0029,
+            "idProduct": 0x00B3,
             "USB Serial Number": "target-device",
             "IORegistryEntryChildren": [
-                {"IORegistryEntryChildren": [{"BSD Name": "disk4"}]}
+                {
+                    "IOObjectClass": "IOUSBHostInterface",
+                    "idVendor": 0x239A,
+                    "IORegistryEntryChildren": [
+                        {
+                            "IOObjectClass": "IOUSBMassStorageInterfaceNub",
+                            "idVendor": 0x239A,
+                            "IORegistryEntryChildren": [
+                                {"IOObjectClass": "IOMedia", "BSD Name": "disk4"}
+                            ],
+                        }
+                    ],
+                }
             ],
         }
         # ioreg lists a hub with the device below it, and the device again on
         # its own; the hub must not be taken for the bootloader.
         hub = {
+            "IOObjectClass": "IOUSBHostDevice",
             "idVendor": 0x05E3,
             "idProduct": 0x0610,
             "USB Serial Number": "hub",
