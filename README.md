@@ -93,6 +93,15 @@ Downstream flakes extend the host with
 provisioner as a package, so `nix build .#provision-mac` builds it without
 running it). Per-user additions go under `home-manager.users.john`.
 
+## Framework share mount
+
+Framework mounts the B2-backed share at `~/share` through Nextcloud WebDAV.
+The mount starts after the network becomes ready and reconnects after failures.
+Writes use a local cache with a 4 GiB target and an 8 GiB free-space reserve.
+The dedicated Nextcloud app password resides in `secrets/share-webdav.yaml`.
+sops-nix decrypts the password into a systemd credential at service start.
+Use `systemctl status rclone-share.service` to inspect mount health.
+
 ## Framework Bluetooth
 
 Framework disables the Bluetooth idle timer so keyboards can reconnect after sleep.

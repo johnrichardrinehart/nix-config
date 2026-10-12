@@ -12,6 +12,7 @@ in
   imports = [
     ./framework.nix
     ./nebula.nix
+    ./share-webdav.nix
     ./tailscale-nix-builders.nix
   ];
 
