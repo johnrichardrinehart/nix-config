@@ -75,7 +75,8 @@ in
     })
 
     (lib.mkIf (cfg.manager == "iwd") {
-      networking.dhcpcd.enable = lib.mkForce false;
+      # iwd runs DHCP on wireless interfaces. dhcpcd must not compete for them.
+      networking.dhcpcd.denyInterfaces = [ "wl*" ];
       networking.networkmanager.enable = lib.mkForce false;
       networking.wireless.iwd = {
         enable = true;

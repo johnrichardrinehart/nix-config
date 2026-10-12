@@ -29,10 +29,8 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.sessionVariables.TIME_STYLE = cfg.ls.timeStyle;
-    # The global useDHCP flag is deprecated, therefore explicitly set to false here.
-    # Per-interface useDHCP will be mandatory in the future, so this generated config
-    # replicates the default behaviour.
-    networking.useDHCP = false;
+    # Hosts enable DHCP explicitly, per interface or globally.
+    networking.useDHCP = lib.mkDefault false;
 
     system.stateVersion = "24.05"; # Did you read the comment?
 
