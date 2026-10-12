@@ -47,6 +47,11 @@
   # offers llvmpipe and niri refuses software EGL unless asked. Pairs with
   # the software-EGL patches in niri-software-egl.nix (niri-wm/niri#4614).
   systemd.user.extraConfig = "DefaultEnvironment=NIRI_ALLOW_SOFTWARE_EGL=1";
+  # Keys reach the guest already in Dvorak (see the niri input override
+  # below). The Linux console takes its keymap from this xkb setting, and
+  # the shared locale module selects Dvorak, so the VTs would remap a second
+  # time.
+  services.xserver.xkb.variant = lib.mkForce "";
 
   # niri's shared config ends with `include optional=true "/tmp/niri.kdl"`, so
   # this is where machine-local overrides go.
