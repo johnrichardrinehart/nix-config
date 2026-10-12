@@ -111,7 +111,7 @@ Framework does not power-cycle the adapter during resume.
 
 ## SliceMK firmware
 
-On Linux, update the SliceMK ErgoDox 202207 Green left half:
+On Linux or macOS, update the SliceMK ErgoDox 202207 Green left half:
 
 ```console
 nix run .#slicemk-update
@@ -122,6 +122,9 @@ Connect only the left half by USB.
 With the keys facing up and USB-C facing you, press the right reset button twice within 500 ms.
 The green LEDs indicate bootloader mode.
 The app uses `sudo` when it must mount the drive or obtain write access.
+On macOS, the app finds the drive with `diskutil` and `ioreg` and needs no `sudo`.
+macOS can report that the disk was not ejected properly when the bootloader restarts.
+Ignore that message.
 It checks the board ID before copying the firmware built from the current configuration.
 Both halves report the same board ID, so the app cannot distinguish the left half from the right half.
 Do not connect the right half in bootloader mode.

@@ -1,7 +1,9 @@
 import errno
+import fcntl
 import json
 import os
 from pathlib import Path
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -10,6 +12,9 @@ import time
 
 
 BOARD_ID = "nRF52833-slicemk-ergodox-202207-green"
+# The ZMK keyboard the bootloader turns back into after a successful update.
+KEYBOARD_VENDOR = 0x1D50
+KEYBOARD_PRODUCT = 0x615E
 
 
 def bootloader_device(devices):
@@ -53,10 +58,75 @@ def keyboard_returned(serial, usb_devices=Path("/sys/bus/usb/devices")):
     return False
 
 
+def darwin_bootloader_volume(volumes):
+    """Pick the SliceMK bootloader volume from `diskutil info -plist` records."""
+    matches = [volume for volume in volumes if volume.get("VolumeName") == "SliceMK"]
+    if len(matches) != 1:
+        raise ValueError("Connect exactly one SliceMK bootloader drive: the left half.")
+    volume = matches[0]
+    if volume.get("BusProtocol") != "USB" or volume.get("FilesystemType") != "msdos":
+        raise ValueError("The SliceMK volume must be a USB FAT filesystem.")
+    return volume
+
+
+def darwin_usb_devices():
+    """Every USB device with its I/O Registry subtree, as `ioreg` reports them."""
+    output = subprocess.run(
+        ["/usr/sbin/ioreg", "-a", "-l", "-r", "-c", "IOUSBHostDevice"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return plistlib.loads(output) if output.strip() else []
+
+
+def _darwin_holds_disk(entry, disk):
+    for child in entry.get("IORegistryEntryChildren", []):
+        # A USB device below a hub is listed on its own; do not credit the hub.
+        if "idVendor" in child:
+            continue
+        if child.get("BSD Name") == disk or _darwin_holds_disk(child, disk):
+            return True
+    return False
+
+
+def darwin_device_serial(devices, disk):
+    for device in devices:
+        if _darwin_holds_disk(device, disk):
+            serial = device.get("USB Serial Number") or device.get(
+                "kUSBSerialNumberString"
+            )
+            if serial:
+                return serial
+    raise ValueError("Cannot identify the bootloader USB serial number.")
+
+
+def darwin_keyboard_returned(serial, devices=None):
+    devices = darwin_usb_devices() if devices is None else devices
+    return any(
+        device.get("idVendor") == KEYBOARD_VENDOR
+        and device.get("idProduct") == KEYBOARD_PRODUCT
+        and serial
+        in (device.get("USB Serial Number"), device.get("kUSBSerialNumberString"))
+        for device in devices
+    )
+
+
+def sync_to_device(fd):
+    if sys.platform == "darwin":
+        # fsync on macOS stops at the drive's cache; F_FULLFSYNC pushes every
+        # block through to the bootloader.
+        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+    else:
+        os.fsync(fd)
+
+
 def wait_for_keyboard(serial):
+    returned = (
+        darwin_keyboard_returned if sys.platform == "darwin" else keyboard_returned
+    )
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        if keyboard_returned(serial):
+        if returned(serial):
             return True
         time.sleep(0.1)
     return False
@@ -86,12 +156,12 @@ def flash(volume, firmware, serial=None):
         try:
             try:
                 destination.flush()
-                os.fsync(destination.fileno())
+                sync_to_device(destination.fileno())
             finally:
                 destination.close()
         except OSError as error:
             if (
-                error.errno not in (errno.EIO, errno.ENODEV)
+                error.errno not in (errno.EIO, errno.ENODEV, errno.ENXIO)
                 or not serial
                 or not wait_for_keyboard(serial)
             ):
@@ -115,6 +185,55 @@ def main():
         )
         if sys.stdin.isatty():
             input("Press Enter when the SliceMK bootloader drive is ready: ")
+    if sys.platform == "darwin":
+        darwin_update(firmware)
+    else:
+        linux_update(firmware)
+    print(
+        "Firmware transfer completed. The left half reboots automatically; test Tab and Bluetooth typing."
+    )
+
+
+def darwin_update(firmware):
+    listing = plistlib.loads(
+        subprocess.run(
+            ["/usr/sbin/diskutil", "list", "-plist", "external"],
+            check=True,
+            capture_output=True,
+        ).stdout
+    )
+    identifiers = []
+    for disk in listing.get("AllDisksAndPartitions", []):
+        identifiers.append(disk["DeviceIdentifier"])
+        identifiers.extend(
+            part["DeviceIdentifier"] for part in disk.get("Partitions", [])
+        )
+
+    def info(identifier):
+        return plistlib.loads(
+            subprocess.run(
+                ["/usr/sbin/diskutil", "info", "-plist", identifier],
+                check=True,
+                capture_output=True,
+            ).stdout
+        )
+
+    volume = darwin_bootloader_volume([info(identifier) for identifier in identifiers])
+    if not volume.get("MountPoint"):
+        subprocess.run(
+            ["/usr/sbin/diskutil", "mount", volume["DeviceIdentifier"]],
+            check=True,
+            capture_output=True,
+        )
+        volume = info(volume["DeviceIdentifier"])
+    mountpoint = Path(volume["MountPoint"])
+    if not os.access(mountpoint, os.W_OK):
+        raise ValueError(f"{mountpoint} is not writable.")
+    serial = darwin_device_serial(darwin_usb_devices(), volume["ParentWholeDisk"])
+    flash(mountpoint, firmware, serial)
+
+
+def linux_update(firmware):
     result = subprocess.run(
         [
             "@utilLinux@/bin/lsblk",
@@ -183,9 +302,6 @@ def main():
                         raise OSError(
                             f"Cannot unmount the bootloader drive: {cleanup.stderr.strip()}"
                         )
-    print(
-        "Firmware transfer completed. The left half reboots automatically; test Tab and Bluetooth typing."
-    )
 
 
 if __name__ == "__main__":

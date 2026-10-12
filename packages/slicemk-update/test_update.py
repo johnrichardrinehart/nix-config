@@ -5,7 +5,17 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from update import BOARD_ID, bootloader_device, flash, keyboard_returned
+from update import (
+    BOARD_ID,
+    KEYBOARD_PRODUCT,
+    KEYBOARD_VENDOR,
+    bootloader_device,
+    darwin_bootloader_volume,
+    darwin_device_serial,
+    darwin_keyboard_returned,
+    flash,
+    keyboard_returned,
+)
 
 
 class UpdateTests(unittest.TestCase):
@@ -71,7 +81,7 @@ class UpdateTests(unittest.TestCase):
             (keyboard / "serial").write_text("other-device")
             error = OSError(errno.EIO, "bootloader disconnected")
             with (
-                patch("update.os.fsync", side_effect=error),
+                patch("update.sync_to_device", side_effect=error),
                 patch(
                     "update.wait_for_keyboard",
                     side_effect=lambda serial: keyboard_returned(serial, usb),
@@ -110,12 +120,76 @@ class UpdateTests(unittest.TestCase):
             firmware = Path(os.environ["SLICEMK_FIRMWARE"])
             with (
                 patch(
-                    "update.os.fsync", side_effect=OSError(errno.ENOSPC, "disk full")
+                    "update.sync_to_device",
+                    side_effect=OSError(errno.ENOSPC, "disk full"),
                 ),
                 patch("update.wait_for_keyboard", return_value=True),
             ):
                 with self.assertRaises(OSError):
                     flash(volume, firmware, "target-device")
+
+    # macOS: `diskutil info -plist` records and `ioreg -a -l -r -c IOUSBHostDevice`.
+    def darwin_volume(self, **overrides):
+        return {
+            "DeviceIdentifier": "disk4",
+            "ParentWholeDisk": "disk4",
+            "VolumeName": "SliceMK",
+            "BusProtocol": "USB",
+            "FilesystemType": "msdos",
+            "MountPoint": "/Volumes/SliceMK",
+            **overrides,
+        }
+
+    def test_darwin_refuses_zero_or_multiple_bootloaders(self):
+        other = self.darwin_volume(DeviceIdentifier="disk5", ParentWholeDisk="disk5")
+        for volumes in ([], [self.darwin_volume(), other]):
+            with self.subTest(volumes=volumes), self.assertRaises(ValueError):
+                darwin_bootloader_volume(volumes)
+
+    def test_darwin_picks_the_slicemk_volume_among_others(self):
+        volume = self.darwin_volume()
+        unrelated = self.darwin_volume(VolumeName="BACKUP", DeviceIdentifier="disk5s1")
+        self.assertIs(darwin_bootloader_volume([unrelated, volume]), volume)
+
+    def test_darwin_refuses_non_usb_or_non_fat_volume(self):
+        for overrides in ({"BusProtocol": "PCI-Express"}, {"FilesystemType": "apfs"}):
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                darwin_bootloader_volume([self.darwin_volume(**overrides)])
+
+    def test_darwin_serial_comes_from_the_device_that_holds_the_disk(self):
+        bootloader = {
+            "idVendor": 0x239A,
+            "idProduct": 0x0029,
+            "USB Serial Number": "target-device",
+            "IORegistryEntryChildren": [
+                {"IORegistryEntryChildren": [{"BSD Name": "disk4"}]}
+            ],
+        }
+        # ioreg lists a hub with the device below it, and the device again on
+        # its own; the hub must not be taken for the bootloader.
+        hub = {
+            "idVendor": 0x05E3,
+            "idProduct": 0x0610,
+            "USB Serial Number": "hub",
+            "IORegistryEntryChildren": [bootloader],
+        }
+        self.assertEqual(
+            darwin_device_serial([hub, bootloader], "disk4"), "target-device"
+        )
+        with self.assertRaises(ValueError):
+            darwin_device_serial([hub, bootloader], "disk5")
+
+    def test_darwin_keyboard_return_needs_same_serial_and_zmk_ids(self):
+        keyboard = {
+            "idVendor": KEYBOARD_VENDOR,
+            "idProduct": KEYBOARD_PRODUCT,
+            "USB Serial Number": "target-device",
+        }
+        self.assertTrue(darwin_keyboard_returned("target-device", [keyboard]))
+        self.assertFalse(darwin_keyboard_returned("other-device", [keyboard]))
+        self.assertFalse(
+            darwin_keyboard_returned("target-device", [{**keyboard, "idProduct": 1}])
+        )
 
 
 if __name__ == "__main__":
