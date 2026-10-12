@@ -63,6 +63,7 @@
     ./agent-tools.nix
     ./auto-suspend.nix
     ./bluetooth.nix
+    ./bluetooth-capture
     ./hibernate-resume-optimization.nix
     ./droidcam.nix
     ./daylight-display.nix
