@@ -926,10 +926,10 @@
           "Args": ["&rgb_ug RGB_HUI"]
         },
         {
-          "Name": "Clear Android / BT 0",
-          "Behavior": "&bt",
-          "Notes": "Clear the selected Bluetooth profile",
-          "Args": ["BT_CLR"]
+          "Name": "",
+          "Behavior": "&none",
+          "Notes": "",
+          "Args": []
         },
         {
           "Name": "",
@@ -1388,10 +1388,10 @@
           "Args": ["C_AC_BACK"]
         },
         {
-          "Name": "",
-          "Behavior": "&none",
-          "Notes": "",
-          "Args": []
+          "Name": "Clear selected profile",
+          "Behavior": "&bt",
+          "Notes": "Mouse + Bluetooth output clears the selected Bluetooth profile",
+          "Args": ["BT_CLR"]
         },
         {
           "Name": "",
