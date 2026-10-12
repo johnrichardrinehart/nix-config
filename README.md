@@ -149,7 +149,8 @@ Hold Fn and tap the middle key to toggle the QWERTY overlay.
 The separate Caps Lock key remains available.
 On the right half, the key immediately right of L sends `/`.
 Hold Shift for `?`.
-The key immediately right of S sends Delete.
+The key immediately right of S sends `-`.
+On the left half, the key immediately right of 5 sends Delete.
 The QWERTY overlay retains Delete on its top letter row and apostrophe on its home row.
 The left half controls Bluetooth profiles and USB/Bluetooth output in dongleless mode.
 No dongle is required.
