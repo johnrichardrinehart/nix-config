@@ -22,35 +22,40 @@ let
   wormhole-send = pkgs.dev.johnrinehart.wormhole-send;
   display-layout = pkgs.dev.johnrinehart.display-layout;
 
+  niriRevision = "bb38b7e14f8f7bbef6584cf263bf36b0044d63d3";
+  niriSource = pkgs.fetchFromGitHub {
+    owner = "niri-wm";
+    repo = "niri";
+    rev = niriRevision;
+    hash = "sha256-pmQTzs7OKMoFI99vb88lURibAdjIVwXpRsgx2Gi19Qw=";
+  };
+  # 0003 pins Smithay and adapts Niri to it, including the per-device keyboard
+  # code from 0004, so it must come last.
   niriPatches = [
     ./0000-version-report-downstream-patches.patch
     ./0001-overview-allow-targeting-active-output.patch
     ./0002-screencast-accept-remote-desktop-sessions.patch
     ./0004-input-support-per-device-keyboard-settings.patch
+    ./0003-niri-pin-smithay-master.patch
   ];
-  niriDependencyPatches = [
-    ./0003-niri-pin-smithay-drm-extras-crtc-recovery.patch
-  ];
-  allNiriPatches = niriPatches ++ niriDependencyPatches;
   niriPatchVersionSuffix = lib.concatMapStrings (
     patch: "\n+ ${builtins.baseNameOf (toString patch)}"
-  ) allNiriPatches;
-  niriWithScopedOverview = pkgs.niri.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ allNiriPatches;
+  ) niriPatches;
+  # Niri 26.04 predates Smithay's SHM damage fix and does not compile with current Smithay APIs.
+  # Follow Niri main for compatible APIs, then pin Smithay to the current upstream master tip.
+  # Keep smithay-drm-extras on the fork containing the unmerged late-CRTC mapping fix.
+  niriPatched = pkgs.niri.overrideAttrs (old: {
+    src = niriSource;
+    patches = (old.patches or [ ]) ++ niriPatches;
 
-    # A connected connector can initially have no free compatible CRTC. If a
-    # later scan releases one, Smithay can map the connector without a state or
-    # mode change, so Niri receives no event and never records the new mapping.
-    # Pin https://github.com/Smithay/smithay/pull/2125 until Niri consumes it.
-    # The pinned commit also includes the DP-MST stale-reservation fix from
-    # https://github.com/Smithay/smithay/pull/2076.
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
       name = "${old.pname}-${old.version}";
-      inherit (old) src;
-      patches = (old.cargoPatches or [ ]) ++ niriDependencyPatches;
-      hash = "sha256-PB5P3h8ZA9kPTFEbQMpA/ms/k+kejvTqTgqSoXcgK/w=";
+      src = niriSource;
+      patches = (old.cargoPatches or [ ]) ++ niriPatches;
+      hash = "sha256-wj7y+3wOsTaP/T5DDFHcFTqk0kP65IPZczHIH0x5Xns=";
     };
     env = (old.env or { }) // {
+      NIRI_BUILD_COMMIT = niriRevision;
       NIRI_BUILD_PATCHES = niriPatchVersionSuffix;
     };
   });
@@ -240,9 +245,8 @@ in
       config.niri."org.freedesktop.impl.portal.FileChooser" = "gnome";
     };
 
-    # nixpkgs' niri with the downstream patches above and the patched
-    # smithay-drm-extras vendor set.
-    programs.niri.package = niriWithScopedOverview;
+    # nixpkgs' niri with the downstream patches above and pinned Smithay sources.
+    programs.niri.package = niriPatched;
 
     users.users.${primaryUser}.extraGroups = [ "seat" ];
 
