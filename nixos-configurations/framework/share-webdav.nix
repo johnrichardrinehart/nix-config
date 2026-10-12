@@ -9,7 +9,7 @@ let
   primaryGroup = config.users.users.${primaryUser}.group;
   mountPoint = "${config.users.users.${primaryUser}.home}/share";
   rcloneConfig = "/run/rclone-share/rclone.conf";
-  webdavUrl = "https://share.johnrinehart.dev/remote.php/dav/files/john/B2/";
+  webdavUrl = "https://share.johnrinehart.dev/remote.php/dav/files/john/";
 
   mountShare = pkgs.writeShellScript "mount-share-webdav" ''
     set -euo pipefail

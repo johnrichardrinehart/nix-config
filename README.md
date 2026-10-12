@@ -95,7 +95,8 @@ running it). Per-user additions go under `home-manager.users.john`.
 
 ## Framework share mount
 
-Framework mounts the B2-backed share at `~/share` through Nextcloud WebDAV.
+Framework mounts the `john` account's Nextcloud files at `~/share` through
+WebDAV. The server stores these files in an encrypted B2 bucket.
 The mount starts after the network becomes ready and reconnects after failures.
 Writes use a local cache with a 4 GiB target and an 8 GiB free-space reserve.
 The dedicated Nextcloud app password resides in `secrets/share-webdav.yaml`.
