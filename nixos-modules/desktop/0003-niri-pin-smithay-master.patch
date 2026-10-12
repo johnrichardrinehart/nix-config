@@ -1,0 +1,1274 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 0b1105f0..a03b104f 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -108,7 +108,7 @@ dependencies = [
+  "ndk-context",
+  "ndk-sys",
+  "num_enum",
+- "thiserror 2.0.20",
++ "thiserror 2.0.21",
+ ]
+ 
+ [[package]]
+@@ -261,7 +261,7 @@ dependencies = [
+  "futures-lite",
+  "parking",
+  "polling",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "slab",
+  "windows-sys 0.61.2",
+ ]
+@@ -292,7 +292,7 @@ dependencies = [
+  "cfg-if",
+  "event-listener",
+  "futures-lite",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+ ]
+ 
+ [[package]]
+@@ -318,7 +318,7 @@ dependencies = [
+  "cfg-if",
+  "futures-core",
+  "futures-io",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "signal-hook-registry",
+  "slab",
+  "windows-sys 0.61.2",
+@@ -338,7 +338,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -494,13 +494,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "bytemuck_derive"
+-version = "1.12.0"
++version = "1.12.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fc0e56a716f1e132ff6bf4bdac1c944a3fcdc1cae65f70a4a2a1ac3b401d2d1f"
++checksum = "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -534,16 +534,16 @@ dependencies = [
+ 
+ [[package]]
+ name = "calloop"
+-version = "0.14.4"
++version = "0.14.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "4dbf9978365bac10f54d1d4b04f7ce4427e51f71d61f2fe15e3fed5166474df7"
++checksum = "43b32313e937c8721c9d17ee9bf60699a6402b4b7c2cb6ac1bee0ffcaa4b4e5e"
+ dependencies = [
+  "async-task",
+  "bitflags",
+  "futures-io",
+  "nix",
+  "polling",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "slab",
+  "tracing",
+ ]
+@@ -555,16 +555,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "138efcf0940a02ebf0cc8d1eff41a1682a46b431630f4c52450d6265876021fa"
+ dependencies = [
+  "calloop",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "wayland-backend",
+  "wayland-client",
+ ]
+ 
+ [[package]]
+ name = "cc"
+-version = "1.4.5"
++version = "1.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "005ec2760ca554fae18df7a11195552ec576cd665632a881bc011d5bb2fd4d80"
++checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
+ dependencies = [
+  "find-msvc-tools",
+  "jobserver",
+@@ -583,9 +583,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "cfg-expr"
+-version = "0.20.9"
++version = "0.20.10"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fe4ece8474b5f766c63426647e7b4b316b67431ade1036a8313cee24a03ae917"
++checksum = "9ba9e9ec16c447027685b1f897b720e18e9a8afd00bd7332c483537e38086c9f"
+ dependencies = [
+  "smallvec",
+  "target-lexicon",
+@@ -593,9 +593,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "cfg-if"
+-version = "1.0.4"
++version = "1.0.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
++checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
+ 
+ [[package]]
+ name = "cfg_aliases"
+@@ -684,7 +684,7 @@ dependencies = [
+  "heck 0.5.0",
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -841,7 +841,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -886,7 +886,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "51a91c9b32ac4e8105dec255e849e0d66e27d7c34d184364fb93e469db08f690"
+ dependencies = [
+  "drm-sys",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+ ]
+ 
+ [[package]]
+@@ -1013,9 +1013,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "find-msvc-tools"
+-version = "0.1.12"
++version = "0.1.14"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
++checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+ 
+ [[package]]
+ name = "flate2"
+@@ -1102,7 +1102,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -1209,9 +1209,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "generator"
+-version = "0.8.9"
++version = "0.8.10"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b3b854b0e584ead1a33f18b2fcad7cf7be18b3875c78816b753639aa501513ae"
++checksum = "54ade96dc9003043bce7c035c85a9df5a858bfb2039c5a2e6fdf00f324f6c551"
+ dependencies = [
+  "cc",
+  "cfg-if",
+@@ -1228,7 +1228,7 @@ version = "1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1bd49230192a3797a9a4d6abe9b3eed6f7fa4c8a8a4947977c6f80025f92cbd8"
+ dependencies = [
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "windows-link",
+ ]
+ 
+@@ -1330,9 +1330,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "glam"
+-version = "0.33.7"
++version = "0.33.12"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e762b9b188634fc508d4ec54b62ea3d352c43fd431d18d05d46f559f217f4725"
++checksum = "37bfe73dc8ec21f54d181e5a60554327ec3f1c600c455a75ccbfc65d2106a6c4"
+ 
+ [[package]]
+ name = "glib"
+@@ -1555,9 +1555,9 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+ 
+ [[package]]
+ name = "icu_collections"
+-version = "2.2.0"
++version = "2.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2984d1cd16c883d7935b9e07e44071dca8d917fd52ecc02c04d5fa0b5a3f191c"
++checksum = "fa68d21081c4a05d5a901a1c62add574c77048b6a1c67be3b50ce0b60d4ca513"
+ dependencies = [
+  "displaydoc",
+  "potential_utf",
+@@ -1569,9 +1569,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "icu_locale_core"
+-version = "2.2.0"
++version = "2.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "92219b62b3e2b4d88ac5119f8904c10f8f61bf7e95b640d25ba3075e6cac2c29"
++checksum = "d56e28588da92eee5c3201a6eff33fabdd49b62269c8938d4ff050ce4d900deb"
+ dependencies = [
+  "displaydoc",
+  "litemap",
+@@ -1582,9 +1582,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "icu_normalizer"
+-version = "2.2.0"
++version = "2.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c56e5ee99d6e3d33bd91c5d85458b6005a22140021cc324cea84dd0e72cff3b4"
++checksum = "12f9cf5f235641ed274641dd81c3f28d870e276763d0797aeeab72317b1c646f"
+ dependencies = [
+  "icu_collections",
+  "icu_normalizer_data",
+@@ -1596,16 +1596,17 @@ dependencies = [
+ 
+ [[package]]
+ name = "icu_normalizer_data"
+-version = "2.2.0"
++version = "2.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "da3be0ae77ea334f4da67c12f149704f19f81d1adf7c51cf482943e84a2bad38"
++checksum = "1563da1ed3e0b3bf3d74c9b85917ac9c56464d2f57242270c09c9e752f8021a0"
+ 
+ [[package]]
+ name = "icu_properties"
+-version = "2.2.0"
++version = "2.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "bee3b67d0ea5c2cca5003417989af8996f8604e34fb9ddf96208a033901e70de"
++checksum = "7e7ca276ad3145661a65914e6daf131ca5120cd3dcee8f8f3214b8875184a148"
+ dependencies = [
++ "displaydoc",
+  "icu_collections",
+  "icu_locale_core",
+  "icu_properties_data",
+@@ -1616,15 +1617,15 @@ dependencies = [
+ 
+ [[package]]
+ name = "icu_properties_data"
+-version = "2.2.0"
++version = "2.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8e2bbb201e0c04f7b4b3e14382af113e17ba4f63e2c9d2ee626b720cbce54a14"
++checksum = "e590f038c1464a96894fd6d10127e90a8be4509f56ff7ecef851b15cee0b7caa"
+ 
+ [[package]]
+ name = "icu_provider"
+-version = "2.2.0"
++version = "2.3.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "139c4cf31c8b5f33d7e199446eff9c1e02decfc2f0eec2c8d71f65befa45b421"
++checksum = "d27bbb9d3abbefac45d55f647c9de1d44aafcd1186eb91879afef17c396c3e73"
+ dependencies = [
+  "displaydoc",
+  "icu_locale_core",
+@@ -1758,7 +1759,7 @@ dependencies = [
+  "jni-sys 0.4.1",
+  "log",
+  "simd_cesu8",
+- "thiserror 2.0.20",
++ "thiserror 2.0.21",
+  "walkdir",
+  "windows-link",
+ ]
+@@ -1816,9 +1817,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "js-sys"
+-version = "0.3.105"
++version = "0.3.106"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ce57d20d1ea864ce2ac172ab472d409214f4fd359f0b2a2775abdf522e2af99e"
++checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
+ dependencies = [
+  "cfg-if",
+  "futures-util",
+@@ -1879,9 +1880,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "lazy_static"
+-version = "1.5.0"
++version = "1.5.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
++checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
+ 
+ [[package]]
+ name = "libadwaita"
+@@ -1916,9 +1917,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "libc"
+-version = "0.2.189"
++version = "0.2.190"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
++checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+ 
+ [[package]]
+ name = "libdisplay-info"
+@@ -1930,7 +1931,7 @@ dependencies = [
+  "libc",
+  "libdisplay-info-derive",
+  "libdisplay-info-sys",
+- "thiserror 2.0.20",
++ "thiserror 2.0.21",
+ ]
+ 
+ [[package]]
+@@ -1972,9 +1973,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+ 
+ [[package]]
+ name = "libredox"
+-version = "0.1.23"
++version = "0.1.25"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8d8f1ea3f21fd3405dcaf6c9b5c1630af9afc422d9073ea39c5f6d6c772e08ed"
++checksum = "61ff90caf6077a803a240f62fdbe88645a890bbca49ef8174c3cb0404362171d"
+ dependencies = [
+  "bitflags",
+  "libc",
+@@ -2014,7 +2015,7 @@ dependencies = [
+  "libc",
+  "libspa-sys",
+  "nom 8.0.0",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "system-deps",
+ ]
+ 
+@@ -2378,9 +2379,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "objc2"
+-version = "0.6.4"
++version = "0.6.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
++checksum = "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8"
+ dependencies = [
+  "objc2-encode",
+ ]
+@@ -2717,7 +2718,7 @@ dependencies = [
+  "libspa",
+  "libspa-sys",
+  "pipewire-sys",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+ ]
+ 
+ [[package]]
+@@ -2784,7 +2785,7 @@ dependencies = [
+  "concurrent-queue",
+  "hermit-abi 0.5.3",
+  "pin-project-lite",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "windows-sys 0.61.2",
+ ]
+ 
+@@ -2962,9 +2963,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "rand"
+-version = "0.10.2"
++version = "0.10.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
++checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
+ dependencies = [
+  "chacha20",
+  "getrandom 0.4.3",
+@@ -3058,7 +3059,7 @@ checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
+ dependencies = [
+  "getrandom 0.2.17",
+  "libredox",
+- "thiserror 2.0.20",
++ "thiserror 2.0.21",
+ ]
+ 
+ [[package]]
+@@ -3078,7 +3079,7 @@ checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -3119,7 +3120,7 @@ dependencies = [
+  "calloop",
+  "enumflags2",
+  "log",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+ ]
+ 
+ [[package]]
+@@ -3152,9 +3153,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "rustix"
+-version = "1.1.4"
++version = "1.1.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
++checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+ dependencies = [
+  "bitflags",
+  "errno",
+@@ -3212,7 +3213,7 @@ dependencies = [
+  "proc-macro2",
+  "quote",
+  "serde_derive_internals",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -3263,7 +3264,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -3274,7 +3275,7 @@ checksum = "f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -3298,14 +3299,14 @@ checksum = "8d3b1629de253c70a0508c3899572da79ca359fdab27c7920ff00406df418906"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+ name = "serde_spanned"
+-version = "1.1.1"
++version = "1.1.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
++checksum = "4e7523beb55eece201a2356bee0bbca0d1ab466c14c07703b2e0ee6d42cb0c2c"
+ dependencies = [
+  "serde_core",
+ ]
+@@ -3371,9 +3372,9 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+ 
+ [[package]]
+ name = "siphasher"
+-version = "1.0.3"
++version = "1.0.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
++checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
+ 
+ [[package]]
+ name = "slab"
+@@ -3383,9 +3384,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+ 
+ [[package]]
+ name = "smallvec"
+-version = "1.16.0"
++version = "1.16.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
++checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+ 
+ [[package]]
+ name = "smawk"
+@@ -3396,7 +3397,7 @@ checksum = "e8e2fb0f499abb4d162f2bedad68f5ef91a1682b5a03596ddb67efd37768d100"
+ [[package]]
+ name = "smithay"
+ version = "0.7.0"
+-source = "git+https://github.com/Smithay/smithay.git?rev=19c16d3e34172fcc8fb3d293bcae563b0a19ea70#19c16d3e34172fcc8fb3d293bcae563b0a19ea70"
++source = "git+https://github.com/Smithay/smithay.git?rev=cf43a02acd6b5863909665c67f289f6f3478823a#cf43a02acd6b5863909665c67f289f6f3478823a"
+ dependencies = [
+  "aliasable",
+  "appendlist",
+@@ -3422,13 +3423,13 @@ dependencies = [
+  "pkg-config",
+  "portable-atomic",
+  "profiling",
+- "rand 0.10.2",
++ "rand 0.10.3",
+  "reis",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "siphasher",
+  "smallvec",
+  "tempfile",
+- "thiserror 2.0.20",
++ "thiserror 2.0.21",
+  "tracing",
+  "tracy-client",
+  "udev",
+@@ -3457,8 +3458,8 @@ dependencies = [
+  "cursor-icon",
+  "log",
+  "memmap2",
+- "rustix 1.1.4",
+- "thiserror 2.0.20",
++ "rustix 1.1.5",
++ "thiserror 2.0.21",
+  "wayland-client",
+  "wayland-csd-frame",
+  "wayland-cursor",
+@@ -3473,7 +3474,7 @@ dependencies = [
+ [[package]]
+ name = "smithay-drm-extras"
+ version = "0.1.0"
+-source = "git+https://github.com/Smithay/smithay.git?rev=19c16d3e34172fcc8fb3d293bcae563b0a19ea70#19c16d3e34172fcc8fb3d293bcae563b0a19ea70"
++source = "git+https://github.com/johnrichardrinehart/smithay.git?rev=caccdb81dce41b073ee573dd776982e318122e49#caccdb81dce41b073ee573dd776982e318122e49"
+ dependencies = [
+  "drm",
+  "libdisplay-info",
+@@ -3481,12 +3482,12 @@ dependencies = [
+ 
+ [[package]]
+ name = "smol_str"
+-version = "0.3.2"
++version = "0.3.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9676b89cd56310a87b93dec47b11af744f34d5fc9f367b829474eec0a891350d"
++checksum = "4aaa7368fcf4852a4c2dd92df0cace6a71f2091ca0a23391ce7f3a31833f1523"
+ dependencies = [
+  "borsh",
+- "serde",
++ "serde_core",
+ ]
+ 
+ [[package]]
+@@ -3559,9 +3560,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "syn"
+-version = "3.0.5"
++version = "3.0.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
++checksum = "01016da373cd8f7ef12624f796309f5c31ba8d646dd08856c02cd741d823c622"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+@@ -3570,13 +3571,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "synstructure"
+-version = "0.13.2"
++version = "0.14.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
++checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.119",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -3605,9 +3606,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+ dependencies = [
+  "fastrand",
+- "getrandom 0.4.3",
++ "getrandom 0.3.4",
+  "once_cell",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "windows-sys 0.61.2",
+ ]
+ 
+@@ -3643,11 +3644,11 @@ dependencies = [
+ 
+ [[package]]
+ name = "thiserror"
+-version = "2.0.20"
++version = "2.0.21"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
++checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
+ dependencies = [
+- "thiserror-impl 2.0.20",
++ "thiserror-impl 2.0.21",
+ ]
+ 
+ [[package]]
+@@ -3663,13 +3664,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "thiserror-impl"
+-version = "2.0.20"
++version = "2.0.21"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
++checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -3691,11 +3692,20 @@ dependencies = [
+  "zerovec",
+ ]
+ 
++[[package]]
++name = "tokio"
++version = "1.53.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
++dependencies = [
++ "pin-project-lite",
++]
++
+ [[package]]
+ name = "toml"
+-version = "1.1.6+spec-1.1.0"
++version = "1.1.8+spec-1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "920602543f0911ab71da12c50d59701da54c196d1a2bf5cb4b75667f137a406a"
++checksum = "20489e00e4d8741d6be680764cc12e270655e375a20d1011e844a9c3379e678d"
+ dependencies = [
+  "indexmap",
+  "serde_core",
+@@ -3708,18 +3718,18 @@ dependencies = [
+ 
+ [[package]]
+ name = "toml_datetime"
+-version = "1.1.1+spec-1.1.0"
++version = "1.1.2+spec-1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
++checksum = "2b86d767906c6c42421dcba507eb9d203e779497710a47782a224bb871653053"
+ dependencies = [
+  "serde_core",
+ ]
+ 
+ [[package]]
+ name = "toml_edit"
+-version = "0.25.15+spec-1.1.0"
++version = "0.25.17+spec-1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1340ea94a5856333492c9064b02c778b191dd2c853778d9609debdcdfea3a614"
++checksum = "e3641d5bbb5349a79e1020a242d251efbc546ad8048d133958323ce9c40a9c9c"
+ dependencies = [
+  "indexmap",
+  "toml_datetime",
+@@ -3729,18 +3739,18 @@ dependencies = [
+ 
+ [[package]]
+ name = "toml_parser"
+-version = "1.1.3+spec-1.1.0"
++version = "1.1.5+spec-1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
++checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
+ dependencies = [
+  "winnow",
+ ]
+ 
+ [[package]]
+ name = "toml_writer"
+-version = "1.1.2+spec-1.1.0"
++version = "1.1.3+spec-1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
++checksum = "06bdbd8cfc056b8d2e2e85f29b56a3bdbecb527cef81eb39e3e7b98af4652770"
+ 
+ [[package]]
+ name = "tracing"
+@@ -3865,9 +3875,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "unicode-ident"
+-version = "1.0.24"
++version = "1.0.26"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
++checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
+ 
+ [[package]]
+ name = "unicode-linebreak"
+@@ -3982,9 +3992,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen"
+-version = "0.2.128"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "aecb87a33d3b0c5e3b7aa46336eaf486cffafbd281b195e4c8b80d50df2351bf"
++checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
+ dependencies = [
+  "cfg-if",
+  "once_cell",
+@@ -3995,19 +4005,20 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen-futures"
+-version = "0.4.78"
++version = "0.4.79"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6ef4c5d3d2cdf5c54f4231181768f5510842e350db025faf1f7163b1030ed928"
++checksum = "3cbab34de2d982e9b48e18d216d04c4a6f641066ff19ffb699980f591ee3610e"
+ dependencies = [
+  "js-sys",
++ "tokio",
+  "wasm-bindgen",
+ ]
+ 
+ [[package]]
+ name = "wasm-bindgen-macro"
+-version = "0.2.128"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a690d511e3c1a8b3a55e33511e3c2c00c78415cd23650f32b808627f5696b9ed"
++checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
+ dependencies = [
+  "quote",
+  "wasm-bindgen-macro-support",
+@@ -4015,22 +4026,22 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen-macro-support"
+-version = "0.2.128"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "411e4887f0071ef2d2164a9d5fdf2d20efbef78fccd3a78b0c10a1dc5295e48a"
++checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
+ dependencies = [
+  "bumpalo",
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+  "wasm-bindgen-shared",
+ ]
+ 
+ [[package]]
+ name = "wasm-bindgen-shared"
+-version = "0.2.128"
++version = "0.2.129"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "81941cd78d0c92026c33e5e01312845a4cb1e9af3407f9134b100dd03144103e"
++checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
+ dependencies = [
+  "unicode-ident",
+ ]
+@@ -4043,7 +4054,7 @@ checksum = "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078"
+ dependencies = [
+  "cc",
+  "downcast-rs",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "scoped-tls",
+  "smallvec",
+  "wayland-sys",
+@@ -4056,7 +4067,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e3c36a0f861ad76d0901f2800b46321410d9f73f2ea88aac0650d86c32688073"
+ dependencies = [
+  "bitflags",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "wayland-backend",
+  "wayland-scanner",
+ ]
+@@ -4078,7 +4089,7 @@ version = "0.31.14"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "4a52d18780be9b1314328a3de5f930b73d2200112e3849ca6cb11822793fb34d"
+ dependencies = [
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "wayland-client",
+  "xcursor",
+ ]
+@@ -4179,7 +4190,7 @@ checksum = "0dde9c29be0f723a573977de51ee455bf3dfa03652730a74f9dd3b337e374d75"
+ dependencies = [
+  "bitflags",
+  "downcast-rs",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "wayland-backend",
+  "wayland-scanner",
+ ]
+@@ -4200,9 +4211,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "web-sys"
+-version = "0.3.105"
++version = "0.3.106"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9fbddc4a036f00ec4f18c83445bd3115cb306a91da554919a099d9222fe4a7f8"
++checksum = "88261b9deccee56594c11a3460c462c41f58d148598fe70ad77070126a68aba4"
+ dependencies = [
+  "js-sys",
+  "wasm-bindgen",
+@@ -4424,7 +4435,7 @@ dependencies = [
+  "dpi",
+  "libc",
+  "raw-window-handle",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "smol_str",
+  "tracing",
+  "winit-android",
+@@ -4566,7 +4577,7 @@ dependencies = [
+  "memmap2",
+  "percent-encoding",
+  "raw-window-handle",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "smithay-client-toolkit",
+  "smol_str",
+  "tracing",
+@@ -4634,7 +4645,7 @@ dependencies = [
+  "libc",
+  "percent-encoding",
+  "raw-window-handle",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "smol_str",
+  "tracing",
+  "winit-common",
+@@ -4687,7 +4698,7 @@ dependencies = [
+  "libc",
+  "libloading",
+  "once_cell",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "x11rb-protocol",
+  "xcursor",
+ ]
+@@ -4774,13 +4785,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "yoke-derive"
+-version = "0.8.2"
++version = "0.8.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
++checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.119",
++ "syn 3.0.8",
+  "synstructure",
+ ]
+ 
+@@ -4806,7 +4817,7 @@ dependencies = [
+  "hex",
+  "libc",
+  "ordered-stream",
+- "rustix 1.1.4",
++ "rustix 1.1.5",
+  "serde",
+  "serde_repr",
+  "tracing",
+@@ -4852,7 +4863,7 @@ dependencies = [
+  "proc-macro-crate",
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+  "zbus_names",
+  "zvariant",
+  "zvariant_utils",
+@@ -4921,13 +4932,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "zerofrom-derive"
+-version = "0.1.7"
++version = "0.1.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "11532158c46691caf0f2593ea8358fed6bbf68a0315e80aae9bd41fbade684a1"
++checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.119",
++ "syn 3.0.8",
+  "synstructure",
+ ]
+ 
+@@ -4961,7 +4972,7 @@ checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+ ]
+ 
+ [[package]]
+@@ -5000,7 +5011,7 @@ dependencies = [
+  "proc-macro-crate",
+  "proc-macro2",
+  "quote",
+- "syn 3.0.5",
++ "syn 3.0.8",
+  "zvariant_utils",
+ ]
+ 
+@@ -5013,6 +5024,6 @@ dependencies = [
+  "proc-macro2",
+  "quote",
+  "serde",
+- "syn 3.0.5",
++ "syn 3.0.8",
+  "winnow",
+ ]
+diff --git a/Cargo.toml b/Cargo.toml
+index 5c5d0305..92cdb065 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -28,13 +28,13 @@ tracy-client = { version = "0.18.5", default-features = false }
+ [workspace.dependencies.smithay]
+ # version = "0.4.1"
+ git = "https://github.com/Smithay/smithay.git"
+-rev = "19c16d3e34172fcc8fb3d293bcae563b0a19ea70"
++rev = "cf43a02acd6b5863909665c67f289f6f3478823a"
+ default-features = false
+ 
+ [workspace.dependencies.smithay-drm-extras]
+ # version = "0.1.0"
+-git = "https://github.com/Smithay/smithay.git"
+-rev = "19c16d3e34172fcc8fb3d293bcae563b0a19ea70"
++git = "https://github.com/johnrichardrinehart/smithay.git"
++rev = "caccdb81dce41b073ee573dd776982e318122e49"
+ # path = "../smithay/smithay-drm-extras"
+ 
+ [package]
+diff --git a/src/handlers/mod.rs b/src/handlers/mod.rs
+index f55f4d6f..88ed3907 100644
+--- a/src/handlers/mod.rs
++++ b/src/handlers/mod.rs
+@@ -13,7 +13,7 @@ use std::time::Duration;
+ 
+ use smithay::backend::allocator::dmabuf::Dmabuf;
+ use smithay::backend::drm::DrmNode;
+-use smithay::backend::input::{InputEvent, TabletToolDescriptor};
++use smithay::backend::input::{Event as _, InputEvent, TabletToolDescriptor};
+ use smithay::desktop::{PopupKind, PopupManager};
+ use smithay::input::dnd::{self, DnDGrab, DndGrabHandler, DndTarget};
+ use smithay::input::pointer::{self, CursorIcon, CursorImageStatus, Focus, PointerHandle};
+@@ -62,6 +62,9 @@ use smithay::wayland::session_lock::{
+     LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker,
+ };
+ use smithay::wayland::text_input::TextInputActivation;
++use smithay::wayland::virtual_keyboard::{
++    VirtualKeyboardBackend, VirtualKeyboardHandler, VirtualKeyboardSpecialEvent,
++};
+ use smithay::wayland::xdg_activation::{
+     XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
+ };
+@@ -659,6 +662,41 @@ impl ScreencopyHandler for State {
+     }
+ }
+ 
++impl VirtualKeyboardHandler for State {
++    fn process_virtual_keyboard_event(&mut self, event: InputEvent<VirtualKeyboardBackend>) {
++        match event {
++            InputEvent::Keyboard { event } => {
++                if self.activate_virtual_keymap(&event.device()) {
++                    self.process_input_event(InputEvent::<VirtualKeyboardBackend>::Keyboard {
++                        event,
++                    });
++                }
++            }
++            InputEvent::Special(VirtualKeyboardSpecialEvent::Modifiers {
++                device,
++                mods_depressed,
++                mods_latched,
++                mods_locked,
++                group,
++            }) => {
++                if self.activate_virtual_keymap(&device) {
++                    let keyboard = self.niri.seat.get_keyboard().unwrap();
++                    keyboard.with_xkb_state(self, |mut context| {
++                        context.set_modifier_mask(mods_depressed, mods_latched, mods_locked, group);
++                    });
++                }
++            }
++            InputEvent::DeviceRemoved { device } => {
++                self.release_virtual_keymap(&device);
++                self.process_input_event(InputEvent::<VirtualKeyboardBackend>::DeviceRemoved {
++                    device,
++                });
++            }
++            event => self.process_input_event(event),
++        }
++    }
++}
++
+ impl VirtualPointerHandler for State {
+     fn virtual_pointer_manager_state(&mut self) -> &mut VirtualPointerManagerState {
+         &mut self.niri.virtual_pointer_state
+diff --git a/src/input/backend_ext.rs b/src/input/backend_ext.rs
+index 99f4a904..2d8ccd54 100644
+--- a/src/input/backend_ext.rs
++++ b/src/input/backend_ext.rs
+@@ -2,6 +2,7 @@ use ::input as libinput;
+ use smithay::backend::input;
+ use smithay::backend::winit::WinitVirtualDevice;
+ use smithay::output::Output;
++use smithay::wayland::virtual_keyboard::VirtualKeyboardDevice;
+ 
+ use crate::niri::State;
+ use crate::protocols::virtual_pointer::VirtualPointer;
+@@ -43,6 +44,11 @@ impl NiriInputDevice for WinitVirtualDevice {
+         None
+     }
+ }
++impl NiriInputDevice for VirtualKeyboardDevice {
++    fn output(&self, _state: &State) -> Option<Output> {
++        None
++    }
++}
+ 
+ impl NiriInputDevice for VirtualPointer {
+     fn output(&self, _: &State) -> Option<Output> {
+diff --git a/src/input/mod.rs b/src/input/mod.rs
+index 6b3646f7..ffcebbf2 100644
+--- a/src/input/mod.rs
++++ b/src/input/mod.rs
+@@ -38,6 +38,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+ use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
+ use smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitor;
+ use smithay::wayland::pointer_constraints::{with_pointer_constraint, PointerConstraint};
++use smithay::wayland::virtual_keyboard::VirtualKeyboardDevice;
+ use touch_overview_grab::TouchOverviewGrab;
+ 
+ use self::move_grab::MoveGrab;
+@@ -66,6 +67,7 @@ pub mod scroll_tracker;
+ pub mod spatial_movement_grab;
+ pub mod swipe_tracker;
+ pub mod touch_overview_grab;
++pub mod virtual_keyboard;
+ 
+ use backend_ext::{NiriInputBackend as InputBackend, NiriInputDevice as _};
+ 
+@@ -620,6 +622,12 @@ impl State {
+         I::Device: 'static,
+     {
+         let device = event.device();
++        // Virtual keyboards bring their own keymap; see `State::activate_virtual_keymap()`.
++        if (&device as &dyn Any).is::<VirtualKeyboardDevice>() {
++            return;
++        }
++        self.restore_configured_keymap();
++
+         let input_device = (&device as &dyn Any)
+             .downcast_ref::<input::Device>()
+             .cloned();
+diff --git a/src/input/virtual_keyboard.rs b/src/input/virtual_keyboard.rs
+new file mode 100644
+index 00000000..4ad23ee0
+--- /dev/null
++++ b/src/input/virtual_keyboard.rs
+@@ -0,0 +1,95 @@
++//! Seat keymap handling for `zwp_virtual_keyboard_v1` clients.
++//!
++//! A virtual keyboard sends keycodes and modifier masks that only have meaning in its own keymap.
++//! Niri activates that keymap before it handles the device's events. It restores the configured
++//! keymap before the next non-virtual key, before per-window layout tracking runs, and when the
++//! virtual keyboard goes away.
++
++use std::sync::Arc;
++
++use smithay::backend::input::Device as _;
++use smithay::input::keyboard::Layout;
++use smithay::wayland::virtual_keyboard::VirtualKeyboardDevice;
++
++use crate::niri::State;
++
++/// A virtual keyboard keymap that replaced the configured seat keymap.
++pub struct VirtualKeymap {
++    /// Device ID of the virtual keyboard that activated the keymap.
++    owner: String,
++    keymap: Arc<str>,
++    /// Active layout of the configured keymap when the virtual keymap replaced it.
++    configured_layout: Layout,
++}
++
++impl State {
++    /// Activates the keymap that the keycodes and modifiers of `device` belong to.
++    ///
++    /// Returns `false` if the keymap could not be activated. The device's event must then be
++    /// dropped, because the active keymap would assign it the wrong meaning.
++    pub fn activate_virtual_keymap(&mut self, device: &VirtualKeyboardDevice) -> bool {
++        let Some(keymap) = device.keymap() else {
++            // The device sent `no_keymap`, so its keycodes use the configured keymap.
++            self.restore_configured_keymap();
++            return true;
++        };
++
++        let owner = device.id();
++        if let Some(active) = &mut self.niri.virtual_keymap {
++            if Arc::ptr_eq(&active.keymap, &keymap) || active.keymap == keymap {
++                active.owner = owner;
++                active.keymap = keymap;
++                return true;
++            }
++        }
++
++        let keyboard = self.niri.seat.get_keyboard().unwrap();
++        let configured_layout = match &self.niri.virtual_keymap {
++            Some(active) => active.configured_layout,
++            None => keyboard.with_xkb_state(self, |context| {
++                context.xkb().lock().unwrap().active_layout()
++            }),
++        };
++
++        if let Err(err) = keyboard.set_keymap_from_string(self, keymap.to_string()) {
++            warn!("error activating virtual keyboard keymap: {err:?}");
++            return false;
++        }
++
++        self.niri.virtual_keymap = Some(VirtualKeymap {
++            owner,
++            keymap,
++            configured_layout,
++        });
++        true
++    }
++
++    /// Restores the configured keymap if a virtual keyboard replaced it.
++    pub fn restore_configured_keymap(&mut self) {
++        let Some(virtual_keymap) = self.niri.virtual_keymap.take() else {
++            return;
++        };
++
++        if !self.apply_xkb(self.niri.current_keyboard.xkb.clone()) {
++            return;
++        }
++
++        let keyboard = self.niri.seat.get_keyboard().unwrap();
++        keyboard.with_xkb_state(self, |mut context| {
++            context.set_layout(virtual_keymap.configured_layout);
++        });
++        self.ipc_refresh_keyboard_layout_index();
++    }
++
++    /// Restores the configured keymap if the removed `device` owns the active keymap.
++    pub fn release_virtual_keymap(&mut self, device: &VirtualKeyboardDevice) {
++        if self
++            .niri
++            .virtual_keymap
++            .as_ref()
++            .is_some_and(|active| active.owner == device.id())
++        {
++            self.restore_configured_keymap();
++        }
++    }
++}
+diff --git a/src/ipc/server.rs b/src/ipc/server.rs
+index 374216c2..d2425f9f 100644
+--- a/src/ipc/server.rs
++++ b/src/ipc/server.rs
+@@ -559,6 +559,11 @@ impl State {
+     }
+ 
+     pub fn ipc_refresh_keyboard_layout_index(&mut self) {
++        // A virtual keyboard keymap does not change the configured layout.
++        if self.niri.virtual_keymap.is_some() {
++            return;
++        }
++
+         let keyboard = self.niri.seat.get_keyboard().unwrap();
+         let idx = keyboard.with_xkb_state(self, |context| {
+             let xkb = context.xkb().lock().unwrap();
+diff --git a/src/niri.rs b/src/niri.rs
+index 1c0a841a..69e4dad7 100644
+--- a/src/niri.rs
++++ b/src/niri.rs
+@@ -140,6 +140,7 @@ use crate::handlers::{configure_lock_surface, XDG_ACTIVATION_TOKEN_TIMEOUT};
+ use crate::input::pick_color_grab::PickColorGrab;
+ use crate::input::scroll_swipe_gesture::ScrollSwipeGesture;
+ use crate::input::scroll_tracker::ScrollTracker;
++use crate::input::virtual_keyboard::VirtualKeymap;
+ use crate::input::{
+     apply_libinput_settings, mods_with_finger_scroll_binds, mods_with_horizontal_wheel_binds,
+     mods_with_mouse_binds, mods_with_tablet_stylus_binds, mods_with_vertical_wheel_binds,
+@@ -282,6 +283,8 @@ pub struct Niri {
+     pub current_keyboard: niri_config::input::Keyboard,
+     pub active_keyboard_device: Option<input::Device>,
+     pub keyboard_device_cache: HashMap<input::Device, niri_config::input::Keyboard>,
++    /// Keymap of a virtual keyboard that temporarily replaced the configured one.
++    pub virtual_keymap: Option<VirtualKeymap>,
+     pub devices: HashSet<input::Device>,
+     pub tablets: HashMap<input::Device, TabletData>,
+     pub touch: HashSet<input::Device>,
+@@ -1463,6 +1466,9 @@ impl State {
+             }
+ 
+             if self.niri.current_keyboard.track_layout == TrackLayout::Window {
++                // Per-window layouts belong to the configured keymap.
++                self.restore_configured_keymap();
++
+                 let current_layout = keyboard.with_xkb_state(self, |context| {
+                     let xkb = context.xkb().lock().unwrap();
+                     xkb.active_layout()
+@@ -1520,6 +1526,8 @@ impl State {
+         keyboard
+             .set_keymap_from_string(self, keymap)
+             .context("failed to set keymap")?;
++        // The configured keymap replaced any virtual keyboard keymap.
++        self.niri.virtual_keymap = None;
+ 
+         // Restore num lock to its previous value.
+         let mut mods_state = keyboard.modifier_state();
+@@ -1563,6 +1571,8 @@ impl State {
+             warn!("error updating xkb config: {err:?}");
+             return false;
+         }
++        // The configured keymap replaced any virtual keyboard keymap.
++        self.niri.virtual_keymap = None;
+ 
+         // Restore num lock to its previous value.
+         let mut mods_state = keyboard.modifier_state();
+@@ -2699,6 +2709,7 @@ impl Niri {
+             current_keyboard,
+             active_keyboard_device: None,
+             keyboard_device_cache: HashMap::new(),
++            virtual_keymap: None,
+             devices: HashSet::new(),
+             tablets: HashMap::new(),
+             touch: HashSet::new(),
