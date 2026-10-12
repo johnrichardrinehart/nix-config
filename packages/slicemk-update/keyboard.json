@@ -59,7 +59,7 @@
           "Name": "",
           "Behavior": "&kp",
           "Notes": "",
-          "Args": ["MINUS"]
+          "Args": ["DELETE"]
         },
         {
           "Name": "",
@@ -257,7 +257,7 @@
           "Name": "",
           "Behavior": "&kp",
           "Notes": "",
-          "Args": ["DELETE"]
+          "Args": ["MINUS"]
         },
         {
           "Name": "",
