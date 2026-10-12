@@ -82,7 +82,9 @@ def darwin_usb_devices():
 def _darwin_holds_disk(entry, disk):
     for child in entry.get("IORegistryEntryChildren", []):
         # A USB device below a hub is listed on its own; do not credit the hub.
-        if "idVendor" in child:
+        # Interfaces and the mass-storage nubs below them also carry idVendor,
+        # so tell devices apart by class.
+        if child.get("IOObjectClass") == "IOUSBHostDevice":
             continue
         if child.get("BSD Name") == disk or _darwin_holds_disk(child, disk):
             return True
