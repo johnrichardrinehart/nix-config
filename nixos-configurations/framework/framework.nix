@@ -122,7 +122,6 @@ in
   # a failure; use `diagnose`, `dynamic-debug`, and `trace` for focused tests.
   dev.johnrinehart.external-display.telemetry = {
     enable = true;
-    verboseKernelLogging = true;
     persistentJournal = true;
     snapshotAfterResume = true;
   };
