@@ -416,9 +416,9 @@
           "Args": ["OUT_USB"]
         },
         {
-          "Name": "Android / BT 0",
+          "Name": "Work / BT 0",
           "Behavior": "&bt",
-          "Notes": "Select Bluetooth profile 0",
+          "Notes": "Select Bluetooth profile 0 for the work machine",
           "Args": ["BT_SEL 0"]
         },
         {
@@ -446,10 +446,10 @@
           "Args": []
         },
         {
-          "Name": "",
-          "Behavior": "&tog",
-          "Notes": "",
-          "Args": ["qwerty"]
+          "Name": "Framework / BT 1",
+          "Behavior": "&bt",
+          "Notes": "Select Bluetooth profile 1 for Framie",
+          "Args": ["BT_SEL 1"]
         },
         {
           "Name": "",
@@ -470,10 +470,10 @@
           "Args": ["OUT_BLE"]
         },
         {
-          "Name": "Framie / BT 1",
+          "Name": "Phone / BT 2",
           "Behavior": "&bt",
-          "Notes": "Select Bluetooth profile 1 for Framie",
-          "Args": ["BT_SEL 1"]
+          "Notes": "Select Bluetooth profile 2 for the phone",
+          "Args": ["BT_SEL 2"]
         }
       ]
     },
@@ -908,10 +908,10 @@
           "Args": []
         },
         {
-          "Name": "RGB_SLD",
-          "Behavior": "$custom",
-          "Notes": "Closest ZMK action: cycle effect",
-          "Args": ["&rgb_ug RGB_EFF"]
+          "Name": "QWERTY toggle",
+          "Behavior": "&tog",
+          "Notes": "Fn + Framework / BT 1 toggles the QWERTY layer",
+          "Args": ["qwerty"]
         },
         {
           "Name": "RGB_HUD",
