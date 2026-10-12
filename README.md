@@ -135,7 +135,12 @@ Do not hold Fn or clear Bluetooth profiles during the update.
 
 `packages/slicemk-update/keyboard.json` contains the dongleless configuration.
 `packages/slicemk-update/dongle.json` contains the separate dongle configuration.
-Both configurations use native Dvorak, plain Tab, phone profile 0, and Framie profile 1.
+Both configurations use native Dvorak, plain Tab, and three Bluetooth host profiles.
+The inner column of small keys in the right thumb cluster selects the profiles.
+The top key selects profile 0 for the work machine.
+The middle key selects profile 1 for Framie.
+The bottom key selects profile 2 for the phone.
+Hold Fn and tap the middle key to toggle the QWERTY overlay.
 The separate Caps Lock key remains available.
 On the right half, the key immediately right of L sends `/`.
 Hold Shift for `?`.
