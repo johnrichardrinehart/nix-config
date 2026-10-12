@@ -47,6 +47,19 @@ in
     }
   ];
 
+  # Karabiner uses its system default profile at the login window, where no
+  # user's profile is loaded. Copy the user's file there, as Karabiner's own
+  # "copy to system default" does, so the built-in keyboard types Dvorak
+  # there too. FileVault's pre-boot unlock runs before Karabiner and stays
+  # U.S.
+  system.activationScripts.postActivation.text = lib.mkAfter ''
+    echo "setting Karabiner's system default profile..." >&2
+    /usr/bin/install -d -m 0755 "/Library/Application Support/org.pqrs/config"
+    /usr/bin/install -m 0644 ${
+      config.home-manager.users.${user}.xdg.configFile."karabiner/karabiner.json".source
+    } "/Library/Application Support/org.pqrs/config/karabiner.json"
+  '';
+
   dev.johnrinehart.provisionMac.summary.shotedit = "${shotedit.meta.mainProgram} (${shoteditBin})";
 
   dev.johnrinehart.provisionMac.manualSteps = {
