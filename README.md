@@ -136,6 +136,8 @@ Do not hold Fn or clear Bluetooth profiles during the update.
 `packages/slicemk-update/keyboard.json` contains the dongleless configuration.
 `packages/slicemk-update/dongle.json` contains the separate dongle configuration.
 Both configurations use native Dvorak, plain Tab, and three Bluetooth host profiles.
+The mouse layer moves the pointer at up to 1600 counts per second.
+It reaches that speed on a quadratic ramp over 250 ms, so short presses stay precise.
 The inner column of small keys in the right thumb cluster selects the profiles.
 The top key selects profile 0 for the work machine.
 The middle key selects profile 1 for Framie.
