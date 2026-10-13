@@ -7,6 +7,7 @@ inputs: {
       packageEntries = builtins.readDir packageRoot;
       configurationPackageEntries = [
         "display-mode"
+        "display-seams"
         "mbp-apple-silicon-qemu-vm.nix"
         "nixos-installer-boot.nix"
         "provision-mac.nix"
