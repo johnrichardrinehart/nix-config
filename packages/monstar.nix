@@ -38,14 +38,17 @@ let
     ''}
   '';
 in
-monstar.packages.${system}.default.overrideAttrs (old: {
-  zigDeps = old.zigDeps.overrideAttrs {
-    LD_PRELOAD = "${ipv4OnlyConnect}/lib/ipv4-only-connect.so";
-  };
-  meta = (old.meta or { }) // {
-    mainProgram = "monstar";
-  };
-  passthru = (old.passthru or { }) // {
-    windowClass = "dev.rockorager.monstar";
-  };
-})
+if !(monstar.packages ? ${system}) then
+  null
+else
+  monstar.packages.${system}.default.overrideAttrs (old: {
+    zigDeps = old.zigDeps.overrideAttrs {
+      LD_PRELOAD = "${ipv4OnlyConnect}/lib/ipv4-only-connect.so";
+    };
+    meta = (old.meta or { }) // {
+      mainProgram = "monstar";
+    };
+    passthru = (old.passthru or { }) // {
+      windowClass = "dev.rockorager.monstar";
+    };
+  })
