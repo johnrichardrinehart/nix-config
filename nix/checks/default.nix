@@ -10,6 +10,7 @@ in
   auto-suspend-module = import ./auto-suspend-module.nix { inherit inputs lib pkgs; };
   brightness-sync = import ./brightness-sync.nix { inherit lib pkgs; };
   daylight-display-module = import ./daylight-display-module.nix { inherit inputs lib pkgs; };
+  display-seams = import ./display-seams.nix { inherit lib pkgs; };
   git-meld-module = import ./git-meld-module.nix { inherit inputs lib pkgs; };
   kitkat-rs-module = import ./kitkat-rs-module.nix { inherit inputs lib pkgs; };
   mycelium-module = import ./mycelium-module.nix { inherit inputs lib pkgs; };

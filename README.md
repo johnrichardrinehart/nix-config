@@ -34,7 +34,22 @@ with nix-darwin and Home Manager from `darwin-configurations/mbp-host`: shell
 Git and SSH identity, Terminal.app's "Clear Dark" profile, the FiraMono Nerd
 Font, macOS defaults (Dock placement, input sources, scrolling, appearance), Karabiner
 and spicy config, the VM share table, `shotedit` (Cmd+Shift+4 straight into
-the screenshot editor), and the GUI apps Karabiner-Elements and KeePassXC.
+the screenshot editor), `display-seams` (below), and the GUI apps
+Karabiner-Elements and KeePassXC.
+
+`display-seams` is a launch agent that removes the walls between displays of
+different sizes. macOS only lets the pointer cross where two edges overlap in
+System Settings > Displays > Arrange; display-seams spreads each edge over all
+of its neighbors instead, in proportion to how much each overlaps it, so the
+full height of one display meets the full height of the next. Pushing against
+an unjoined stretch for a moment carries the pointer across, and crossings
+through the real overlap land on the same proportional point. It rereads the
+arrangement on every hotplug or rearrangement and logs only warnings and
+errors, to `/tmp/display-seams.log`.
+It moves the pointer by posting mouse events, which needs Accessibility; like
+`shotedit`, each build is a new binary that `provision-mac` asks you to allow.
+Until then it warps the pointer instead, which leaves it frozen for about a
+quarter of a second after each jump.
 
 The VM launcher's SPICE viewer is `Spicy.app`, which Home Manager copies into
 `~/Applications/Home Manager Apps`; the launcher runs that copy when it matches

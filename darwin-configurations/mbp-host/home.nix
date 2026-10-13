@@ -5,6 +5,7 @@
   lib,
   pkgs,
   shotedit,
+  displaySeams,
   ...
 }:
 let
@@ -195,6 +196,19 @@ in
         KeepAlive = true;
         ProcessType = "Interactive";
         StandardErrorPath = "/tmp/shotedit.log";
+      };
+    };
+
+    # Join display edges macOS leaves as walls: the pointer crosses the whole
+    # height of each edge, mapped proportionally (see display-seams/main.swift).
+    launchd.agents.display-seams = {
+      enable = true;
+      config = {
+        ProgramArguments = [ (lib.getExe displaySeams) ];
+        RunAtLoad = true;
+        KeepAlive = true;
+        ProcessType = "Interactive";
+        StandardErrorPath = "/tmp/display-seams.log";
       };
     };
 

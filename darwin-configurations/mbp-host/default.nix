@@ -17,9 +17,12 @@
 }:
 let
   user = "john";
-  # One build for both the launch agent (home.nix) and its manual step below.
+  # One build each for both the launch agent (home.nix) and its manual step
+  # below.
   shotedit = pkgs.callPackage ../../packages/shotedit/package.nix { };
   shoteditBin = lib.getExe shotedit;
+  displaySeams = pkgs.callPackage ../../packages/display-seams/package.nix { };
+  displaySeamsBin = lib.getExe displaySeams;
 
   # Every key the generated ~/.ssh/config names, including ones downstream
   # modules add, so a fresh machine is told which keys to put in place.
@@ -61,6 +64,8 @@ in
   '';
 
   dev.johnrinehart.provisionMac.summary.shotedit = "${shotedit.meta.mainProgram} (${shoteditBin})";
+  dev.johnrinehart.provisionMac.summary.display-seams =
+    "${displaySeams.meta.mainProgram} (${displaySeamsBin})";
 
   dev.johnrinehart.provisionMac.manualSteps = {
     "shotedit: Accessibility" = {
@@ -74,6 +79,21 @@ in
         for older shotedit builds. TCC keys the grant to the binary, so each build
         (a new tag) needs this again:
           ${shoteditBin}
+      '';
+      settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+    };
+    "display-seams: Accessibility" = {
+      # display-seams writes its own path there once macOS trusts it.
+      check = ''
+        [[ $(cat "$HOME/.local/state/display-seams/trusted-binary") == ${displaySeamsBin} ]]
+      '';
+      instructions = ''
+        Allow ${displaySeams.meta.mainProgram} under Privacy & Security > Accessibility;
+        add it with + (Cmd+Shift+G) if it is not listed, and remove the entries
+        for older display-seams builds. Without it the pointer freezes for a
+        moment after every jump between displays. TCC keys the grant to the
+        binary, so each build (a new tag) needs this again:
+          ${displaySeamsBin}
       '';
       settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
     };
@@ -215,7 +235,7 @@ in
     # to back up on every switch; replace the previous backup instead of
     # stopping at mv's prompt (the old backup is read-only, a store copy).
     overwriteBackup = true;
-    extraSpecialArgs = { inherit inputs shotedit; };
+    extraSpecialArgs = { inherit inputs shotedit displaySeams; };
     users.${user} = ./home.nix;
   };
 }
