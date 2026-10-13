@@ -2,4 +2,4 @@
   repo-manager,
   system,
 }:
-repo-manager.packages.${system}.repo-manager
+repo-manager.packages.${system}.repo-manager or null

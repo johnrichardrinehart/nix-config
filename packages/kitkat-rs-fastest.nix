@@ -1,3 +1,3 @@
 { kitkat-rs, system }:
 
-kitkat-rs.packages.${system}.fastest
+kitkat-rs.packages.${system}.fastest or null
