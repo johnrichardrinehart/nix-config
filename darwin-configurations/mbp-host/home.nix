@@ -117,6 +117,21 @@ in
         # Ctrl+Left/Right: word movement
         bindkey "^[[1;5D" backward-word
         bindkey "^[[1;5C" forward-word
+
+        # Colour ls by entry type with whichever ls is on PATH. oh-my-zsh
+        # aliases ls='ls -G' for macOS's BSD ls at startup, but a Nix dev
+        # shell (direnv) puts GNU ls first, which reads -G as --no-group and
+        # needs --color. zsh rehashes on every PATH change, so this follows
+        # direnv in and out. LS_COLORS (GNU) and LSCOLORS (BSD) come from
+        # oh-my-zsh.
+        unalias ls 2>/dev/null
+        ls() {
+          if [[ ''${commands[ls]} == /bin/ls ]]; then
+            command ls -G "$@"
+          else
+            command ls --color=auto "$@"
+          fi
+        }
       '';
 
       # The git aliases (gst, glg, gd, gaa, ggl, ...) the NixOS hosts have.
