@@ -6,6 +6,43 @@
 }:
 let
   cfg = config.dev.johnrinehart.packages;
+
+  # Log Chromium's Ozone/Wayland input routing. When Brave stops responding to
+  # input, the log shows the drag, focus, cursor, and window state before the
+  # freeze. Release builds have no logging for menus, capture, or IME.
+  braveInputLogModules = [
+    "wayland_event_source=1"
+    "wayland_keyboard=1"
+    "wayland_cursor=1"
+    "wayland_toplevel_window=3"
+    "wayland_window_drag_controller=1"
+    "wayland_data_drag_controller=1"
+    "wayland_data_device=1"
+    "wayland_data_source=1"
+    "tab_drag_controller=1"
+  ];
+
+  # Append the stderr of each launch, including child processes, to its own
+  # file. The files survive restarts and reboots, and nothing deletes them.
+  braveLogSetup = ''
+    brave_log_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/brave-input-logs"
+    ${pkgs.coreutils}/bin/mkdir -p "$brave_log_dir"
+    exec 2>>"$brave_log_dir/brave-$(${pkgs.coreutils}/bin/date +%Y%m%dT%H%M%S)-$$.log"
+    printf "%s launch: brave %s\n" "$(${pkgs.coreutils}/bin/date -Is)" "$*" >&2
+  '';
+
+  braveWithInputLogging =
+    (pkgs.brave.override {
+      commandLineArgs = lib.concatStringsSep " " [
+        "--enable-logging=stderr"
+        "--vmodule=${lib.concatStringsSep "," braveInputLogModules}"
+      ];
+    }).overrideAttrs
+      (old: {
+        preFixup = (old.preFixup or "") + ''
+          gappsWrapperArgs+=(--run ${lib.escapeShellArg braveLogSetup})
+        '';
+      });
 in
 {
   options.dev.johnrinehart.packages = {
@@ -49,7 +86,7 @@ in
         pkgs.libnotify
         pkgs.gnome-icon-theme
         pkgs.vscodium
-        pkgs.brave
+        braveWithInputLogging
         pkgs.keepassxc
         pkgs.pavucontrol
         pkgs.gparted
