@@ -22,12 +22,27 @@ let
     "tab_drag_controller=1"
   ];
 
-  # Append the stderr of each launch, including child processes, to its own
-  # file. The files survive restarts and reboots, and nothing deletes them.
+  # Split the stderr of each launch, including child processes, into two logs:
+  #
+  # - <launch>.log keeps Chromium's messages. Nothing deletes it.
+  # - <launch>.wayland/ keeps the WAYLAND_DEBUG protocol trace. The trace logs
+  #   every frame, so multilog rotates it at about 512 MiB per launch and adds
+  #   TAI64N timestamps (read them with tai64nlocal).
+  #
+  # Every line is flushed, so the logs are current when Brave stops responding.
+  braveLogSplitter = ''
+    /^\[ *[0-9:]+\.[0-9]+\] / { print | wayland; fflush(wayland); next }
+    { print >> chromium; fflush(chromium) }
+  '';
   braveLogSetup = ''
     brave_log_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/brave-input-logs"
-    ${pkgs.coreutils}/bin/mkdir -p "$brave_log_dir"
-    exec 2>>"$brave_log_dir/brave-$(${pkgs.coreutils}/bin/date +%Y%m%dT%H%M%S)-$$.log"
+    brave_log="$brave_log_dir/brave-$(${pkgs.coreutils}/bin/date +%Y%m%dT%H%M%S)-$$"
+    ${pkgs.coreutils}/bin/mkdir -p "$brave_log.wayland"
+    export WAYLAND_DEBUG=client
+    exec 2> >(${pkgs.gawk}/bin/gawk \
+      -v chromium="$brave_log.log" \
+      -v wayland="${pkgs.daemontools}/bin/multilog t s16777215 n32 '$brave_log.wayland'" \
+      ${lib.escapeShellArg braveLogSplitter})
     printf "%s launch: brave %s\n" "$(${pkgs.coreutils}/bin/date -Is)" "$*" >&2
   '';
 
