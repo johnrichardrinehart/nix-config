@@ -4,8 +4,9 @@
   inputs,
   lib,
   pkgs,
-  shotedit,
-  displaySeams,
+  # Signed copies outside the store (default.nix), installed by provision-mac.
+  shoteditBin,
+  displaySeamsBin,
   ...
 }:
 let
@@ -205,7 +206,7 @@ in
     launchd.agents.shotedit = {
       enable = true;
       config = {
-        ProgramArguments = [ (lib.getExe shotedit) ];
+        ProgramArguments = [ shoteditBin ];
         RunAtLoad = true;
         KeepAlive = true;
         ProcessType = "Interactive";
@@ -218,7 +219,7 @@ in
     launchd.agents.display-seams = {
       enable = true;
       config = {
-        ProgramArguments = [ (lib.getExe displaySeams) ];
+        ProgramArguments = [ displaySeamsBin ];
         RunAtLoad = true;
         KeepAlive = true;
         ProcessType = "Interactive";

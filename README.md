@@ -46,8 +46,9 @@ an unjoined stretch for a moment carries the pointer across, and crossings
 through the real overlap land on the same proportional point. It rereads the
 arrangement on every hotplug or rearrangement and logs only warnings and
 errors, to `/tmp/display-seams.log`.
-It moves the pointer by posting mouse events, which needs Accessibility; like
-`shotedit`, each build is a new binary that `provision-mac` asks you to allow.
+It moves the pointer by posting mouse events, which needs Accessibility, as
+does `shotedit`; `provision-mac` asks you to allow each once (signed copies,
+below).
 Until then it warps the pointer instead, which leaves it frozen for about a
 quarter of a second after each jump.
 
@@ -56,18 +57,22 @@ The VM launcher's SPICE viewer is `Spicy.app`, which Home Manager copies into
 its own build. As a bundled app it keeps its Dock and app-switcher entry across
 Dock restarts, and "Keep in Dock" pins a path that survives rebuilds.
 
-`secretspec` on PATH is a copy of the Nix build that `provision-mac` signs
-with a self-signed code-signing certificate, at
-`~/.local/state/secretspec-signed/bin/secretspec`
-(`darwin-configurations/mbp-host/secretspec.nix`). Its KeePassXC master
-password sits in the login keychain, which asks again whenever the reading
-program's signature changes: twice for every ad hoc signed Nix build, and,
-once "Always Allow" has admitted the certificate, once ("access key") for
-each new build signed with it. The key stays out of `/nix/store`:
-`provision-mac` reads it, as base64 of one PEM holding the certificate and
-private key, from `MAC_CODESIGN_IDENTITY_PEM_BASE64` in the environment it is
-started from.
-Without it the copy is the unsigned build, and a manual step says so.
+`secretspec`, `shotedit` and `display-seams` run from copies of their Nix
+builds that `provision-mac` signs with a self-signed code-signing
+certificate, at `~/.local/state/<name>-signed/bin/<name>`
+(`darwin-configurations/mbp-host/signed-copies.nix`). macOS remembers what
+you allowed a program by its code signature, and an ad hoc signed Nix build
+is a new program every time: the keychain holding secretspec's KeePassXC
+master password asked twice per build, and every Accessibility grant left an
+entry per build behind. With one certificate at a fixed path, an
+Accessibility grant carries over to later builds, and the keychain asks once
+("access key") per new secretspec build after "Always Allow". The key stays
+out of `/nix/store`: `provision-mac` reads it, as base64 of one PEM holding
+the certificate and private key, from `MAC_CODESIGN_IDENTITY_PEM_BASE64` in
+the environment it is started from. Without it new builds are copied
+unsigned, and a manual step says so. Another manual step lists Accessibility
+entries left by store-path builds, which `tccutil` cannot remove, for
+removal by hand.
 
 The VM share table (`dev.johnrinehart.mbp-host.vmShares`, in
 `darwin-configurations/mbp-host/vm-shares.nix`) lists directories shared with
@@ -109,7 +114,7 @@ to apply later changes.
 
 Some steps macOS only accepts from the user: approving Karabiner's background
 items, driver extension, Input Monitoring and Accessibility, Accessibility for
-`shotedit` (again after every rebuild of it), and putting the SSH keys in
+`shotedit` and `display-seams`, and putting the SSH keys in
 place. Modules declare these under `dev.johnrinehart.provisionMac.manualSteps`
 with a check for each; after activating, `provision-mac` lists the ones still
 pending, launches the app that asks for them, and opens System Settings at

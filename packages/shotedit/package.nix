@@ -2,9 +2,10 @@
 # pure and does not depend on the Xcode license having been accepted.
 #
 # The binary is named shotedit-<tag>, where the tag hashes what determines
-# the compiled binary: the source and the compiler. TCC lists entries by
-# executable name and keys each grant to one binary, so builds that need
-# separate grants show up under distinct names in System Settings.
+# the compiled binary: the source and the compiler, so provision-mac's
+# summary names the build. The Mac host runs a signed copy under the fixed
+# name `shotedit` (darwin-configurations/mbp-host/signed-copies.nix), so its
+# Accessibility grant survives rebuilds.
 {
   runCommandCC,
   swift,

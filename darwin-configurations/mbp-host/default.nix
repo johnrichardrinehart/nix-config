@@ -17,12 +17,21 @@
 }:
 let
   user = "john";
-  # One build each for both the launch agent (home.nix) and its manual step
-  # below.
+  # Accessibility grants follow the code signature, so both run from signed
+  # copies at fixed paths (signed-copies.nix): a grant then survives rebuilds
+  # instead of leaving an entry per build behind.
   shotedit = pkgs.callPackage ../../packages/shotedit/package.nix { };
-  shoteditBin = lib.getExe shotedit;
+  shoteditBin = config.dev.johnrinehart.mbp-host.signedCopies.shotedit.path;
   displaySeams = pkgs.callPackage ../../packages/display-seams/package.nix { };
-  displaySeamsBin = lib.getExe displaySeams;
+  displaySeamsBin = config.dev.johnrinehart.mbp-host.signedCopies.display-seams.path;
+
+  # Each writes its own path to ~/.local/state/<name>/trusted-binary whenever
+  # it starts (or later becomes) trusted. Newer than the copy means the build
+  # now installed there is trusted.
+  trusted = name: bin: ''
+    f="$HOME/.local/state/${name}/trusted-binary"
+    [[ $(cat "$f") == ${bin} && $f -nt ${bin} ]]
+  '';
 
   # Every key the generated ~/.ssh/config names, including ones downstream
   # modules add, so a fresh machine is told which keys to put in place.
@@ -39,6 +48,7 @@ in
     ./apps.nix
     ./manual-steps.nix
     ./secretspec.nix
+    ./signed-copies.nix
     ./tmp-cleaner.nix
     ./vm-shares.nix
   ];
@@ -64,37 +74,56 @@ in
     } "/Library/Application Support/org.pqrs/config/karabiner.json"
   '';
 
+  dev.johnrinehart.mbp-host.signedCopies = {
+    shotedit = {
+      package = shotedit;
+      launchdLabel = "org.nix-community.home.shotedit";
+    };
+    display-seams = {
+      package = displaySeams;
+      launchdLabel = "org.nix-community.home.display-seams";
+    };
+  };
+
   dev.johnrinehart.provisionMac.summary.shotedit = "${shotedit.meta.mainProgram} (${shoteditBin})";
   dev.johnrinehart.provisionMac.summary.display-seams =
     "${displaySeams.meta.mainProgram} (${displaySeamsBin})";
 
   dev.johnrinehart.provisionMac.manualSteps = {
     "shotedit: Accessibility" = {
-      # shotedit writes its own path there once macOS trusts it.
-      check = ''
-        [[ $(cat "$HOME/.local/state/shotedit/trusted-binary") == ${shoteditBin} ]]
-      '';
+      check = trusted "shotedit" shoteditBin;
       instructions = ''
-        Allow ${shotedit.meta.mainProgram} under Privacy & Security > Accessibility;
-        add it with + (Cmd+Shift+G) if it is not listed, and remove the entries
-        for older shotedit builds. TCC keys the grant to the binary, so each build
-        (a new tag) needs this again:
+        Allow shotedit under Privacy & Security > Accessibility; add it with +
+        (Cmd+Shift+G) if it is not listed. Signed with your certificate, the
+        grant carries over to later builds:
           ${shoteditBin}
       '';
       settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
     };
     "display-seams: Accessibility" = {
-      # display-seams writes its own path there once macOS trusts it.
+      check = trusted "display-seams" displaySeamsBin;
+      instructions = ''
+        Allow display-seams under Privacy & Security > Accessibility; add it
+        with + (Cmd+Shift+G) if it is not listed. Without it the pointer
+        freezes for a moment after every jump between displays. Signed with
+        your certificate, the grant carries over to later builds:
+          ${displaySeamsBin}
+      '';
+      settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+    };
+    # Grants for builds run straight from the store, before the signed copies
+    # (and any copy left unsigned), stay listed after the build is gone.
+    # tccutil cannot remove a path entry, so list them for removal by hand.
+    "Accessibility: stale entries" = {
       check = ''
-        [[ $(cat "$HOME/.local/state/display-seams/trusted-binary") == ${displaySeamsBin} ]]
+        ! /usr/bin/tccutil list -s Accessibility | grep -E '^/nix/store/[^/]+-(shotedit|display-seams)-' >/dev/null
       '';
       instructions = ''
-        Allow ${displaySeams.meta.mainProgram} under Privacy & Security > Accessibility;
-        add it with + (Cmd+Shift+G) if it is not listed, and remove the entries
-        for older display-seams builds. Without it the pointer freezes for a
-        moment after every jump between displays. TCC keys the grant to the
-        binary, so each build (a new tag) needs this again:
-          ${displaySeamsBin}
+        Remove these old builds' entries from Privacy & Security > Accessibility
+        (select, then -); the signed copies replace them:
+      '';
+      action = ''
+        /usr/bin/tccutil list -s Accessibility | grep -E '^/nix/store/[^/]+-(shotedit|display-seams)-' | sed 's/^/        /'
       '';
       settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
     };
@@ -236,7 +265,7 @@ in
     # to back up on every switch; replace the previous backup instead of
     # stopping at mv's prompt (the old backup is read-only, a store copy).
     overwriteBackup = true;
-    extraSpecialArgs = { inherit inputs shotedit displaySeams; };
+    extraSpecialArgs = { inherit inputs shoteditBin displaySeamsBin; };
     users.${user} = ./home.nix;
   };
 }
