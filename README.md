@@ -56,6 +56,19 @@ The VM launcher's SPICE viewer is `Spicy.app`, which Home Manager copies into
 its own build. As a bundled app it keeps its Dock and app-switcher entry across
 Dock restarts, and "Keep in Dock" pins a path that survives rebuilds.
 
+`secretspec` on PATH is a copy of the Nix build that `provision-mac` signs
+with a self-signed code-signing certificate, at
+`~/.local/state/secretspec-signed/bin/secretspec`
+(`darwin-configurations/mbp-host/secretspec.nix`). Its KeePassXC master
+password sits in the login keychain, which asks again whenever the reading
+program's signature changes: twice for every ad hoc signed Nix build, and,
+once "Always Allow" has admitted the certificate, once ("access key") for
+each new build signed with it. The key stays out of `/nix/store`:
+`provision-mac` reads it, as base64 of one PEM holding the certificate and
+private key, from `MAC_CODESIGN_IDENTITY_PEM_BASE64` in the environment it is
+started from.
+Without it the copy is the unsigned build, and a manual step says so.
+
 The VM share table (`dev.johnrinehart.mbp-host.vmShares`, in
 `darwin-configurations/mbp-host/vm-shares.nix`) lists directories shared with
 the guest over NFSv3, each exported by the side its data lives on:

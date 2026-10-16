@@ -44,7 +44,6 @@ in
         ln -s ${pkgs.coreutils}/bin/timeout $out/bin/timeout
       '')
       pkgs.repo-manager
-      (pkgs.callPackage ../../packages/secretspec/package.nix { })
       inputs.self.packages.aarch64-darwin.mbp-apple-silicon-qemu-vm
       # Its viewer, Spicy.app, which Home Manager copies into
       # ~/Applications/Home Manager Apps; the launcher runs that copy.

@@ -9,6 +9,7 @@
   darwinConfiguration,
   lib,
   writeShellApplication,
+  writeShellScript,
 }:
 let
   inherit (darwinConfiguration) config;
@@ -105,6 +106,18 @@ writeShellApplication {
       echo "==> removing per-user copies of FiraMono Nerd Font"
       rm -f "''${stale_fonts[@]}"
     fi
+
+    ${lib.concatStrings (
+      lib.mapAttrsToList (name: text: ''
+        echo ${lib.escapeShellArg "==> ${name}"}
+        if ! ${writeShellScript "provision-mac-step" ''
+          set -euo pipefail
+          ${text}
+        ''}; then
+          echo ${lib.escapeShellArg "==> ${name} failed; continuing"} >&2
+        fi
+      '') (config.dev.johnrinehart.provisionMac.userSteps or { })
+    )}
 
     echo "==> done"
     ${lib.concatStrings (
