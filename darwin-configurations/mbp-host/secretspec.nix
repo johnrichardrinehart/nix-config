@@ -11,9 +11,12 @@ let
   copy = config.dev.johnrinehart.mbp-host.signedCopies.secretspec;
 in
 {
-  dev.johnrinehart.mbp-host.signedCopies.secretspec.package =
-    pkgs.callPackage ../../packages/secretspec/package.nix
-      { };
+  dev.johnrinehart.mbp-host.signedCopies.secretspec = {
+    package = pkgs.callPackage ../../packages/secretspec/package.nix { };
+    # A command, not a launchd program. ~/.local/bin is not on PATH here, so
+    # PATH reaches it through the link below.
+    path = "${config.users.users.${config.system.primaryUser}.home}/.local/bin/secretspec";
+  };
 
   home-manager.users.${config.system.primaryUser}.home.packages = [ copy.link ];
 }
