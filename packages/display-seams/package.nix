@@ -1,10 +1,11 @@
 # Built with nixpkgs' Swift toolchain rather than Xcode's, like shotedit.
 #
 # The binary is named display-seams-<tag>, where the tag hashes what
-# determines the compiled binary: the sources and the compiler. It moves the
-# pointer by posting events, which needs Accessibility; TCC lists entries by
-# executable name and keys each grant to one binary, so builds that need
-# separate grants show up under distinct names in System Settings.
+# determines the compiled binary: the sources and the compiler, so
+# provision-mac's summary names the build. It moves the pointer by posting
+# events, which needs Accessibility; the Mac host runs a signed copy under the
+# fixed name `display-seams` (darwin-configurations/mbp-host/signed-copies.nix),
+# so the grant survives rebuilds.
 {
   runCommandCC,
   swift,
