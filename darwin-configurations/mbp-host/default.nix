@@ -38,6 +38,7 @@ in
     inputs.home-manager.darwinModules.home-manager
     ./apps.nix
     ./manual-steps.nix
+    ./secretspec.nix
     ./tmp-cleaner.nix
     ./vm-shares.nix
   ];

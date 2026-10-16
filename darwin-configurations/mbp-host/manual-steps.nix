@@ -17,6 +17,18 @@ in
     description = "Lines `provision-mac` prints after every activation, as `name: value`.";
   };
 
+  options.dev.johnrinehart.provisionMac.userSteps = mkOption {
+    type = types.attrsOf types.lines;
+    default = { };
+    description = ''
+      Bash (`set -euo pipefail`) that `provision-mac` runs as the primary
+      user after activation, before checking the manual steps, each as its own
+      script. They see the environment `provision-mac` was started from (such
+      as the checkout's direnv), which the sudo activation does not. A failing
+      step is reported and the rest of the run continues.
+    '';
+  };
+
   options.dev.johnrinehart.provisionMac.manualSteps = mkOption {
     default = { };
     description = "Imperative steps to surface after `provision-mac` activates.";
