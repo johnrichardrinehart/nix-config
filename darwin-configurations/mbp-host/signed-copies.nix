@@ -54,9 +54,19 @@ in
             };
             path = mkOption {
               type = types.str;
+              default = "${home}/.local/libexec/${name}";
+              defaultText = lib.literalExpression ''"''${home}/.local/libexec/''${name}"'';
+              description = ''
+                Where the copy is installed: `~/.local/libexec` for programs only
+                launchd runs, `~/.local/bin` for commands. Grants are keyed to the
+                path, so changing it means granting again.
+              '';
+            };
+            sourceFile = mkOption {
+              type = types.str;
               readOnly = true;
-              default = "${home}/.local/state/${name}-signed/bin/${name}";
-              description = "Where the copy is installed.";
+              default = "${home}/.local/state/${name}-signed/source";
+              description = "State file naming the build the copy was made from.";
             };
             link = mkOption {
               type = types.package;
@@ -105,13 +115,13 @@ in
         echo "MAC_CODESIGN_IDENTITY_PEM_BASE64 is not set; installing new builds unsigned" >&2
       fi
 
-      # install_copy NAME UNSIGNED COPY LAUNCHD-LABEL
+      # install_copy NAME UNSIGNED COPY SOURCE-FILE LAUNCHD-LABEL
       install_copy() {
-        local name=$1 unsigned=$2 copy=$3 label=$4
-        local state
-        state=$(dirname "$(dirname "$copy")")
+        local name=$1 unsigned=$2 copy=$3 source=$4 label=$5
+        # The previous layout kept the copy in bin/ beside the source file.
+        rm -rf "$(dirname "$source")/bin"
         local current=
-        if [[ -x $copy && $(cat "$state/source" 2>/dev/null) == "$unsigned" ]]; then
+        if [[ -x $copy && $(cat "$source" 2>/dev/null) == "$unsigned" ]]; then
           current=1
         fi
         if [[ -n $leaf ]]; then
@@ -132,7 +142,8 @@ in
         mkdir -p "$(dirname "$copy")"
         cp "$tmp/$name" "$copy.new"
         mv -f "$copy.new" "$copy"
-        echo "$unsigned" >"$state/source"
+        mkdir -p "$(dirname "$source")"
+        echo "$unsigned" >"$source"
         if [[ -n $label ]]; then
           /bin/launchctl kickstart -k "gui/$(id -u)/$label" || true
         fi
@@ -140,7 +151,7 @@ in
     ''
     + lib.concatStrings (
       lib.mapAttrsToList (name: copy: ''
-        install_copy ${esc name} ${esc copy.executable} ${esc copy.path} ${esc (toString copy.launchdLabel)}
+        install_copy ${esc name} ${esc copy.executable} ${esc copy.path} ${esc copy.sourceFile} ${esc (toString copy.launchdLabel)}
       '') cfg
     );
 
@@ -148,7 +159,7 @@ in
       check =
         lib.concatStrings (
           lib.mapAttrsToList (_: copy: ''
-            [[ $(cat ${esc (dirOf (dirOf copy.path))}/source) == ${esc copy.executable} ]] &&
+            [[ $(cat ${esc copy.sourceFile}) == ${esc copy.executable} ]] &&
               /usr/bin/codesign -d -r- ${esc copy.path} 2>&1 | grep -q 'certificate leaf' &&
           '') cfg
         )

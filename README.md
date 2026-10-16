@@ -59,7 +59,8 @@ Dock restarts, and "Keep in Dock" pins a path that survives rebuilds.
 
 `secretspec`, `shotedit` and `display-seams` run from copies of their Nix
 builds that `provision-mac` signs with a self-signed code-signing
-certificate, at `~/.local/state/<name>-signed/bin/<name>`
+certificate: `~/.local/libexec/<name>` for the launch agents,
+`~/.local/bin/secretspec` (linked onto PATH) for the command
 (`darwin-configurations/mbp-host/signed-copies.nix`). macOS remembers what
 you allowed a program by its code signature, and an ad hoc signed Nix build
 is a new program every time: the keychain holding secretspec's KeePassXC

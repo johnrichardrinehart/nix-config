@@ -111,22 +111,31 @@ in
       '';
       settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
     };
-    # Grants for builds run straight from the store, before the signed copies
-    # (and any copy left unsigned), stay listed after the build is gone.
-    # tccutil cannot remove a path entry, so list them for removal by hand.
-    "Accessibility: stale entries" = {
-      check = ''
-        ! /usr/bin/tccutil list -s Accessibility | grep -E '^/nix/store/[^/]+-(shotedit|display-seams)-' >/dev/null
-      '';
-      instructions = ''
-        Remove these old builds' entries from Privacy & Security > Accessibility
-        (select, then -); the signed copies replace them:
-      '';
-      action = ''
-        /usr/bin/tccutil list -s Accessibility | grep -E '^/nix/store/[^/]+-(shotedit|display-seams)-' | sed 's/^/        /'
-      '';
-      settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
-    };
+    # Grants for anything but the current copies (builds run straight from
+    # the store, copies at earlier paths) stay listed after the program is
+    # gone. tccutil cannot remove a path entry, so list them for removal by
+    # hand.
+    "Accessibility: stale entries" =
+      let
+        stale = lib.removeSuffix "\n" ''
+          { /usr/bin/tccutil list -s Accessibility |
+            grep -E '/(shotedit|display-seams)(-[0-9a-f]{8})?$' |
+            grep -vxF -e ${shoteditBin} -e ${displaySeamsBin}; } || true
+        '';
+      in
+      {
+        check = ''
+          [[ -z $(${stale}) ]]
+        '';
+        instructions = ''
+          Remove these entries from Privacy & Security > Accessibility
+          (select, then -); the current copies replace them:
+        '';
+        action = ''
+          ${stale} | sed 's/^/        /'
+        '';
+        settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+      };
     "SSH keys" = {
       check =
         lib.concatMapStrings (key: ''
