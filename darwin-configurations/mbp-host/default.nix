@@ -181,6 +181,10 @@ in
   # As in the guest: outputs reachable from a live .drv stay in the store, so
   # garbage collection does not force the next build to redo kept work.
   nix.settings.keep-outputs = true;
+  # Lets the primary user `nix copy` unsigned paths in (e.g. from the guest)
+  # and pass daemon-restricted settings. Root-equivalent for the store.
+  # Merges with nix-darwin's default (root).
+  nix.settings.trusted-users = [ user ];
 
   # nix-darwin only writes /etc/nix/machines when build machines are set, and
   # its activation reloads the daemon whenever that file differs from the
