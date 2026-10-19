@@ -12,6 +12,7 @@ in
   imports = [
     ./framie.nix
     ./framework.nix
+    ./git-send-email.nix
     ./nebula.nix
     ./share-webdav.nix
     ./tailscale-nix-builders.nix

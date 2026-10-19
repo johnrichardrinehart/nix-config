@@ -14,3 +14,7 @@ creation_rules:
     key_groups:
       - age:
           - *framework
+  - path_regex: secrets/framework\.yaml$
+    key_groups:
+      - age:
+          - *framework
