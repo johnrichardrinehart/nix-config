@@ -16,4 +16,12 @@ _: {
     enable = true;
     manager = "iwd";
   };
+  # With DriverQuirks.DefaultInterface, iwd must find the kernel-created
+  # interface when it sets up the wiphy. If iwd starts while iwlmvm is still
+  # registering the card, iwd can miss the interface and expose no device.
+  # The device unit appears only after udev renames the interface.
+  systemd.services.iwd = {
+    wants = [ "sys-subsystem-net-devices-wlp170s0.device" ];
+    after = [ "sys-subsystem-net-devices-wlp170s0.device" ];
+  };
 }
