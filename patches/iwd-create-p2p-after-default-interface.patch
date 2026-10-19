@@ -1,0 +1,48 @@
+From 045e7c87423a4acf10ccdae8e5accf77c1cd1f94 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Mon, 19 Oct 2026 07:35:27 -0400
+Subject: [PATCH] manager: create the P2P device after the default interface
+
+With [DriverQuirks].DefaultInterface, iwd can set up a wiphy before the
+driver creates its default interface. This happens when iwd starts while
+mac80211 registers the card, for example during boot. The interface
+dump is then empty, so manager_use_default() sets state->retry and
+waits for a NEW_INTERFACE event.
+
+manager_create_interfaces() still creates the P2P device in this case.
+The NEW_INTERFACE event for that P2P device arrives first and clears
+state->retry. The P2P device is not a default interface, so setup
+finishes without a station device. The driver's NEW_INTERFACE event
+arrives next, finds no pending setup, and is ignored. The wiphy has no
+station until iwd restarts or the driver reloads.
+
+Return from manager_create_interfaces() when manager_use_default() fails.
+The retry calls manager_create_interfaces() again after the default
+interface appears, and that pass creates the P2P device.
+---
+ src/manager.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/manager.c b/src/manager.c
+index 436daa56..48c0acc6 100644
+--- a/src/manager.c
++++ b/src/manager.c
+@@ -203,7 +203,14 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
+ 		return;
+ 
+ 	if (state->use_default) {
+-		manager_use_default(state);
++		/*
++		 * If the default interface does not exist yet, wait for its
++		 * NEW_INTERFACE event before creating the P2P device.  The
++		 * event for our own P2P device would otherwise end the wait,
++		 * and the default interface would never be set up.
++		 */
++		if (!manager_use_default(state))
++			return;
+ 
+ 		/*
+ 		 * Some drivers don't let us touch the default interface
+-- 
+2.56.0
+

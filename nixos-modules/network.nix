@@ -80,6 +80,11 @@ in
       networking.networkmanager.enable = lib.mkForce false;
       networking.wireless.iwd = {
         enable = true;
+        # DefaultInterface makes iwd wait for the driver's interface. The patch
+        # stops iwd's own P2P device from ending that wait at boot.
+        package = pkgs.iwd.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ../patches/iwd-create-p2p-after-default-interface.patch ];
+        });
         settings = {
           General.EnableNetworkConfiguration = true;
           Network.NameResolvingService = if config.services.resolved.enable then "systemd" else "resolvconf";
