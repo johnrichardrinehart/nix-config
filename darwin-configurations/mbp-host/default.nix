@@ -183,6 +183,15 @@ in
   nix.settings.keep-outputs = true;
   # Hard-links identical store files as paths are added.
   nix.settings.auto-optimise-store = true;
+  # macOS refuses to hard-link PkgInfo and _CodeSignature/* below a *.app
+  # directory, and stock Nix only skips *.app/Contents/, so optimising an
+  # iOS-style bundle (e.g. a simulator build) fails the build or
+  # `nix store optimise`. The patch skips any file the kernel won't link.
+  nix.package = pkgs.nix.appendPatches (
+    lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+      ../../patches/nix-optimise-skip-unlinkable-app-bundle-files.patch
+    ]
+  );
   # Lets the primary user `nix copy` unsigned paths in (e.g. from the guest)
   # and pass daemon-restricted settings. Root-equivalent for the store.
   # Merges with nix-darwin's default (root).

@@ -1,0 +1,57 @@
+Skip files macOS refuses to hard-link during store optimisation.
+
+macOS returns EPERM when hard-linking PkgInfo and _CodeSignature/* below
+any *.app directory. Nix only skips *.app/Contents/, so iOS-style bundles
+abort `nix store optimise` and, with auto-optimise-store, the build.
+
+Backport to 2.34.8 of
+https://github.com/johnrichardrinehart/nix/commit/0516af5a730e7fe9d07ac0e8e8191f09cb9eafb7
+(branch darwin-optimise-skip-unlinkable-files, proposed for NixOS/nix master).
+
+diff --git a/src/libstore/optimise-store.cc b/src/libstore/optimise-store.cc
+index 7d37dbf..8409a96 100644
+--- a/src/libstore/optimise-store.cc
++++ b/src/libstore/optimise-store.cc
+@@ -207,6 +207,18 @@ void LocalStore::optimisePath_(
+                 return;
+             }
+ 
++#ifdef __APPLE__
++            else if (e.code() == std::errc::operation_not_permitted) {
++                /* macOS refuses to hard-link some files anywhere below a
++                   *.app directory, such as `_CodeSignature/*` and `PkgInfo`,
++                   even for root. The regex above only covers bundles with a
++                   `Contents` directory, not iOS-style ones that keep these
++                   files at the bundle root. */
++                debug("%s is not allowed to be linked in macOS", PathFmt(path));
++                return;
++            }
++#endif
++
+             else
+                 throw SystemError(e.code(), "creating hard link from %1% to %2%", PathFmt(linkPath), PathFmt(path));
+         }
+diff --git a/tests/functional/optimise-store.sh b/tests/functional/optimise-store.sh
+index 332a308..ac815f0 100755
+--- a/tests/functional/optimise-store.sh
++++ b/tests/functional/optimise-store.sh
+@@ -44,6 +44,19 @@ if [ "$inode1" != "$inode3" ]; then
+     exit 1
+ fi
+ 
++# macOS refuses to hard-link `PkgInfo` and `_CodeSignature/*` below a *.app
++# directory; both building and optimising must leave them alone.
++# shellcheck disable=SC2016
++outPath5=$(echo 'with import '"${config_nix}"'; mkDerivation { name = "foo5"; builder = builtins.toFile "builder" "mkdir -p $out/foo.app/_CodeSignature; echo bundle > $out/foo.app/PkgInfo; echo bundle > $out/foo.app/_CodeSignature/CodeResources; echo bundle > $out/plain"; }' | nix-build - --no-out-link --auto-optimise-store)
++
++NIX_REMOTE="" nix-store --optimise
++
++nlink="$(stat --format=%h "$outPath5"/plain)"
++if [ "$nlink" -lt 2 ]; then
++    echo "file next to an app bundle was not linked"
++    exit 1
++fi
++
+ nix-store --gc
+ 
+ if [ -n "$(ls "$NIX_STORE_DIR"/.links)" ]; then
