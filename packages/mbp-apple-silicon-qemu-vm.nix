@@ -865,7 +865,9 @@ in
       # routes keys to usb-kbd until the guest's virtio driver starts the
       # keyboard above, which then takes over (ui/input.c handler order).
       -device "usb-kbd,bus=xhci.0"
-      -drive "if=none,id=root,format=raw,file=$disk"
+      # discard/detect-zeroes: guest TRIM (fstrim.timer) punches holes in the
+      # sparse image, so blocks freed in the guest return to the host.
+      -drive "if=none,id=root,format=raw,discard=unmap,detect-zeroes=unmap,file=$disk"
       -device "virtio-blk-pci,drive=root,bootindex=0"
       -serial none
       -monitor none

@@ -181,6 +181,8 @@ in
   # As in the guest: outputs reachable from a live .drv stay in the store, so
   # garbage collection does not force the next build to redo kept work.
   nix.settings.keep-outputs = true;
+  # Hard-links identical store files as paths are added.
+  nix.settings.auto-optimise-store = true;
   # Lets the primary user `nix copy` unsigned paths in (e.g. from the guest)
   # and pass daemon-restricted settings. Root-equivalent for the store.
   # Merges with nix-darwin's default (root).

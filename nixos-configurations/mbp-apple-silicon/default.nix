@@ -23,6 +23,8 @@
   # work behind the generations that were kept. Retention only; it holds no
   # generations itself.
   nix.settings.keep-outputs = true;
+  # Hard-links identical store files as paths are added.
+  nix.settings.auto-optimise-store = true;
   # In /etc/nix/nix.conf, so root (`sudo nix ...`) has them too, not only
   # users with their own ~/.config/nix/nix.conf.
   nix.settings.extra-experimental-features = [
