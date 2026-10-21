@@ -46,6 +46,7 @@ in
   imports = [
     inputs.home-manager.darwinModules.home-manager
     ./apps.nix
+    ./dock.nix
     ./manual-steps.nix
     ./secretspec.nix
     ./signed-copies.nix
@@ -269,14 +270,6 @@ in
     # shotedit clicks the floating thumbnail to open the editor; without the
     # thumbnail Cmd+Shift+4 would only save a file.
     screencapture.show-thumbnail = true;
-
-    dock = {
-      orientation = "left";
-      tilesize = 78;
-      autohide = false;
-      # The tiles are left to the Dock itself: nix-darwin would replace the
-      # whole list, including apps this configuration does not install.
-    };
   };
 
   home-manager = {
