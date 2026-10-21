@@ -206,7 +206,7 @@
         framework-13-pro-netboot = mkNetbootServer {
           inherit system;
           name = "framework-13-pro-netboot";
-          nixosConfiguration = self.nixosConfigurations.framework-13-pro;
+          nixosConfiguration = self.nixosConfigurations.framework-13-pro-netboot;
         };
       });
     in

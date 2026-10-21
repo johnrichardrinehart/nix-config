@@ -79,6 +79,63 @@ let
 
   # Largest file a newc cpio header can describe.
   cpioFileLimit = 4294967295;
+
+  installTarget = cfg.installer.target.config;
+  installDisks = map (disk: disk.device) (lib.attrValues installTarget.disko.devices.disk);
+  installRoot = installTarget.disko.rootMountPoint;
+  installToDisk = pkgs.writeShellApplication {
+    name = "install-to-disk";
+    runtimeInputs = [
+      config.system.build.nixos-install
+      pkgs.util-linux
+    ];
+    text = ''
+      usage() {
+        cat <<EOF
+      Usage: install-to-disk [--yes]
+
+      Installs ${installTarget.networking.hostName} onto ${toString installDisks},
+      erasing ${if lib.length installDisks == 1 then "it" else "them"}:
+        1. partitions and formats with disko, which asks for the LUKS
+           passphrase twice on standard input,
+        2. installs ${installTarget.system.build.toplevel}
+           at ${installRoot} with nixos-install, from this system's store.
+
+        --yes   do not ask before erasing
+      EOF
+      }
+
+      wipe=()
+      case "''${1:-}" in
+      "") ;;
+      --yes) wipe=(--yes-wipe-all-disks) ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        usage >&2
+        exit 64
+        ;;
+      esac
+
+      if [ "$(id -u)" != 0 ]; then
+        echo "install-to-disk: run as root (sudo install-to-disk)" >&2
+        exit 1
+      fi
+
+      lsblk -o NAME,SIZE,MODEL,FSTYPE,MOUNTPOINTS ${lib.escapeShellArgs installDisks}
+
+      ${installTarget.system.build.destroyFormatMount}/bin/disko-destroy-format-mount "''${wipe[@]}"
+
+      nixos-install --root ${lib.escapeShellArg installRoot} \
+        --system ${installTarget.system.build.toplevel} \
+        --no-root-passwd --no-channel-copy
+
+      umount -R ${lib.escapeShellArg installRoot}
+      echo "Installed ${installTarget.networking.hostName}. Reboot and boot from the disk."
+    '';
+  };
 in
 {
   imports = [ "${modulesPath}/installer/netboot/netboot.nix" ];
@@ -104,9 +161,29 @@ in
         squashfs part, before compression.
       '';
     };
+
+    installer.target = lib.mkOption {
+      type = lib.types.nullOr lib.types.raw;
+      default = null;
+      example = lib.literalExpression "inputs.self.nixosConfigurations.my-laptop";
+      description = ''
+        A NixOS configuration, as `nixosSystem` returns it, that imports
+        disko's module and describes its disks in `disko.devices`. When set,
+        the netbooted system carries that configuration's closure and an
+        `install-to-disk` command, run as root, which partitions and formats
+        those disks with disko (destroying what is on them) and installs the
+        configuration onto them with nixos-install, without the network.
+      '';
+    };
   };
 
   config = {
+    netboot.storeContents = lib.mkIf (cfg.installer.target != null) [
+      installTarget.system.build.toplevel
+      installTarget.system.build.destroyFormatMount
+    ];
+    environment.systemPackages = lib.mkIf (cfg.installer.target != null) [ installToDisk ];
+
     fileSystems = {
       # A tmpfs to hold the part mount points.
       "/nix/.ro-store" = lib.mkForce {

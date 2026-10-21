@@ -16,7 +16,8 @@ The flake exposes:
 Managed NixOS hosts:
 
 - `framework`
-- `framework-13-pro` (netbooted; see below)
+- `framework-13-pro` (installed; see below)
+- `framework-13-pro-netboot` (netbooted; see below)
 - `gce`
 - `hp_spectre_x360`
 - `mbp-apple-silicon`
@@ -268,6 +269,28 @@ AMD board's 10 Gbit/s USB ports carry anyway.
 
 The work layer (Git identities, AWS, secretspec, repod fetching, the Mac's
 SSH key) is added downstream, as for the `mbp-apple-silicon` guest.
+
+### Installing to disk
+
+`framework-13-pro` is the same system installed on the laptop's NVMe drive
+(`nixos-configurations/framework-13-pro/{default,disko}.nix`); the netbooted
+system, `framework-13-pro-netboot`, carries its closure and an
+`install-to-disk` command (`dev.johnrinehart.netboot.installer.target`):
+
+```bash
+sudo install-to-disk          # shows the disk, asks before erasing it
+```
+
+It runs the target's disko script, which erases `/dev/nvme0n1` and lays out
+a 10 GiB ESP at `/boot` and LUKS2 over the rest, with ext4 at `/`. It asks
+twice for the LUKS passphrase. Then it runs `nixos-install`
+from the local store; no network is needed. ext4 is mounted `noatime` and
+formatted with `fast_commit`, for the many small reads, writes and fsyncs of
+`nix eval`, `git fetch` and the Nix store as well as large model files; TRIM
+reaches the drive through LUKS (`allowDiscards`) in fstrim's weekly batches,
+and `bypassWorkqueues` skips dm-crypt's queues, which only add latency on
+NVMe. The installed system unlocks LUKS in stage 1 and boots with
+systemd-boot.
 
 ### Firmware settings
 
