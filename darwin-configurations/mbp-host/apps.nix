@@ -13,7 +13,12 @@
 #
 # An app is installed only when it is missing or older than declared, so an
 # app that updated itself is never downgraded. A running app is left alone.
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   inherit (pkgs) fetchurl;
 
@@ -38,6 +43,14 @@ let
       };
     };
   };
+
+  # Apps installed by hand that update themselves with Electron's Squirrel.
+  # Squirrel swaps the bundle unprivileged when the user can write it;
+  # otherwise it asks for an admin password every update check (hourly) to
+  # run its installer as root, which then waits for the app to quit. Owning
+  # the bundle keeps updates silent.
+  userOwnedBundles = [ "Proton Pass.app" ];
+  user = config.system.primaryUser;
 
   sort = "${pkgs.coreutils}/bin/sort";
 
@@ -109,6 +122,16 @@ in
     installPkgFromImage() { fromImage "$1" "$2" /usr/sbin/installer -target / -pkg; }
 
     ${lib.concatStrings (lib.mapAttrsToList installOne apps)}
+
+    # ownByUser BUNDLE: give the primary user an app bundle in /Applications.
+    ownByUser() {
+      local dest=/Applications/$1
+      if [[ -d $dest ]] && [[ -n $(/usr/bin/find "$dest" ! -user ${user} -print -quit) ]]; then
+        echo "giving ${user} $dest so it updates without an admin password" >&2
+        /usr/sbin/chown -R ${user}:admin "$dest"
+      fi
+    }
+    ${lib.concatMapStrings (bundle: "ownByUser ${lib.escapeShellArg bundle}\n") userOwnedBundles}
   '';
 
   # Karabiner's approvals, each detected the way Karabiner itself reports it.
