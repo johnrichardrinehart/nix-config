@@ -6,6 +6,10 @@
 
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
 
+    # Newer nixos-26.05 for framework-13-pro's kernel only (Linux 7.3; see
+    # nixos-configurations/framework-13-pro/hardware.nix).
+    nixpkgs-kernel.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
+
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -98,6 +102,8 @@
         };
         mycelium = ./nixos-modules/nebula/mycelium;
         nebula = ./nixos-modules/nebula;
+        # Not part of `default`: it replaces the root filesystem with RAM.
+        netboot = ./nixos-modules/netboot;
       };
       unifiedLib = lib // {
         daylightDisplay = import ./lib/daylight-display.nix;
@@ -181,6 +187,28 @@
         mbp-apple-silicon-qemu-vm = mbpAppleSiliconQemuVm;
         provision-mac = mkProvisionMacPackage mbpHost;
       };
+
+      # PXE server, run on `system`, for an x86_64-linux configuration that
+      # imports nixosModules.netboot. The configuration's kernel, initrd and
+      # iPXE are x86_64-linux builds whatever `system` is.
+      mkNetbootServer =
+        {
+          system,
+          name,
+          nixosConfiguration,
+        }:
+        pkgsBySystem.${system}.callPackage ./packages/netboot-server/package.nix {
+          inherit name;
+          tree = nixosConfiguration.config.system.build.netbootTree;
+          ipxeEfi = nixosConfiguration.config.system.build.netbootIpxeEfi;
+        };
+      netbootServers = lib.genAttrs systems (system: {
+        framework-13-pro-netboot = mkNetbootServer {
+          inherit system;
+          name = "framework-13-pro-netboot";
+          nixosConfiguration = self.nixosConfigurations.framework-13-pro;
+        };
+      });
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ inputs.flake-parts.flakeModules.partitions ];
@@ -237,7 +265,12 @@
       flake = {
         inherit overlays;
         lib = unifiedLib // {
-          inherit mkMbpHost mkProvisionMac mkProvisionMacPackage;
+          inherit
+            mkMbpHost
+            mkNetbootServer
+            mkProvisionMac
+            mkProvisionMacPackage
+            ;
         };
 
         nixosModules = reusableNixosModules // {
@@ -276,18 +309,35 @@
         darwinConfigurations.mbp-host = mbpHost;
 
         legacyPackages = pkgsBySystem;
-        packages = reusablePackages // {
-          aarch64-darwin = reusablePackages.aarch64-darwin // configurationPackages;
-        };
-        apps = slicemkApps // {
-          aarch64-darwin = slicemkApps.aarch64-darwin // {
-            mbp-apple-silicon-qemu-vm = {
-              type = "app";
-              program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
-            };
-            provision-mac = mkProvisionMac mbpHost;
-          };
-        };
+        packages = lib.mapAttrs (system: packages: packages // netbootServers.${system}) (
+          reusablePackages
+          // {
+            aarch64-darwin = reusablePackages.aarch64-darwin // configurationPackages;
+          }
+        );
+        apps =
+          lib.mapAttrs
+            (
+              system: apps:
+              apps
+              // lib.mapAttrs (name: package: {
+                type = "app";
+                program = "${package}/bin/${name}";
+                meta.description = package.meta.description;
+              }) netbootServers.${system}
+            )
+            (
+              slicemkApps
+              // {
+                aarch64-darwin = slicemkApps.aarch64-darwin // {
+                  mbp-apple-silicon-qemu-vm = {
+                    type = "app";
+                    program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
+                  };
+                  provision-mac = mkProvisionMac mbpHost;
+                };
+              }
+            );
       };
     };
 }

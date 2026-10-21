@@ -16,6 +16,7 @@ The flake exposes:
 Managed NixOS hosts:
 
 - `framework`
+- `framework-13-pro` (netbooted; see below)
 - `gce`
 - `hp_spectre_x360`
 - `mbp-apple-silicon`
@@ -230,6 +231,94 @@ no runtime service override is needed. After switching, use the normal
 RightCtrl leader and “start dictation” command to check first-text latency.
 Leader-key monitoring also survives USB and Bluetooth keyboard reconnects;
 there is no need to restart the service after changing keyboards.
+
+## Framework 13 Pro (netboot)
+
+`framework-13-pro` is a Framework Laptop 13 Pro with the Ryzen AI 9 HX 370
+mainboard (2x48 GB DDR5, MediaTek MT7925, WisdPi 10G Ethernet card). It boots
+over PXE and runs entirely from RAM: nothing is installed to its disk, and
+every boot starts from the built system.
+
+Desktop and userspace come from `dev.johnrinehart.profiles.framework`
+(`nixos-modules/profiles/framework.nix`), which `framework` uses too: Niri
+behind tuigreet, the Dell monitor layout, daylight display, sound and
+RNNoise, voice dictation, auto-suspend, v4l2loopback, chrony. Hardware is
+nixos-hardware's `framework-amd-ai-300-series` plus
+`nixos-configurations/framework-13-pro/hardware.nix`:
+
+- Linux 7.3 from a second, newer nixos-26.05 input (`nixpkgs-kernel`). The
+  main nixpkgs stops at 7.2.9, which lacks the amdgpu vblank/flip rework
+  behind freezes on the 13 Pro AMD and later Replay fixes for its panel;
+  the RTL8159 in the WisdPi card needs 7.2 or later. Drop the input once
+  `linux_latest` in the main nixpkgs reaches 7.3.
+- udev rules that enable wakeup on the lid and power button
+  ([nixos-hardware#1782](https://github.com/NixOS/nixos-hardware/issues/1782#issuecomment-6254883883)).
+- The US wireless regulatory domain for the MT7925.
+- Voice dictation on ONNX Runtime's CPU provider: OpenVINO's GPU device is
+  Intel graphics only.
+- Suspend, not suspend-then-hibernate (`dev.johnrinehart.system.suspendVerb`):
+  there is no swap to hibernate to.
+
+Left out on purpose: `amdgpu.dcdebugmask` beyond nixos-hardware's PSR bit
+(this panel uses Replay; set `hardware.amdgpu.dcDebugMask.disableReplay` if
+it shows corruption), nixos-hardware's classic-chassis speaker tuning (the
+Pro's speakers differ), and the RTL8159 PHY firmware, which linux-firmware
+does not ship; without it the card links at up to 5 Gbit/s, near what the
+AMD board's 10 Gbit/s USB ports carry anyway.
+
+The work layer (Git identities, AWS, secretspec, repod fetching, the Mac's
+SSH key) is added downstream, as for the `mbp-apple-silicon` guest.
+
+### Firmware settings
+
+BIOS 4.02 or later (the Pro chassis's touchpad, touch panel and battery need
+it). In the BIOS: Boot > Network Stack enabled, Secure Boot disabled (iPXE is
+not signed). The firmware PXE boots from the Ethernet expansion card's UEFI
+driver; if it does not list the WisdPi card, use an RTL8156-based card or
+dongle for booting. Without an EFI system partition fwupd cannot stage
+capsule updates; update the BIOS from Framework's EFI shell package on a USB
+stick.
+
+### Serving
+
+```bash
+sudo nix run .#framework-13-pro-netboot -- --interface en7
+```
+
+This runs dnsmasq as a proxy DHCP and TFTP server on the interface and
+darkhttpd on port 8080. The network's own DHCP server keeps handing out
+addresses; dnsmasq only adds the boot information, so this is safe on a
+shared LAN. The firmware fetches iPXE (`snponly.efi`, which drives the card
+through the firmware's own network stack) over TFTP, and iPXE fetches the
+kernel and initrd over HTTP. On a cable straight to the laptop, give the
+interface a static address and add `--dhcp-range 10.42.0.100,10.42.0.150`
+to make dnsmasq the DHCP server. `--append` adds kernel arguments,
+`--print-config` shows the dnsmasq configuration. It runs on Linux and macOS
+and needs root for ports 67 and 69; the host's firewall must let in UDP 67,
+69 and 4011 and TCP 8080 on that interface. Building it needs an
+x86_64-linux builder.
+
+### The initrd
+
+nixpkgs' netboot module packs the system closure into one squashfs inside
+the initrd, a newc cpio archive whose file size field cannot reach 4 GiB.
+This closure compresses to more than that, so `nixosModules.netboot`
+(`nixos-modules/netboot`) packs it into `dev.johnrinehart.netboot.storeParts`
+squashfs images (default 8) of at most 3.75 GiB of files each, mounts each
+under `/nix/.ro-store/part-N` in stage 1 and joins them as the lower layers
+of the `/nix/store` overlay. A build whose closure does not fit fails and
+names the part count it needs. The initrd is the stage 1 initrd followed by
+an uncompressed cpio archive of the parts.
+
+The current initrd is 6.5 GB. Booting holds it about three times at once
+(iPXE's download, the kernel's copy, the unpacked parts), so it needs about
+20 GB of RAM; an emulated client with 18 GB failed in the kernel's EFI stub
+with EFI_OUT_OF_RESOURCES.
+
+Everything lives in RAM: the store parts unpacked from the initrd, and every
+write since boot (`/` and the store's upper layer are tmpfs). The account
+password is `john` from each boot (`users.users.john.initialPassword`; the
+shadow file is rebuilt every boot), so SSH accepts keys only.
 
 ## Nebula lighthouse installation
 
