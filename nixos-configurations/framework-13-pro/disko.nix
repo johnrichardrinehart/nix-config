@@ -48,11 +48,15 @@
               format = "ext4";
               mountpoint = "/";
               mountOptions = [ "noatime" ];
+              # ext4 reserves 5% for root by default: 186 GiB on this 4 TB
+              # drive. 1% (37 GiB) is plenty for one user's machine.
               extraArgs = [
                 "-L"
                 "nixos"
                 "-O"
                 "fast_commit"
+                "-m"
+                "1"
               ];
             };
           };
