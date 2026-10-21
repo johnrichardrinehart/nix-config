@@ -378,7 +378,7 @@ in
             keyboard_brightness_notify = lib.getExe keyboard-brightness-notify;
             lock_command = "${lib.getExe' pkgs.systemd "loginctl"} lock-session";
             monitor_power_notify = lib.getExe monitor-power-notify;
-            suspend = "${lib.getExe' pkgs.systemd "systemctl"} suspend-then-hibernate";
+            suspend = "${lib.getExe' pkgs.systemd "systemctl"} ${config.dev.johnrinehart.system.suspendVerb}";
             wl-kbptr = lib.getExe pkgs.wl-kbptr;
             brightness_notify = lib.getExe brightness-notify;
             display_layout_editor = lib.getExe display-layout;

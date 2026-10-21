@@ -288,6 +288,7 @@ in
             confirmSshActivityCommand = lib.optionalString sshSessionLockCfg.enable (
               lib.getExe confirmSshActivityPackage
             );
+            inherit (osConfig.dev.johnrinehart.system) suspendVerb;
           };
         in
         (pkgs.replaceVars ./hypridle.conf {

@@ -25,6 +25,19 @@ in
         configurations may use a named style or a custom date format.
       '';
     };
+    suspendVerb = lib.mkOption {
+      type = lib.types.enum [
+        "suspend-then-hibernate"
+        "suspend"
+      ];
+      default = "suspend-then-hibernate";
+      description = ''
+        `systemctl` verb behind the desktop's suspend key, lid switch and
+        long-idle suspend. Hosts that cannot hibernate (no swap) need
+        `suspend`: systemd refuses suspend-then-hibernate there, and the
+        machine would stay awake.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {

@@ -1,5 +1,6 @@
 {
   confirmSshActivityCommand ? "",
+  suspendVerb ? "suspend-then-hibernate",
   writeShellScriptBin,
   libnotify,
   systemd,
@@ -15,5 +16,5 @@ writeShellScriptBin "suspend-if-no-active-ssh" ''
     fi
   fi
 
-  ${systemd}/bin/systemctl suspend-then-hibernate
+  ${systemd}/bin/systemctl ${suspendVerb}
 ''
