@@ -25,10 +25,21 @@
 
   dev.johnrinehart.profiles.framework.enable = true;
 
+  # As on framie: iwd for Wi-Fi (impala), dhcpcd for wired interfaces.
   dev.johnrinehart.network = {
     enable = true;
-    manager = "networkmanager";
+    manager = "iwd";
   };
+  networking.useDHCP = true;
+  networking.dhcpcd.allowInterfaces = [
+    "en*"
+    "eth*"
+  ];
+  # Do not hold boot for a lease when no cable is plugged in.
+  networking.dhcpcd.wait = "background";
+  # dhcpcd defaults to metric 1000 + ifindex, which loses to the iwd route
+  # (metric 302). Prefer a wired link when one is plugged in.
+  networking.dhcpcd.extraConfig = "metric 200";
 
   # 13.5" 2880x1920 touch panel, 30-120 Hz. 1.5 leaves a 1920x1280 logical
   # desktop, about what framie's panel shows at 1.0. Mode is left to the
