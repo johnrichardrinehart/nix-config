@@ -49,7 +49,10 @@ let
   # otherwise it asks for an admin password every update check (hourly) to
   # run its installer as root, which then waits for the app to quit. Owning
   # the bundle keeps updates silent.
-  userOwnedBundles = [ "Proton Pass.app" ];
+  userOwnedBundles = [
+    "Proton Mail.app"
+    "Proton Pass.app"
+  ];
   user = config.system.primaryUser;
 
   sort = "${pkgs.coreutils}/bin/sort";
