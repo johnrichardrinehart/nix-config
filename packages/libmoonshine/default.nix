@@ -183,7 +183,7 @@ stdenv.mkDerivation {
       // Build an OpenVINO SessionOptions for one model. reshape_input may be
       // null for providers/devices where the graph should not be reshaped.
       // Returns nullptr on failure; caller falls back to the shared CPU options.
-      auto make_openvino_options = [this](const char *device, const char *precision, const char *reshape_input) -> OrtSessionOptions * {
+      [[maybe_unused]] auto make_openvino_options = [this](const char *device, const char *precision, const char *reshape_input) -> OrtSessionOptions * {
         static std::string ov_cache_dir;
         if (ov_cache_dir.empty()) {
           const char *xdg = getenv("XDG_CACHE_HOME");
@@ -230,7 +230,7 @@ stdenv.mkDerivation {
         return opts;
       };
 
-      auto make_audio_options = [&](const char *reshape_input) -> OrtSessionOptions * {
+      auto make_audio_options = [&]([[maybe_unused]] const char *reshape_input) -> OrtSessionOptions * {
         return ${audioOptionsExpr};
       };
       auto make_decoder_options = [&]() -> OrtSessionOptions * {
