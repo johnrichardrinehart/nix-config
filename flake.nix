@@ -188,27 +188,26 @@
         provision-mac = mkProvisionMacPackage mbpHost;
       };
 
-      # PXE server, run on `system`, for an x86_64-linux configuration that
-      # imports nixosModules.netboot. The configuration's kernel, initrd and
-      # iPXE are x86_64-linux builds whatever `system` is.
-      mkNetbootServer =
-        {
-          system,
-          name,
-          nixosConfiguration,
-        }:
-        pkgsBySystem.${system}.callPackage ./packages/netboot-server/package.nix {
-          inherit name;
-          tree = nixosConfiguration.config.system.build.netbootTree;
-          ipxeEfi = nixosConfiguration.config.system.build.netbootIpxeEfi;
-        };
-      netbootServers = lib.genAttrs systems (system: {
-        framework-13-pro-netboot = mkNetbootServer {
-          inherit system;
-          name = "framework-13-pro-netboot";
-          nixosConfiguration = self.nixosConfigurations.framework-13-pro-netboot;
-        };
-      });
+      # `nix run .#netboot -- NAME` serves nixosConfigurations.NAME (which
+      # imports nixosModules.netboot) over PXE. `flake` is where NAME is
+      # looked up by default, so a downstream flake passes its own `self`.
+      mkNetbootPackages =
+        flake:
+        lib.genAttrs systems (system: {
+          netboot = pkgsBySystem.${system}.callPackage ./packages/netboot/package.nix {
+            inherit flake;
+          };
+        });
+      netbootPackages = mkNetbootPackages self;
+      mkNetbootApps =
+        flake:
+        lib.mapAttrs (_: packages: {
+          netboot = {
+            type = "app";
+            program = lib.getExe packages.netboot;
+            meta.description = packages.netboot.meta.description;
+          };
+        }) (mkNetbootPackages flake);
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ inputs.flake-parts.flakeModules.partitions ];
@@ -267,7 +266,8 @@
         lib = unifiedLib // {
           inherit
             mkMbpHost
-            mkNetbootServer
+            mkNetbootApps
+            mkNetbootPackages
             mkProvisionMac
             mkProvisionMacPackage
             ;
@@ -309,35 +309,24 @@
         darwinConfigurations.mbp-host = mbpHost;
 
         legacyPackages = pkgsBySystem;
-        packages = lib.mapAttrs (system: packages: packages // netbootServers.${system}) (
+        packages = lib.mapAttrs (system: packages: packages // netbootPackages.${system}) (
           reusablePackages
           // {
             aarch64-darwin = reusablePackages.aarch64-darwin // configurationPackages;
           }
         );
-        apps =
-          lib.mapAttrs
-            (
-              system: apps:
-              apps
-              // lib.mapAttrs (name: package: {
+        apps = lib.mapAttrs (system: apps: apps // (mkNetbootApps self).${system}) (
+          slicemkApps
+          // {
+            aarch64-darwin = slicemkApps.aarch64-darwin // {
+              mbp-apple-silicon-qemu-vm = {
                 type = "app";
-                program = "${package}/bin/${name}";
-                meta.description = package.meta.description;
-              }) netbootServers.${system}
-            )
-            (
-              slicemkApps
-              // {
-                aarch64-darwin = slicemkApps.aarch64-darwin // {
-                  mbp-apple-silicon-qemu-vm = {
-                    type = "app";
-                    program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
-                  };
-                  provision-mac = mkProvisionMac mbpHost;
-                };
-              }
-            );
+                program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
+              };
+              provision-mac = mkProvisionMac mbpHost;
+            };
+          }
+        );
       };
     };
 }

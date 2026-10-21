@@ -239,22 +239,14 @@ in
       ''
     );
 
-    # What a PXE server hands out over HTTP; netboot.ipxe names the other two
-    # relative to its own URL.
-    system.build.netbootTree = pkgs.symlinkJoin {
-      name = "netboot-tree";
-      paths = [
-        config.system.build.kernel
-        config.system.build.netbootRamdisk
-        config.system.build.netbootIpxeScript
-      ];
-    };
-
-    # iPXE for the firmware to load over TFTP. snponly.efi drives the NIC
-    # through the firmware's own network stack, so it works with any card the
-    # firmware can PXE boot from, USB expansion cards included. It fetches the
-    # server's boot.ipxe from the TFTP server that served it.
-    system.build.netbootIpxeEfi =
+    # Everything a PXE server hands out: ipxe.efi over TFTP, the rest over
+    # HTTP (netboot.ipxe names bzImage and initrd relative to its own URL).
+    #
+    # ipxe.efi is iPXE's snponly.efi, which drives the NIC through the
+    # firmware's own network stack, so it works with any card the firmware
+    # can PXE boot from, USB expansion cards included. Its embedded script
+    # fetches the server's boot.ipxe from the TFTP server that served it.
+    system.build.netboot =
       let
         ipxe = pkgs.ipxe.override {
           enableDefaultPlatformTargets = false;
@@ -271,7 +263,24 @@ in
           '';
         };
       in
-      "${ipxe}/snponly.efi";
+      pkgs.linkFarm "netboot" [
+        {
+          name = "bzImage";
+          path = "${config.system.build.kernel}/${config.system.boot.loader.kernelFile}";
+        }
+        {
+          name = "initrd";
+          path = "${config.system.build.netbootRamdisk}/initrd";
+        }
+        {
+          name = "netboot.ipxe";
+          path = "${config.system.build.netbootIpxeScript}/netboot.ipxe";
+        }
+        {
+          name = "ipxe.efi";
+          path = "${ipxe}/snponly.efi";
+        }
+      ];
 
     # The stage 1 initrd, then an uncompressed cpio archive of the parts: the
     # parts are already compressed, and the kernel unpacks concatenated
