@@ -97,6 +97,7 @@
     ./tmux-socket.nix
     ./virtualisation.nix
     ./voice-dictation.nix
+    ./profiles/framework.nix
     ./profiles/laptop.nix
 
     ./desktop/default.nix

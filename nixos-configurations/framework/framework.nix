@@ -5,60 +5,12 @@
   config,
   lib,
   pkgs,
-  options,
   inputs,
   ...
 }:
-let
-  primaryUser = config.dev.johnrinehart.users.primary;
-  kittyIntegrationEnabled = config.dev.johnrinehart.users.terminalEmulator.integrations.kitty.enable;
-in
 {
   imports = [
     inputs.nixos-hardware.nixosModules.framework-11th-gen-intel
-  ];
-
-  dev.johnrinehart.droidcam.enable = false; # TODO: broken
-  dev.johnrinehart.programs.git.meld.enable = true;
-
-  home-manager.users.${primaryUser} = lib.mkIf kittyIntegrationEnabled {
-    programs.kitty.extraConfig = lib.mkAfter ''
-      mouse_map ctrl+left release grabbed,ungrabbed mouse_handle_click link
-    '';
-    xdg.configFile."kitty/open-actions.conf".text = ''
-      protocol http,https
-      action launch --type=background ${lib.getExe' pkgs.wl-clipboard "wl-copy"} -- $URL
-    '';
-  };
-
-  programs.ssh.extraConfig = lib.mkAfter ''
-    Host keepass.johnrinehart.dev
-      Port 2222
-  '';
-
-  dev.johnrinehart.auto-suspend = {
-    lowLevel = 30;
-    criticalLevel = 20;
-    notificationLevels = builtins.genList (i: 45 - (i * 5)) 6; # [ 45 40 35 30 25 20 ]
-    enable = true;
-  };
-
-  nix = {
-    settings = {
-      extra-experimental-features = "nix-command flakes ca-derivations";
-      download-buffer-size = 256 * 1024 * 1024;
-      keep-outputs = true;
-      min-free = 5 * 1024 * 1024 * 1024;
-      max-free = 10 * 1024 * 1024 * 1024;
-    };
-  };
-
-  boot.supportedFilesystems = [
-    "ntfs"
-    "exfat"
-    "vfat"
-    "btrfs"
-    "ext"
   ];
 
   boot.initrd.availableKernelModules = [
@@ -97,16 +49,6 @@ in
 
   powerManagement.cpuFreqGovernor = lib.mkDefault "powersave";
   hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
-  hardware.enableRedistributableFirmware = true;
-
-  services.fwupd.enable = true;
-
-  security.rtkit.enable = true;
-
-  ## Below v4l2loopback stuff stolen from https://gist.github.com/TheSirC/93130f70cc280cdcdff89faf8d4e98ab
-  # Extra kernel modules
-  boot.kernelPackages = pkgs.linuxPackages_latest;
-  boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];
 
   # Instrument the complete USB-C -> Thunderbolt/USB4 -> DP tunnel -> MST ->
   # DRM path. Run `sudo display-link-debug snapshot failed` immediately after
@@ -179,14 +121,6 @@ in
     debugTiming.enable = true;
   };
 
-  environment.etc."modprobe.d/v4l2loopback.conf".text = ''
-    options v4l2loopback video_nr=0,1,2 card_label="Virtual Video 0,Virtual Video 1,Virtual Video 2" exclusive_caps=1
-  '';
-
-  environment.etc."modules-load.d/v4l2loopback.conf".text = ''
-    v4l2loopback
-  '';
-
   # Let Linux own PCIe port services (hotplug, AER, PME) instead of relying on
   # firmware/ACPI handoff. This may avoid resume-time races that leave USB4/TB
   # DisplayPort tunnels disconnected.
@@ -194,15 +128,6 @@ in
   boot.kernelModules = [
     "kvm-intel" # detected automatically
   ];
-
-  services.chrony = {
-    enable = true;
-    # if we're off by >1s then jump system clock only within the 1st 3 clock
-    # updates
-    extraConfig = ''
-      makestep 1 3
-    '';
-  };
 
   services.tailscale = {
     enable = true;
@@ -317,12 +242,6 @@ in
     };
   };
 
-  networking.timeServers = options.networking.timeServers.default ++ [ "time.facebook.com" ];
-
-  services.upower = {
-    enable = true;
-  };
-
   swapDevices = [
     {
       device = "/dev/nvme0n1p3";
@@ -355,54 +274,6 @@ in
     HandleSuspendKey = "hibernate";
   };
 
-  services.getty.loginOptions = "-- \\u TMOUT=10";
-
-  dev.johnrinehart.sound = {
-    enable = true;
-
-    # Use the Samson Q9U's zero-latency hardware direct monitor without also
-    # routing the processed microphone back through PipeWire.
-    softwareMicMonitor.enable = false;
-
-    rnnoise = {
-      highpass = {
-        enable = true;
-        frequency = 210.0;
-      };
-      dualMonoOutput.enable = true;
-      vadThreshold = 70.0;
-      vadGracePeriod = 300.0;
-      retroactiveVadGrace = 100.0;
-      # RNNoise provides best-effort keyboard attenuation without the
-      # real-time underruns caused by the heavier DeepFilterNet stage.
-      deepfilter.enable = false;
-      inputRules = [
-        {
-          matches = [
-            {
-              "media.class" = "Audio/Source";
-              "api.alsa.card.name" = "Samson Q9U";
-            }
-          ];
-          actions.update-props = {
-            "priority.session" = 2300;
-          };
-        }
-        {
-          matches = [
-            {
-              "media.class" = "Audio/Source";
-              "api.alsa.card.name" = "HDA Intel PCH";
-            }
-          ];
-          actions.update-props = {
-            "priority.session" = 2200;
-          };
-        }
-      ];
-    };
-  };
-
   virtualisation.vmVariant = _: {
     fileSystems."/" = {
       device = "/dev/sda";
@@ -415,7 +286,18 @@ in
     networking.interfaces = lib.mkForce { };
   };
 
-  hardware.keyboard.zsa.enable = true;
-
-  services.hardware.bolt.enable = true;
+  # Rank the built-in microphone below the Samson Q9U (profiles.framework).
+  dev.johnrinehart.sound.rnnoise.inputRules = [
+    {
+      matches = [
+        {
+          "media.class" = "Audio/Source";
+          "api.alsa.card.name" = "HDA Intel PCH";
+        }
+      ];
+      actions.update-props = {
+        "priority.session" = 2200;
+      };
+    }
+  ];
 }
