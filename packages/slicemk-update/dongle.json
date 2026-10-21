@@ -1299,15 +1299,15 @@
         },
         {
           "Name": "",
-          "Behavior": "&trans",
+          "Behavior": "&kp",
           "Notes": "",
-          "Args": []
+          "Args": ["C_VOLUME_UP"]
         },
         {
           "Name": "",
-          "Behavior": "&trans",
+          "Behavior": "&kp",
           "Notes": "",
-          "Args": []
+          "Args": ["C_VOLUME_DOWN"]
         },
         {
           "Name": "",

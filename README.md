@@ -177,6 +177,7 @@ Do not hold Fn or clear Bluetooth profiles during the update.
 Both configurations use native Dvorak, plain Tab, and three Bluetooth host profiles.
 The mouse layer moves the pointer at up to 3200 counts per second.
 It reaches that speed on a quadratic ramp over 350 ms, so short presses stay precise.
+Hold the mouse layer key (the lower tall key in the left inner column) and tap ↑ or ↓ for volume up or down.
 The inner column of small keys in the right thumb cluster selects the profiles.
 The top key selects profile 0 for the work machine.
 The middle key selects profile 1 for Framie.
@@ -307,21 +308,34 @@ stick.
 ### Serving
 
 ```bash
-sudo nix run .#framework-13-pro-netboot -- --interface en7
+nix run .#netboot -- framework-13-pro-netboot
 ```
 
-This runs dnsmasq as a proxy DHCP and TFTP server on the interface and
-darkhttpd on port 8080. The network's own DHCP server keeps handing out
-addresses; dnsmasq only adds the boot information, so this is safe on a
-shared LAN. The firmware fetches iPXE (`snponly.efi`, which drives the card
-through the firmware's own network stack) over TFTP, and iPXE fetches the
-kernel and initrd over HTTP. On a cable straight to the laptop, give the
-interface a static address and add `--dhcp-range 10.42.0.100,10.42.0.150`
-to make dnsmasq the DHCP server. `--append` adds kernel arguments,
-`--print-config` shows the dnsmasq configuration. It runs on Linux and macOS
-and needs root for ports 67 and 69; the host's firewall must let in UDP 67,
-69 and 4011 and TCP 8080 on that interface. Building it needs an
-x86_64-linux builder.
+`netboot NAME` builds `nixosConfigurations.NAME.config.system.build.netboot`
+(any configuration that imports `nixosModules.netboot`: `bzImage`, `initrd`,
+`netboot.ipxe` and `ipxe.efi`) and serves it. dnsmasq answers DHCP and
+TFTP, darkhttpd serves the kernel and initrd over HTTP on port 8080, and
+the app asks sudo for the ports. The firmware fetches iPXE (`snponly.efi`,
+which drives the card through the firmware's own network stack) over TFTP,
+and iPXE fetches the kernel and initrd over HTTP.
+
+Without options it picks the one wired interface that has a link and no
+default route, and a mode from that interface's address. With a routable
+IPv4 address it uses proxy DHCP: the network's own DHCP server keeps
+handing out addresses and dnsmasq only adds the boot information, so this
+is safe on a shared LAN. With none (a cable straight to the laptop) it
+becomes the DHCP server for `10.42.0.100`-`10.42.0.150` and adds
+`10.42.0.1` to the interface while it serves. `--interface`, `--mode
+proxy|dhcp`, `--address`, `--dhcp-range` and `--http-port` override that;
+`--append` adds kernel arguments, `--print-config` shows the dnsmasq
+configuration without building, and `--flake` looks NAME up in another
+flake. Arguments after `--` go to `nix build` (for example `--builders`
+on a host that cannot build x86_64-linux). It runs on Linux and macOS; the
+host's firewall must let in UDP 67, 69 and 4011 and TCP 8080 on that
+interface.
+
+Downstream flakes get the same app looking NAME up in themselves with
+`lib.mkNetbootApps self` (and `lib.mkNetbootPackages self`).
 
 ### The initrd
 
