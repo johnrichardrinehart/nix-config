@@ -273,9 +273,11 @@ SSH key) is added downstream, as for the `mbp-apple-silicon` guest.
 
 BIOS 4.02 or later (the Pro chassis's touchpad, touch panel and battery need
 it). In the BIOS: Boot > Network Stack enabled, Secure Boot disabled (iPXE is
-not signed). The firmware PXE boots from the Ethernet expansion card's UEFI
-driver; if it does not list the WisdPi card, use an RTL8156-based card or
-dongle for booting. Without an EFI system partition fwupd cannot stage
+not signed). The firmware PXE boots through its Realtek USB UNDI driver:
+the WisdPi card ("network media not present") and ASIX dongles do not work;
+an RTL8153/RTL8156 dongle or Framework's 2.5G card does. The iPXE script
+runs `ifclose` before `boot`: with the firmware's network driver still open,
+the kernel's EFI stub hangs right after "Measured initrd data into PCR 9". Without an EFI system partition fwupd cannot stage
 capsule updates; update the BIOS from Framework's EFI shell package on a USB
 stick.
 

@@ -146,6 +146,22 @@ in
 
     system.build.squashfsStoreParts = squashfsParts;
 
+    # nixpkgs' script, plus ifclose before boot. snponly.efi drives the NIC
+    # through the firmware's driver; left open, the Framework 13 (Ryzen AI
+    # 300) firmware's USB UNDI hangs the kernel's EFI stub right after it
+    # measures the initrd ("into PCR 9"), with any kernel.
+    system.build.netbootIpxeScript = lib.mkForce (
+      pkgs.writeTextDir "netboot.ipxe" ''
+        #!ipxe
+        # Use the cmdline variable to allow the user to specify custom kernel params
+        # when chainloading this script from other iPXE scripts like netboot.xyz
+        kernel ${pkgs.stdenv.hostPlatform.linux-kernel.target} init=${config.system.build.toplevel}/init initrd=initrd ${toString config.boot.kernelParams} ''${cmdline}
+        initrd initrd
+        ifclose
+        boot
+      ''
+    );
+
     # What a PXE server hands out over HTTP; netboot.ipxe names the other two
     # relative to its own URL.
     system.build.netbootTree = pkgs.symlinkJoin {
