@@ -438,6 +438,10 @@ in
         };
         core.excludesFile = "~/.gitignore";
         pull.rebase = true;
+        # A plain `git push` of a branch without an upstream (one created from
+        # a commit or a local branch, e.g. by `git worktree add -b`) pushes it
+        # to the same name on origin and tracks it.
+        push.autoSetupRemote = true;
         # repo-manager sets this per repository as it touches them, and passes
         # it on every git call it makes; this covers `git worktree add` by hand
         # in clones it has not touched since. The managed tree is seen from

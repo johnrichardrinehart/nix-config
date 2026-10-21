@@ -189,6 +189,9 @@ in
       # ~/.netrc or a credential helper holds, not the key picked by the
       # remote's owner.
       settings.url."git@github.com:".insteadOf = "https://github.com";
+      # As on the NixOS machines: a plain `git push` of a branch without an
+      # upstream pushes it to the same name on origin and tracks it.
+      settings.push.autoSetupRemote = true;
     };
 
     programs.ssh = {
