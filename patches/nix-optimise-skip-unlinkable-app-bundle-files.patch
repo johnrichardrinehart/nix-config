@@ -4,9 +4,10 @@ macOS returns EPERM when hard-linking PkgInfo and _CodeSignature/* below
 any *.app directory. Nix only skips *.app/Contents/, so iOS-style bundles
 abort `nix store optimise` and, with auto-optimise-store, the build.
 
-Backport to 2.34.8 of
-https://github.com/johnrichardrinehart/nix/commit/0516af5a730e7fe9d07ac0e8e8191f09cb9eafb7
-(branch darwin-optimise-skip-unlinkable-files, proposed for NixOS/nix master).
+Backport to 2.34.9 of
+https://github.com/johnrichardrinehart/nix/commit/eaaee8553f2e9b46a92b328937f1539778561a7e
+(branch darwin-optimise-skip-unlinkable-files, open pull request
+https://github.com/NixOS/nix/pull/16654).
 
 diff --git a/src/libstore/optimise-store.cc b/src/libstore/optimise-store.cc
 index 7d37dbf..8409a96 100644

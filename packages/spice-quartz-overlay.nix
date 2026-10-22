@@ -5,49 +5,6 @@
 final: prev: {
   gtk3-quartz-patched = prev.gtk3.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
-      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10388
-      (prev.fetchpatch2 {
-        name = "quartz-poll-descriptor-race.patch";
-        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/dccd93038aa034ab36b768b34fb727418fb83288.patch";
-        hash = "sha256-f8jgV5RR3mqjYXt0MzPmtLXl0jgCGT6ErFbBQ51dk4I=";
-      })
-      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10389
-      (prev.fetchpatch2 {
-        name = "quartz-clipboard-owner-change.patch";
-        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/b33cff2db0d6a021bc9c784b2a68f8735ca7eebd.patch";
-        hash = "sha256-aBu9s5UlHxtwoYzXMofoBlbvTugIybd+PX1b7aCNGGc=";
-      })
-      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10418
-      # The TARGETS list advertises public.png as image/png (and any other
-      # UTI under its MIME name), but reading contents looked the MIME name
-      # up verbatim, so only text and image/tiff ever returned data. spice-gtk
-      # announced PNG to the guest, got 0 bytes back and never answered, and
-      # every guest reader of image/png hung until the next clipboard change.
-      (prev.fetchpatch2 {
-        name = "quartz-clipboard-read-uti.patch";
-        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/ab37ec7e52cd80c6bb7275dc57e13f6333783da1.patch";
-        hash = "sha256-CzKtI9QmYdvAQS57Dorc+zqEP62m8b1usjU/F2tEJxA=";
-      })
-      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10419
-      # The macOS screenshot tool copies images as TIFF alone, and guest
-      # consumers such as omp only take PNG. Offer image/png for a TIFF-only
-      # pasteboard and convert on request. Applies on top of the patch above.
-      (prev.fetchpatch2 {
-        name = "quartz-clipboard-tiff-as-png.patch";
-        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/b304affecf9df7c637402d502a69506b60b9a884.patch";
-        hash = "sha256-fH0HT8qZx08uhPOs2N5qHZq4XNgS4sy7nb41OW544fQ=";
-      })
-      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10415
-      # A modifier key's press or release was judged by the flag both keys
-      # of its left/right pair share, so releasing one Shift while holding
-      # the other came out as another press: the guest kept that Shift held
-      # until spicy lost and regained focus. Decide by the key's own
-      # device-dependent bit.
-      (prev.fetchpatch2 {
-        name = "quartz-modifier-sides.patch";
-        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/d6adfa92514a7adbe8aa6f30cea6d0549516a307.patch";
-        hash = "sha256-D1l9cVJS1Z1HXsA+wtlWFZgl3DLdqzlneU/su1rdXeY=";
-      })
       # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10417, merged into
       # gtk-3-24 after 3.24.52.
       # gdk_keymap_get_caps_lock_state() always said FALSE, so spice-gtk's
@@ -58,6 +15,51 @@ final: prev: {
         url = "https://gitlab.gnome.org/GNOME/gtk/-/commit/2cc84440712c9b1d18f8a2a4ac4fbd10823bc818.patch";
         hash = "sha256-B4dxF62cQ4UlwXaa083HixE2Hrie2d0o1quEtXjufTY=";
       })
+      # The commits below come from merge requests based on gtk-3-24, which
+      # holds the patch above, so they apply on top of it.
+      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10388
+      (prev.fetchpatch2 {
+        name = "quartz-poll-descriptor-race.patch";
+        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/d1bf212c842742cb97f0f167d3ad944ea9b92520.patch";
+        hash = "sha256-f8jgV5RR3mqjYXt0MzPmtLXl0jgCGT6ErFbBQ51dk4I=";
+      })
+      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10389
+      (prev.fetchpatch2 {
+        name = "quartz-clipboard-owner-change.patch";
+        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/15cefe2dd9d6d2c7f74f1d46b044bd0414665bb0.patch";
+        hash = "sha256-aBu9s5UlHxtwoYzXMofoBlbvTugIybd+PX1b7aCNGGc=";
+      })
+      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10418
+      # The TARGETS list advertises public.png as image/png (and any other
+      # UTI under its MIME name), but reading contents looked the MIME name
+      # up verbatim, so only text and image/tiff ever returned data. spice-gtk
+      # announced PNG to the guest, got 0 bytes back and never answered, and
+      # every guest reader of image/png hung until the next clipboard change.
+      (prev.fetchpatch2 {
+        name = "quartz-clipboard-read-uti.patch";
+        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/4f5200fc044b1cba950729f64058e7c9d80aa19b.patch";
+        hash = "sha256-CzKtI9QmYdvAQS57Dorc+zqEP62m8b1usjU/F2tEJxA=";
+      })
+      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10419
+      # The macOS screenshot tool copies images as TIFF alone, and guest
+      # consumers such as omp only take PNG. Offer image/png for a TIFF-only
+      # pasteboard and convert on request. Applies on top of the patch above.
+      (prev.fetchpatch2 {
+        name = "quartz-clipboard-tiff-as-png.patch";
+        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/a94666f04954d92628820a7a55cd8876e7f35cfd.patch";
+        hash = "sha256-fH0HT8qZx08uhPOs2N5qHZq4XNgS4sy7nb41OW544fQ=";
+      })
+      # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10415
+      # A modifier key's press or release was judged by the flag both keys
+      # of its left/right pair share, so releasing one Shift while holding
+      # the other came out as another press: the guest kept that Shift held
+      # until spicy lost and regained focus. Decide by the key's own
+      # device-dependent bit.
+      (prev.fetchpatch2 {
+        name = "quartz-modifier-sides.patch";
+        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/3de3315d35872a2827abefeb84b0c940171c5b03.patch";
+        hash = "sha256-wkkVevpuRDOJipHCLUePhgVeXzJZYUsu2I7z8N+MtZY=";
+      })
       # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10420
       # gtk_window_maximize() before the window is shown reaches the quartz
       # backend while the window is still unmapped, and it only zoomed mapped
@@ -65,7 +67,7 @@ final: prev: {
       # the request and zoom once shown.
       (prev.fetchpatch2 {
         name = "quartz-initial-maximize.patch";
-        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/9fe1cd3659e172b2e99e7e7de7f0f6fe5fd832a8.patch";
+        url = "https://gitlab.gnome.org/johnrichardrinehart/gtk/-/commit/207d40139e495ce83b449de7f9b28ccf62507438.patch";
         hash = "sha256-+gaIJ5o31ljwUAyE5pUpEQs1j/RSpe3k9IXYareHRAc=";
       })
       # Only GtkApplication calls -[NSApplication finishLaunching]. spicy uses

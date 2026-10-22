@@ -81,7 +81,7 @@ stdenv.mkDerivation {
     # https://github.com/bjthompson805/spice-vdagent-wayland/pull/1
     (fetchpatch2 {
       name = "mutter-empty-display-fallback.patch";
-      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/7c4a2fc750c2d3df947fe146b7f628d479379b16.patch?full_index=1";
+      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/74c365dec6ecec7f5d7cc9accdd7f6b360a475be.patch?full_index=1";
       hash = "sha256-051+WHnLlOSqZ3NxLggCts6izl9iEpXgIh4ahQ0N9zQ=";
     })
     # A headless agent can never set a wl_data_device selection: that needs a
@@ -94,7 +94,7 @@ stdenv.mkDerivation {
     # https://github.com/bjthompson805/spice-vdagent-wayland/pull/2
     (fetchpatch2 {
       name = "data-control-clipboard-write.patch";
-      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/d88eb06b9054926a8058af285d85ba0acb937b3a.patch?full_index=1";
+      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/77e62cd24f3671a8b8bdc34a2f53d7a5f4d9d32e.patch?full_index=1";
       hash = "sha256-6639ldKVL1WZJee/QINIFhx81SN3Y3zzseg32otvJb4=";
     })
     # The agent dropped each zwlr_output_mode_v1 as soon as niri announced it,
@@ -105,7 +105,7 @@ stdenv.mkDerivation {
     # https://github.com/bjthompson805/spice-vdagent-wayland/pull/3
     (fetchpatch2 {
       name = "output-mode-lifetime.patch";
-      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/ea2046ff7951038987dd53ee53633795f798a2b4.patch?full_index=1";
+      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/41bf32fb8659755bff2e5e7d574caed8c4d04607.patch?full_index=1";
       hash = "sha256-MUoSMwO8SNFBkcl4UoRUIrOgNQimiThwXQ8NxO5eWgc=";
     })
     # vdagentd kept the old client's capabilities and grab serials when the
@@ -117,7 +117,7 @@ stdenv.mkDerivation {
     # https://github.com/bjthompson805/spice-vdagent-wayland/pull/4
     (fetchpatch2 {
       name = "clipboard-grab-before-handshake.patch";
-      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/29407beeee3002c9e3660c544cd909ff726a6094.patch?full_index=1";
+      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/4303cd8a0db06216990b167f23a75548b660948d.patch?full_index=1";
       hash = "sha256-iS2eKel7mM9fXIKZMngdpeohmMd7aZBwmiRG9y4A8vc=";
     })
     # wl-clip-persist re-offers every selection with its own copy, including
@@ -129,7 +129,7 @@ stdenv.mkDerivation {
     # https://github.com/bjthompson805/spice-vdagent-wayland/pull/5
     (fetchpatch2 {
       name = "clipboard-echo.patch";
-      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/1f37cc3a4cab124d62fb9df7bb5ae415bad81fb0.patch?full_index=1";
+      url = "https://github.com/johnrichardrinehart/spice-vdagent-wayland/commit/12d3088ad1436c85255d8c1f24fdf7a3bb380717.patch?full_index=1";
       hash = "sha256-BNofNgD6ToPn16PCKhsZxMmRYfBNBcmDkXXSILewSLU=";
     })
   ];

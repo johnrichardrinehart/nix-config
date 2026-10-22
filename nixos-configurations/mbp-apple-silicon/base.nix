@@ -44,8 +44,9 @@
   };
 
   # virtio-gpu has no virglrenderer behind it on a macOS host, so Mesa only
-  # offers llvmpipe and niri refuses software EGL unless asked. Pairs with
-  # the software-EGL patches in niri-software-egl.nix (niri-wm/niri#4614).
+  # offers llvmpipe. With this variable, niri keeps the render-drm-device
+  # below as its render node. Pairs with the software-EGL patches in
+  # niri-software-egl.nix (niri-wm/niri#3959 and niri-wm/niri#4614).
   systemd.user.extraConfig = "DefaultEnvironment=NIRI_ALLOW_SOFTWARE_EGL=1";
   # Keys reach the guest already in Dvorak (see the niri input override
   # below). The Linux console takes its keymap from this xkb setting, and
@@ -58,8 +59,8 @@
   #
   # debug: point niri's renderer at the primary node: virtio-gpu's render node
   # cannot back a software EGL renderer, and Smithay registers the GPU under
-  # card0 instead. Pairs with
-  # the software-EGL patches in niri-software-egl.nix (niri-wm/niri#4614).
+  # card0 instead. Pairs with the software-EGL patches in
+  # niri-software-egl.nix (niri-wm/niri#3959 and niri-wm/niri#4614).
 
   # input: Karabiner sends Dvorak key codes from both physical keyboards.
   # SPICE combines them into one virtual keyboard. U.S. XKB preserves those codes.

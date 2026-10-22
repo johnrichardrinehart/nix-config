@@ -1,6 +1,23 @@
+From b0a947e453b9c07e9fdc6feb509c1cd769dbb733 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 15 Oct 2026 13:37:06 -0400
+Subject: [PATCH] version: report downstream patches
+
+A downstream build can carry patches on top of a niri commit. The
+version string shows only the commit, so `niri --version` and
+`niri msg version` cannot tell such a build from upstream.
+
+Append NIRI_BUILD_PATCHES to the version string when the build sets it.
+Distributions can list the applied patches there.
+---
+ src/utils/mod.rs | 30 ++++++++++++++++++------------
+ 1 file changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/src/utils/mod.rs b/src/utils/mod.rs
+index 6d513eb6..fb4366c4 100644
 --- a/src/utils/mod.rs
 +++ b/src/utils/mod.rs
-@@ -141,22 +141,28 @@
+@@ -142,22 +142,28 @@ impl ResizeEdge {
  }
  
  pub fn version() -> String {

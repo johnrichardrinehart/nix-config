@@ -248,11 +248,9 @@ RNNoise, voice dictation, auto-suspend, v4l2loopback, chrony. Hardware is
 nixos-hardware's `framework-amd-ai-300-series` plus
 `nixos-configurations/framework-13-pro/hardware.nix`:
 
-- Linux 7.3 from a second, newer nixos-26.05 input (`nixpkgs-kernel`). The
-  main nixpkgs stops at 7.2.9, which lacks the amdgpu vblank/flip rework
-  behind freezes on the 13 Pro AMD and later Replay fixes for its panel;
-  the RTL8159 in the WisdPi card needs 7.2 or later. Drop the input once
-  `linux_latest` in the main nixpkgs reaches 7.3.
+- Linux 7.3 or later (`linuxPackages_latest`). 7.3 carries the amdgpu
+  vblank/flip rework behind freezes on the 13 Pro AMD and later Replay fixes
+  for its panel; the RTL8159 in the WisdPi card needs 7.2 or later.
 - udev rules that enable wakeup on the lid and power button
   ([nixos-hardware#1782](https://github.com/NixOS/nixos-hardware/issues/1782#issuecomment-6254883883)).
 - The US wireless regulatory domain for the MT7925.

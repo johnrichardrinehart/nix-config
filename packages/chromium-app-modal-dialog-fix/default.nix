@@ -6,8 +6,9 @@
 # dialog lands outside its window and every browser window ignores input.
 # Brave carries the same code, so this build proves the fix for Brave too.
 #
-# The patch is the change proposed upstream. Nothing installs this package:
-# build it on a big-parallel builder to test the fix.
+# The patch is patch set 3 of https://crrev.com/c/8620314, which fixes
+# https://issues.chromium.org/issues/575925050. Nothing installs this
+# package: build it on a big-parallel builder to test the fix.
 { chromium, runCommand }:
 
 let

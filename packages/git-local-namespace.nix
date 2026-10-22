@@ -33,8 +33,8 @@ git.overrideAttrs (old: {
     ++ [
       (fetchpatch2 {
         name = "git-local-namespace.patch";
-        url = "https://github.com/johnrichardrinehart/git/compare/010afd3166ddc64c9863b1506f12cbcdda0d4ea1...08fb0de2c83ab27c651312c3a87e4ef7c2c62c00.patch?full_index=1";
-        hash = "sha256-C5PCdH046LdNgsKccblHrvXDy/BczWB3JyTQ5nGMDDI=";
+        url = "https://github.com/johnrichardrinehart/git/compare/a018953688f1b10bddf91bff8747068f5f4746a4...e9b2fc28d03fec4294d6774734a6e2ade4bdd8e0.patch?full_index=1";
+        hash = "sha256-ZyUHdDcCP3oZAhL8JHs8Uw8NPTxYrEe6+0KKTrHI57w=";
       })
     ];
 

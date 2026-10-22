@@ -1,4 +1,4 @@
-From 9df3f945e2570d45c0bdbd42d32061eb9e17a6a0 Mon Sep 17 00:00:00 2001
+From c8332b1d49a578aa68d8c4ae70f672a344b28538 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Fri, 9 Oct 2026 21:47:56 -0400
 Subject: [PATCH] input: support per-device keyboard settings
@@ -11,16 +11,16 @@ Accept named keyboard sections and merge matching settings over the
 default. Switch the seat keymap when the active input device changes.
 Cache libinput resolutions and clear them on removal or config reload.
 ---
- docs/wiki/Configuration:-Input.md |  33 +++++++++-
- niri-config/src/input.rs          |  38 +++++++++--
- niri-config/src/lib.rs            |  44 +++++++++++++
+ docs/wiki/Configuration:-Input.md |  33 +++++++-
+ niri-config/src/input.rs          |  38 +++++++--
+ niri-config/src/lib.rs            |  44 +++++++++++
  src/dbus/freedesktop_a11y.rs      |   4 +-
- src/input/mod.rs                  |  77 ++++++++++++++++++++--
- src/niri.rs                       | 102 ++++++++++++++++++------------
- 6 files changed, 242 insertions(+), 56 deletions(-)
+ src/input/mod.rs                  |  45 ++++++++++-
+ src/niri.rs                       | 126 ++++++++++++++++++++----------
+ 6 files changed, 234 insertions(+), 56 deletions(-)
 
 diff --git a/docs/wiki/Configuration:-Input.md b/docs/wiki/Configuration:-Input.md
-index 62f70b5a..19f7bc21 100644
+index af645910..a38d97a9 100644
 --- a/docs/wiki/Configuration:-Input.md
 +++ b/docs/wiki/Configuration:-Input.md
 @@ -2,9 +2,10 @@
@@ -37,7 +37,7 @@ index 62f70b5a..19f7bc21 100644
  
  All settings at a glance:
  
-@@ -130,6 +131,32 @@ input {
+@@ -132,6 +133,32 @@ input {
  }
  ```
  
@@ -71,7 +71,7 @@ index 62f70b5a..19f7bc21 100644
  >
  > <sup>Since: 25.02</sup>
 diff --git a/niri-config/src/input.rs b/niri-config/src/input.rs
-index dceb5c6c..841466c3 100644
+index 78e3ed21..352159e0 100644
 --- a/niri-config/src/input.rs
 +++ b/niri-config/src/input.rs
 @@ -11,6 +11,7 @@ use crate::FloatOrInt;
@@ -153,11 +153,11 @@ index dceb5c6c..841466c3 100644
      pub xkb: Option<Xkb>,
      #[knuffel(child, unwrap(argument))]
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index 329b7669..3e5e8e13 100644
+index c7d04af7..bac18148 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
-@@ -648,6 +648,49 @@ mod tests {
-         assert_eq!(config.input.keyboard.repeat_rate, 25);
+@@ -657,6 +657,49 @@ mod tests {
+         );
      }
  
 +    #[test]
@@ -206,7 +206,7 @@ index 329b7669..3e5e8e13 100644
      #[track_caller]
      fn do_parse(text: &str) -> Config {
          Config::parse_mem(text)
-@@ -985,6 +1028,7 @@ mod tests {
+@@ -1026,6 +1069,7 @@ mod tests {
                      track_layout: Window,
                      numlock: false,
                  },
@@ -215,10 +215,10 @@ index 329b7669..3e5e8e13 100644
                      off: false,
                      tap: true,
 diff --git a/src/dbus/freedesktop_a11y.rs b/src/dbus/freedesktop_a11y.rs
-index 930f0f52..f41d0e98 100644
+index eba19533..d104022b 100644
 --- a/src/dbus/freedesktop_a11y.rs
 +++ b/src/dbus/freedesktop_a11y.rs
-@@ -471,8 +471,8 @@ impl State {
+@@ -647,8 +647,8 @@ impl State {
              (mods, keysym, unichar)
          });
  
@@ -228,12 +228,12 @@ index 930f0f52..f41d0e98 100644
 +            Duration::from_millis(u64::from(self.niri.current_keyboard.repeat_delay));
          let released = state == KeyState::Released;
  
-         let Some(monitor) = &self.niri.a11y_keyboard_monitor else {
+         let Some(manager) = &self.niri.a11y_manager else {
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index f1ad4932..80c753d7 100644
+index 6880468a..083b9839 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
-@@ -235,6 +235,10 @@ impl State {
+@@ -261,6 +261,10 @@ impl State {
              InputEvent::DeviceRemoved { device } => {
                  self.niri.touch.remove(device);
                  self.niri.tablets.remove(device);
@@ -244,28 +244,24 @@ index f1ad4932..80c753d7 100644
                  self.niri.devices.remove(device);
              }
              _ => (),
-@@ -367,7 +371,10 @@ impl State {
-         &mut self,
-         event: I::KeyboardKeyEvent,
-         consumed_by_a11y: &mut bool,
--    ) {
-+    ) where
-+        I::Device: 'static,
-+    {
-+        self.apply_keyboard_config::<I>(&event);
-         let mod_key = self.backend.mod_key(&self.niri.config.borrow());
+@@ -429,6 +433,7 @@ impl State {
+         // Restore the real keymap if required (the virtual keyboard uses its own one).
+         if virtual_keyboard.is_none() {
+             self.restore_configured_keymap();
++            self.apply_keyboard_config::<I>(&device);
+         }
  
-         let serial = SERIAL_COUNTER.next_serial();
-@@ -558,6 +565,70 @@ impl State {
+         // Keys from a virtual keyboard are tracked separately from the physical
+@@ -631,6 +636,42 @@ impl State {
          self.start_key_repeat(bind);
      }
  
-+    fn apply_keyboard_config<I: InputBackend>(&mut self, event: &I::KeyboardKeyEvent)
++    /// Switches to the keyboard settings of the physical keyboard `device`.
++    fn apply_keyboard_config<I: InputBackend>(&mut self, device: &I::Device)
 +    where
 +        I::Device: 'static,
 +    {
-+        let device = event.device();
-+        let input_device = (&device as &dyn Any)
++        let input_device = (device as &dyn Any)
 +            .downcast_ref::<input::Device>()
 +            .cloned();
 +
@@ -291,43 +287,15 @@ index f1ad4932..80c753d7 100644
 +        } else {
 +            self.niri.config.borrow().input.keyboard.clone()
 +        };
-+        if keyboard_config == self.niri.current_keyboard {
++        if self.set_keyboard_config(keyboard_config) {
 +            self.niri.active_keyboard_device = input_device;
-+            return;
 +        }
-+
-+        let current_keyboard = self.niri.current_keyboard.clone();
-+        if keyboard_config.xkb != current_keyboard.xkb {
-+            if !self.apply_xkb(keyboard_config.xkb.clone()) {
-+                return;
-+            }
-+            self.ipc_keyboard_layouts_changed();
-+        }
-+
-+        let keyboard = self.niri.seat.get_keyboard().unwrap();
-+        if keyboard_config.repeat_rate != current_keyboard.repeat_rate
-+            || keyboard_config.repeat_delay != current_keyboard.repeat_delay
-+        {
-+            keyboard.change_repeat_info(
-+                keyboard_config.repeat_rate.into(),
-+                keyboard_config.repeat_delay.into(),
-+            );
-+        }
-+
-+        if keyboard_config.numlock != current_keyboard.numlock {
-+            let mut modifier_state = keyboard.modifier_state();
-+            modifier_state.num_lock = keyboard_config.numlock;
-+            keyboard.set_modifier_state(modifier_state);
-+        }
-+
-+        self.niri.current_keyboard = keyboard_config;
-+        self.niri.active_keyboard_device = input_device;
 +    }
 +
      fn start_key_repeat(&mut self, bind: Bind) {
          if !bind.repeat {
              return;
-@@ -568,9 +639,7 @@ impl State {
+@@ -641,9 +682,7 @@ impl State {
              self.niri.event_loop.remove(token);
          }
  
@@ -339,12 +307,12 @@ index f1ad4932..80c753d7 100644
          if repeat_rate == 0 {
              return;
 diff --git a/src/niri.rs b/src/niri.rs
-index ec40e01c..7f3d2304 100644
+index 2f3c4581..115e9539 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
-@@ -266,6 +266,9 @@ pub struct Niri {
-     /// startup, libinput will immediately send a closed event.
-     pub is_lid_closed: bool,
+@@ -289,6 +289,9 @@ pub struct Niri {
+     /// Runtime toggle for touchpad disabled state (combined with config.touchpad.off).
+     pub touchpad_disabled_by_toggle: bool,
  
 +    pub current_keyboard: niri_config::input::Keyboard,
 +    pub active_keyboard_device: Option<input::Device>,
@@ -352,7 +320,7 @@ index ec40e01c..7f3d2304 100644
      pub devices: HashSet<input::Device>,
      pub tablets: HashMap<input::Device, TabletData>,
      pub touch: HashSet<input::Device>,
-@@ -1324,7 +1327,7 @@ impl State {
+@@ -1485,7 +1488,7 @@ impl State {
                  }
              }
  
@@ -361,21 +329,26 @@ index ec40e01c..7f3d2304 100644
                  let current_layout = keyboard.with_xkb_state(self, |context| {
                      let xkb = context.xkb().lock().unwrap();
                      xkb.active_layout()
-@@ -1402,12 +1405,28 @@ impl State {
+@@ -1559,16 +1562,39 @@ impl State {
          }
      }
  
 -    pub fn set_xkb_config(&mut self, xkb: XkbConfig) {
-+    pub(crate) fn apply_xkb(&mut self, mut xkb: Xkb) -> bool {
++    /// Loads `xkb` (xkb file, xkb config, or locale1's) onto the seat, replacing a virtual
++    /// keyboard's keymap if there is one.
++    ///
++    /// Returns `false` if the seat keeps its previous keymap.
++    pub fn apply_xkb(&mut self, mut xkb: Xkb) -> bool {
 +        if let Some(xkb_file) = xkb.file.take() {
-+            if let Err(err) = self.set_xkb_file(xkb_file) {
-+                warn!("error loading xkb_file: {err:?}");
-+                return false;
++            match self.set_xkb_file(xkb_file) {
++                Ok(()) => return true,
++                Err(err) => warn!("error loading xkb_file: {err:?}"),
 +            }
-+            return true;
 +        }
 +
++        // If xkb is unset in the niri config, use settings from locale1.
 +        if xkb == Xkb::default() {
++            trace!("using xkb from locale1");
 +            xkb = self.niri.xkb_from_locale1.clone().unwrap_or_default();
 +        }
 +
@@ -384,44 +357,111 @@ index ec40e01c..7f3d2304 100644
 +
 +    pub fn set_xkb_config(&mut self, xkb: XkbConfig) -> bool {
          let keyboard = self.niri.seat.get_keyboard().unwrap();
-         let num_lock = keyboard.modifier_state().num_lock;
+         let restore = self.keyboard_state_to_restore();
          if let Err(err) = keyboard.set_xkb_config(self, xkb) {
              warn!("error updating xkb config: {err:?}");
 -            return;
 +            return false;
          }
- 
-         // Restore num lock to its previous value.
-@@ -1416,6 +1435,8 @@ impl State {
-             mods_state.num_lock = num_lock;
-             keyboard.set_modifier_state(mods_state);
-         }
+         self.niri.virtual_keyboard_keymap = None;
+         self.niri.configured_keymap = None;
+         self.restore_keyboard_state(restore);
 +
 +        true
      }
  
+     /// Returns the keyboard state to restore after replacing the seat's keymap (which resets it).
+@@ -1654,31 +1680,51 @@ impl State {
+         }
+     }
+ 
+-    /// Loads the configured keymap (xkb file, xkb config, or locale1's) onto the seat, replacing a
+-    /// virtual keyboard's if there is one.
++    /// Loads the keymap of the active keyboard settings (xkb file, xkb config, or locale1's) onto
++    /// the seat, replacing a virtual keyboard's if there is one.
+     pub fn load_configured_keymap(&mut self) {
+-        let mut xkb = self.niri.config.borrow().input.keyboard.xkb.clone();
+-        let mut set_xkb_config = true;
++        self.apply_xkb(self.niri.current_keyboard.xkb.clone());
++        self.ipc_keyboard_layouts_changed();
++    }
+ 
+-        if let Some(xkb_file) = xkb.file.take() {
+-            if let Err(err) = self.set_xkb_file(xkb_file) {
+-                warn!("error loading xkb_file: {err:?}");
+-            } else {
+-                set_xkb_config = false;
+-            }
++    /// Switches the seat keyboard to `keyboard_config`.
++    ///
++    /// Returns `false` if the xkb keymap fails to load. The seat then keeps its previous settings.
++    pub fn set_keyboard_config(&mut self, keyboard_config: niri_config::input::Keyboard) -> bool {
++        let current = &self.niri.current_keyboard;
++        if keyboard_config == *current {
++            return true;
+         }
+ 
+-        if set_xkb_config {
+-            // If xkb is unset in the niri config, use settings from locale1.
+-            if xkb == Xkb::default() {
+-                trace!("using xkb from locale1");
+-                xkb = self.niri.xkb_from_locale1.clone().unwrap_or_default();
++        let xkb_changed = keyboard_config.xkb != current.xkb;
++        let repeat_changed = keyboard_config.repeat_rate != current.repeat_rate
++            || keyboard_config.repeat_delay != current.repeat_delay;
++        let numlock_changed = keyboard_config.numlock != current.numlock;
++
++        if xkb_changed {
++            if !self.apply_xkb(keyboard_config.xkb.clone()) {
++                return false;
+             }
++            self.ipc_keyboard_layouts_changed();
++        }
+ 
+-            self.set_xkb_config(xkb.to_xkb_config());
++        if repeat_changed {
++            let keyboard = self.niri.seat.get_keyboard().unwrap();
++            keyboard.change_repeat_info(
++                keyboard_config.repeat_rate.into(),
++                keyboard_config.repeat_delay.into(),
++            );
+         }
+ 
+-        self.ipc_keyboard_layouts_changed();
++        if numlock_changed {
++            self.restore_keyboard_state(SavedKeyboardState {
++                num_lock: Some(keyboard_config.numlock),
++                ..Default::default()
++            });
++        }
++
++        self.niri.current_keyboard = keyboard_config;
++        true
+     }
+ 
      pub fn reload_config(&mut self, config: Result<Config, ()>) {
-@@ -1465,7 +1486,7 @@ impl State {
+@@ -1728,7 +1774,7 @@ impl State {
  
          *CHILD_ENV.write().unwrap() = mem::take(&mut config.environment);
  
--        let mut reload_xkb = None;
+-        let mut reload_xkb = false;
 +        let mut reload_keyboard = None;
          let mut libinput_config_changed = false;
          let mut output_config_changed = false;
          let mut preserved_output_config = None;
-@@ -1485,20 +1506,12 @@ impl State {
+@@ -1748,20 +1794,13 @@ impl State {
              self.niri.cursor_texture_cache.clear();
          }
  
 -        // We need &mut self to reload the xkb config, so just store it here.
 -        if config.input.keyboard.xkb != old_config.input.keyboard.xkb {
--            reload_xkb = Some(config.input.keyboard.xkb.clone());
+-            reload_xkb = true;
 -        }
 -
 -        // Reload the repeat info.
 -        if config.input.keyboard.repeat_rate != old_config.input.keyboard.repeat_rate
 -            || config.input.keyboard.repeat_delay != old_config.input.keyboard.repeat_delay
++        // We need &mut self to reload the keyboard config, so just store it here.
 +        if config.input.keyboard != old_config.input.keyboard
 +            || config.input.keyboard_overrides != old_config.input.keyboard_overrides
          {
@@ -436,63 +476,20 @@ index ec40e01c..7f3d2304 100644
          }
  
          if config.input.touchpad != old_config.input.touchpad
-@@ -1614,32 +1627,36 @@ impl State {
+@@ -1887,9 +1926,9 @@ impl State {
          // Release the borrow.
          drop(old_config);
  
 -        // Now with a &mut self we can reload the xkb config.
--        if let Some(mut xkb) = reload_xkb {
--            let mut set_xkb_config = true;
+-        if reload_xkb {
+-            self.load_configured_keymap();
++        // Now with a &mut self we can reload the keyboard config.
 +        if let Some(keyboard_config) = reload_keyboard {
-+            let current_keyboard = self.niri.current_keyboard.clone();
-+            let mut xkb_applied = true;
- 
--            // It's fine to .take() the xkb file, as this is a
--            // clone and the file field is not used in the XkbConfig.
--            if let Some(xkb_file) = xkb.file.take() {
--                if let Err(err) = self.set_xkb_file(xkb_file) {
--                    warn!("error reloading xkb_file: {err:?}");
--                } else {
--                    // We successfully set xkb file so we don't need to fallback to XkbConfig.
--                    set_xkb_config = false;
-+            if keyboard_config.xkb != current_keyboard.xkb {
-+                xkb_applied = self.apply_xkb(keyboard_config.xkb.clone());
-+                if xkb_applied {
-+                    self.ipc_keyboard_layouts_changed();
-                 }
-             }
- 
--            if set_xkb_config {
--                // If xkb is unset in the niri config, use settings from locale1.
--                if xkb == Xkb::default() {
--                    trace!("using xkb from locale1");
--                    xkb = self.niri.xkb_from_locale1.clone().unwrap_or_default();
--                }
-+            let keyboard = self.niri.seat.get_keyboard().unwrap();
-+            if keyboard_config.repeat_rate != current_keyboard.repeat_rate
-+                || keyboard_config.repeat_delay != current_keyboard.repeat_delay
-+            {
-+                keyboard.change_repeat_info(
-+                    keyboard_config.repeat_rate.into(),
-+                    keyboard_config.repeat_delay.into(),
-+                );
-+            }
- 
--                self.set_xkb_config(xkb.to_xkb_config());
-+            if keyboard_config.numlock != current_keyboard.numlock {
-+                let mut modifier_state = keyboard.modifier_state();
-+                modifier_state.num_lock = keyboard_config.numlock;
-+                keyboard.set_modifier_state(modifier_state);
-             }
- 
--            self.ipc_keyboard_layouts_changed();
-+            if xkb_applied {
-+                self.niri.current_keyboard = keyboard_config;
-+            }
++            self.set_keyboard_config(keyboard_config);
          }
  
          if libinput_config_changed {
-@@ -2208,12 +2225,9 @@ impl State {
+@@ -2474,12 +2513,9 @@ impl State {
          trace!("locale1 xkb settings changed: {xkb:?}");
          let xkb = self.niri.xkb_from_locale1.insert(xkb);
  
@@ -508,7 +505,7 @@ index ec40e01c..7f3d2304 100644
          }
  
          let xkb = xkb.clone();
-@@ -2240,6 +2254,7 @@ impl Niri {
+@@ -2506,6 +2542,7 @@ impl Niri {
          let display_handle = display.handle();
          let config_ = config.borrow();
          let config_file_output_config = config_.outputs.clone();
@@ -516,9 +513,9 @@ index ec40e01c..7f3d2304 100644
  
          let mut animation_clock = Clock::default();
  
-@@ -2511,6 +2526,9 @@ impl Niri {
-             monitors_active: true,
+@@ -2791,6 +2828,9 @@ impl Niri {
              is_lid_closed: false,
+             touchpad_disabled_by_toggle: false,
  
 +            current_keyboard,
 +            active_keyboard_device: None,
@@ -526,6 +523,3 @@ index ec40e01c..7f3d2304 100644
              devices: HashSet::new(),
              tablets: HashMap::new(),
              touch: HashSet::new(),
--- 
-2.56.0
-

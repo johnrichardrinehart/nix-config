@@ -6,9 +6,14 @@ _: {
   # leaves the SPICE displays blank and makes the guest agent report a 0x0
   # desktop that spice-vdagentd discards as coming from an old agent.
   #
-  # base.nix already sets NIRI_ALLOW_SOFTWARE_EGL and pins render-drm-device,
-  # but niri honours them only with the two commits of niri-wm/niri#4614,
-  # an open pull request that no release includes. Carry them until one does.
+  # niri-wm/niri#3959, an open pull request, accepts a software EGL device on
+  # the primary node and disables dma-buf and DRM leasing while it renders. The
+  # second patch comes from niri-wm/niri#4614, which was closed in favour of
+  # #3959: virtio-gpu's render node cannot back the software renderer, so with
+  # NIRI_ALLOW_SOFTWARE_EGL set (base.nix) niri keeps the render-drm-device
+  # that base.nix pins (card0) as its render node, and the renderer lookup
+  # finds the GPU that Smithay registered. Carry both until a release includes
+  # equivalent support.
   #
   # The hook is pkgs.niri rather than programs.niri.package because
   # greetd+niri.nix derives its compositor with
@@ -20,17 +25,17 @@ _: {
     (_final: prev: {
       niri = prev.niri.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [
-          # https://github.com/niri-wm/niri/pull/4614
+          # https://github.com/niri-wm/niri/pull/3959
           (prev.fetchpatch2 {
-            name = "tty-allow-opting-into-software-egl.patch";
-            url = "https://github.com/johnrichardrinehart/niri/commit/aaabc0c46be0828d60a8c827ee2acfacb3590487.patch?full_index=1";
-            hash = "sha256-J5M9fMkOrtoiUuKwaXUxxlrOZakzjApw3Ucytr4R3o8=";
+            name = "render-allow-software-rendering-as-last-resort.patch";
+            url = "https://github.com/niri-wm/niri/commit/b01319783309c41eddb4e10ed1f8ab55847101bd.patch?full_index=1";
+            hash = "sha256-BAmHDvJqZwH2Yhw+6PPUBSlacgueX8WiFn1HGxstIRo=";
           })
           # https://github.com/niri-wm/niri/pull/4614
           (prev.fetchpatch2 {
             name = "tty-honor-configured-node-for-software-egl.patch";
-            url = "https://github.com/johnrichardrinehart/niri/commit/eb81ec601ba6f10147a32e75ccc7a6e54e789224.patch?full_index=1";
-            hash = "sha256-iQdFsZYvAXwAuw/QXFyWU2BM0fSAev/2utE/1IWZzdE=";
+            url = "https://github.com/johnrichardrinehart/niri/commit/38982c5f59ef94afd9f6795669e39518540bccd0.patch?full_index=1";
+            hash = "sha256-EH5JbAzNOJTZsgXtSEjwreDvO1LxS/REcy1E3xAtjeo=";
           })
         ];
       });

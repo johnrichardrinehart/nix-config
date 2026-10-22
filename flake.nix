@@ -6,10 +6,6 @@
 
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
 
-    # Newer nixos-26.05 for framework-13-pro's kernel only (Linux 7.3; see
-    # nixos-configurations/framework-13-pro/hardware.nix).
-    nixpkgs-kernel.url = "github:NixOS/nixpkgs?ref=nixos-26.05";
-
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -26,7 +22,8 @@
     };
 
     home-manager = {
-      # release-26.05 plus nix-community/home-manager#10006.
+      # release-26.05 plus nix-community/home-manager#10006, which master
+      # contains (cf22324a2724) but release-26.05 does not.
       url = "github:johnrichardrinehart/home-manager/release-26.05-overwrite-backup-rm-f";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -143,8 +140,8 @@
       ];
 
       bootstrapIso = aarch64DarwinPkgs.fetchurl {
-        url = "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1082427.b4fd65b198c5/nixos-minimal-26.11pre1082427.b4fd65b198c5-aarch64-linux.iso";
-        hash = "sha256-muUaIkjXmRRsz8xzHSeBEXd0+6xto1HMZT+xqh4RvVU=";
+        url = "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1097682.02c087f3fe67/nixos-minimal-26.11pre1097682.02c087f3fe67-aarch64-linux.iso";
+        hash = "sha256-qfHrzUi1AnPxQCCN3lVZKWCnX3dQRBsZQJ+9/XW8sao=";
       };
       guestFlake = "path:${self.outPath}";
       installerBoot = aarch64DarwinPkgs.callPackage ./packages/nixos-installer-boot.nix {

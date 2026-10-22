@@ -2,22 +2,36 @@
   lib,
   buildGo126Module,
   fetchFromGitHub,
+  fetchurl,
   git,
+  go_1_26,
   openssh,
   tmux,
 }:
-buildGo126Module rec {
+let
+  # go.mod requires go >= 1.26.9; nixpkgs ships 1.26.8.
+  go = go_1_26.overrideAttrs (
+    finalAttrs: _old: {
+      version = "1.26.10";
+      src = fetchurl {
+        url = "https://go.dev/dl/go${finalAttrs.version}.src.tar.gz";
+        hash = "sha256-/WPog7ovK/ypPBZGsx6+9j4rHk0rMXyXidl2po2B828=";
+      };
+    }
+  );
+in
+(buildGo126Module.override { inherit go; }) rec {
   pname = "agent-deck";
-  version = "1.16.26";
+  version = "1.16.30";
 
   src = fetchFromGitHub {
     owner = "asheshgoplani";
     repo = "agent-deck";
     rev = "v${version}";
-    hash = "sha256-uB2t4njAWC/tFcRSfpAstJvEEhrdQhvPq25R6E3amsU=";
+    hash = "sha256-3mVmpV5F1LqN/f5pbihR9Lrw/UO4nu2+/cldcE/UoB4=";
   };
 
-  vendorHash = "sha256-AChAtXMmFDfJzlqnUpgkyD1KCmLGxkPZtKsD0+Tnt7E=";
+  vendorHash = "sha256-v3vhZiTTktjmWuv4FTWAEiHaeSUXyVRVTOL02UeZZrw=";
 
   subPackages = [ "cmd/agent-deck" ];
 
@@ -28,9 +42,12 @@ buildGo126Module rec {
   ];
   checkFlags = [
     # Keep the rest of the package tests enabled while skipping sandbox-sensitive
-    # remote-execution, interactive TUI timing, fake-codex pane process, and
-    # PATH-restricted model probe checks.
-    "-skip=TestRemoteCommandParity|TestRemoteSuccessfulMutationParity|TestCloseSessionWindow_KillsExtraWindow|TestLogCgroupIsolationDecision_WiredIntoBootstrap/tui_startup_emits_line|TestPerf_ColdStart_(Help|Version)|TestStatusStale_CLI_CandidateViewAndMutatesNothing|TestIssue2388_CapabilitiesCarryProbe|TestCodexAcceptanceGuardAcceptsFreshComposerThread|TestIssue2394_HydratePrefersLiveThreadOverGuessedPaneIdentity|TestIssue2400_ArchiveKeepsLiveCodexIdentity|TestIssue2396_FirstTurnOutputIsBoundToItsConversation"
+    # remote-execution, interactive TUI timing, fake-codex and fake-claude pane
+    # process, PATH-restricted model probe, and `#!/bin/bash` stub-script checks.
+    "-skip=TestRemoteCommandParity|TestRemoteSuccessfulMutationParity|TestCloseSessionWindow_KillsExtraWindow|TestLogCgroupIsolationDecision_WiredIntoBootstrap/tui_startup_emits_line|TestPerf_ColdStart_(Help|Version)|TestStatusStale_CLI_CandidateViewAndMutatesNothing|TestIssue2388_CapabilitiesCarryProbe|TestCodexAcceptanceGuardAcceptsFreshComposerThread|TestIssue2394_HydratePrefersLiveThreadOverGuessedPaneIdentity|TestIssue2400_ArchiveKeepsLiveCodexIdentity|TestIssue2396_FirstTurnOutputIsBoundToItsConversation|TestIssue2549_(SendAdoptsRotatedLiveThread|PeerOwnedLiveThreadIsNotAdopted|SubagentLiveThreadIsNotAdopted)|TestSessionSendSocketWaitPeerReply|TestLaunchSubagentScript_(AppendsFanoutHintOnlyWithoutIdentityBlock|FanoutHintNoDuplicate)"
+    # The cmd/agent-deck tests start real tmux servers and run longer than the
+    # default 10-minute go test timeout on the Nix builders.
+    "-timeout=30m"
   ];
 
   preCheck = ''

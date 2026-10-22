@@ -1,8 +1,35 @@
+From 93511343b778d8d054098150f8d303ddd27a7673 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Wed, 2 Sep 2026 15:25:47 -0400
+Subject: [PATCH 2/3] font: apply synthetic italic transforms
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Apply Fontconfig synthetic italic transforms when the requested italic face is unavailable. Keep the selected source weight configurable and use KiTTY-compatible glyph placement.
+
+Synthetic glyphs can extend beyond their logical text run: wide glyphs occupy a spacer tail, and one-column symbols may rasterize into the following blank cell. Size and composite the synthetic coverage mask through the furthest constrained glyph cell.
+
+Reproduction with a ReleaseSafe build:
+
+    printf '\033[3m→\033[0m'
+
+Run Monstar with `synthetic-italic = true` and a font requiring synthetic italics. Before the mask fix, maxGlyphCoverage aborts with clip_end 20 and mask_width 10. The extended raster span keeps the process alive and preserves both symbol spill and wide-cell tails.
+---
+ dist/monstar.5       |  11 +++
+ src/App.zig          |   6 +-
+ src/Config.zig       |  21 ++++
+ src/Font.zig         | 205 ++++++++++++++++++++++++++++++++++----
+ src/Renderer.zig     | 230 ++++++++++++++++++++++++++++++++++++++++---
+ src/bench.zig        |   6 +-
+ src/pixel_raster.zig |   2 +-
+ 7 files changed, 443 insertions(+), 38 deletions(-)
+
 diff --git a/dist/monstar.5 b/dist/monstar.5
-index 286324d..8779c65 100644
+index 5f1734b..c907369 100644
 --- a/dist/monstar.5
 +++ b/dist/monstar.5
-@@ -116,6 +116,17 @@ Bold faces continue to request the bold weight.
+@@ -172,6 +172,17 @@ Bold faces continue to request the bold weight.
  The default is
  .BR default .
  .TP
@@ -21,10 +48,10 @@ index 286324d..8779c65 100644
  Set the font size.
  Bare values and
 diff --git a/src/App.zig b/src/App.zig
-index a8ddbd4..ee01347 100644
+index 6e02070..a831b2c 100644
 --- a/src/App.zig
 +++ b/src/App.zig
-@@ -473,7 +473,11 @@ fn tmpDirPath(environ: std.process.Environ) []const u8 {
+@@ -502,7 +502,11 @@ fn tmpDirPath(environ: std.process.Environ) []const u8 {
  /// copies them via execve). `config` strings must remain valid until the
  /// first successful reload or App teardown.
  fn fontOptions(config: Config) Font.Options {
@@ -38,10 +65,10 @@ index a8ddbd4..ee01347 100644
  
  pub fn init(
 diff --git a/src/Config.zig b/src/Config.zig
-index e1252bf..87f580a 100644
+index 6dbfee6..e751783 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
-@@ -92,10 +92,16 @@ pub const FontWeight = enum {
+@@ -94,10 +94,16 @@ pub const FontWeight = enum {
      default,
      medium,
  };
@@ -58,7 +85,7 @@ index e1252bf..87f580a 100644
  /// Bare and `pt` values are typographic points; `px` values are logical
  /// pixels. Both apply the output's fractional scale during rasterization.
  font_size: FontSize = .{ .points = 12 },
-@@ -244,6 +250,15 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+@@ -264,6 +270,15 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
          self.font_family = try arena.dupeZ(u8, value);
      } else if (std.mem.eql(u8, key, "font-weight")) {
          self.font_weight = std.meta.stringToEnum(FontWeight, value) orelse return error.InvalidValue;
@@ -74,7 +101,7 @@ index e1252bf..87f580a 100644
      } else if (std.mem.eql(u8, key, "font-size")) {
          self.font_size = try parseFontSize(value);
      } else if (std.mem.eql(u8, key, "adjust-cell-height")) {
-@@ -559,6 +574,8 @@ test "defaults" {
+@@ -659,6 +674,8 @@ test "defaults" {
      try std.testing.expectEqualStrings(default_app_id, config.app_id);
      try std.testing.expectEqualStrings("monospace", config.font_family);
      try std.testing.expectEqual(FontWeight.default, config.font_weight);
@@ -83,7 +110,7 @@ index e1252bf..87f580a 100644
      try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
-@@ -610,6 +627,8 @@ test "parse config" {
+@@ -714,6 +731,8 @@ test "parse config" {
          \\app-id = com.example.scratchpad
          \\font-family = Fira Code
          \\font-weight = medium
@@ -92,7 +119,7 @@ index e1252bf..87f580a 100644
          \\font-size = 14.5
          \\window-padding-x = 4
          \\window-padding-y = 6, 10
-@@ -646,6 +665,8 @@ test "parse config" {
+@@ -750,6 +769,8 @@ test "parse config" {
      try std.testing.expectEqualStrings("com.example.scratchpad", config.app_id);
      try std.testing.expectEqualStrings("Fira Code", config.font_family);
      try std.testing.expectEqual(FontWeight.medium, config.font_weight);
@@ -727,10 +754,10 @@ index 1dacc2b..8dcb86d 100644
      defer font.deinit(alloc);
      var renderer: Renderer = try .init(alloc, &font, .{});
 diff --git a/src/pixel_raster.zig b/src/pixel_raster.zig
-index 889063c..ae7192b 100644
+index 1d74c9e..4339148 100644
 --- a/src/pixel_raster.zig
 +++ b/src/pixel_raster.zig
-@@ -305,7 +305,7 @@ const CoverageCache = struct {
+@@ -309,7 +309,7 @@ const CoverageCache = struct {
  };
  threadlocal var coverage_cache: [32]CoverageCache = @splat(.{});
  
@@ -739,3 +766,6 @@ index 889063c..ae7192b 100644
      std.debug.assert(dst.len == coverage.len and color >> 24 == 255);
      if (dst.len == 0) return;
      const fg = decodeRgb(color);
+-- 
+2.56.0
+

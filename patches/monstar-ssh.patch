@@ -1,4 +1,4 @@
-From ff1b5fae3cbc2e22b86213145ba3b14d3537d907 Mon Sep 17 00:00:00 2001
+From de74e72d297a9ccd2eefda3bc3427bba406f5076 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 20:11:58 -0400
 Subject: [PATCH] ssh: install terminfo before remote login
@@ -12,7 +12,7 @@ Subject: [PATCH] ssh: install terminfo before remote login
  create mode 100644 src/Ssh.zig
 
 diff --git a/README.md b/README.md
-index fe14fb0..826923a 100644
+index 34399b9..11a865d 100644
 --- a/README.md
 +++ b/README.md
 @@ -59,6 +59,15 @@ Pass `--` to run a shell expression:
@@ -32,7 +32,7 @@ index fe14fb0..826923a 100644
  configuration overrides with command-line options:
  
 diff --git a/dist/monstar.1 b/dist/monstar.1
-index c3770c0..767d7ae 100644
+index 9ce5a25..3550bc7 100644
 --- a/dist/monstar.1
 +++ b/dist/monstar.1
 @@ -15,6 +15,10 @@ monstar \- a small Wayland terminal emulator
@@ -46,7 +46,7 @@ index c3770c0..767d7ae 100644
  .SH DESCRIPTION
  .B monstar
  is a Wayland terminal emulator written in Zig and built on Ghostty's terminal
-@@ -121,11 +125,16 @@ Monstar uses Ghostty's
+@@ -136,11 +140,16 @@ Monstar uses Ghostty's
  terminal core and installs its own
  .B monstar
  terminfo entry.
@@ -229,7 +229,7 @@ index 0000000..82df8dc
 +    try std.testing.expectError(error.InvalidCli, parseArgs(&args));
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 4cee148..5f739b9 100644
+index 547b838..7491d05 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -12,6 +12,7 @@ const Link = @import("Link.zig");
@@ -273,7 +273,7 @@ index 4cee148..5f739b9 100644
              } else if (std.mem.eql(u8, arg, "--")) {
                  if (self.index + 1 >= self.args.len) return error.InvalidCli;
                  self.setCommand(.shell, self.index + 1);
-@@ -212,6 +223,7 @@ fn printUsage(init: std.process.Init) !void {
+@@ -224,6 +235,7 @@ fn printUsage(init: std.process.Init) !void {
      try writer.interface.writeAll(
          \\usage: monstar [options]
          \\       monstar [options] -e command [args...]
@@ -281,7 +281,7 @@ index 4cee148..5f739b9 100644
          \\       monstar [options] -- command...
          \\
          \\Options:
-@@ -228,6 +240,7 @@ fn printUsage(init: std.process.Init) !void {
+@@ -240,6 +252,7 @@ fn printUsage(init: std.process.Init) !void {
          \\  -o key=value                       Override a config key
          \\  -e command [args...]               Execute command directly
          \\  -- command...                      Run command through /bin/sh -c
@@ -289,7 +289,7 @@ index 4cee148..5f739b9 100644
          \\
      );
  }
-@@ -247,6 +260,14 @@ fn invalidCli(init: std.process.Init) noreturn {
+@@ -259,6 +272,14 @@ fn invalidCli(init: std.process.Init) noreturn {
      std.process.exit(2);
  }
  
@@ -304,7 +304,7 @@ index 4cee148..5f739b9 100644
  /// GUI mode: run a live terminal session in a window.
  fn gui(init: std.process.Init, cli: CliOptions) !void {
      const arena = init.arena.allocator();
-@@ -482,6 +503,18 @@ test "parse CLI reserves bare words for future subcommands" {
+@@ -719,6 +740,18 @@ test "parse CLI reserves bare words for future subcommands" {
      try std.testing.expectError(error.InvalidCli, parseCli(arena_state.allocator(), &args));
  }
  
@@ -324,5 +324,5 @@ index 4cee148..5f739b9 100644
      var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
      defer arena_state.deinit();
 -- 
-2.54.0
+2.56.0
 

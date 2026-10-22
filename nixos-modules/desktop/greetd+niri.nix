@@ -22,28 +22,27 @@ let
   wormhole-send = pkgs.dev.johnrinehart.wormhole-send;
   display-layout = pkgs.dev.johnrinehart.display-layout;
 
-  niriRevision = "bb38b7e14f8f7bbef6584cf263bf36b0044d63d3";
+  niriRevision = "aee25c9efcfa85b6029d5d1a2b7aaac7d87ae9d1";
   niriSource = pkgs.fetchFromGitHub {
     owner = "niri-wm";
     repo = "niri";
     rev = niriRevision;
-    hash = "sha256-pmQTzs7OKMoFI99vb88lURibAdjIVwXpRsgx2Gi19Qw=";
+    hash = "sha256-uN+SmXUGHMQQjPGYjQ7VPiC+PkFO8N5KNGQSOXZAwbY=";
   };
-  # 0003 pins Smithay and adapts Niri to it, including the per-device keyboard
-  # code from 0004, so it must come last.
   niriPatches = [
     ./0000-version-report-downstream-patches.patch
     ./0001-overview-allow-targeting-active-output.patch
     ./0002-screencast-accept-remote-desktop-sessions.patch
-    ./0004-input-support-per-device-keyboard-settings.patch
     ./0003-niri-pin-smithay-master.patch
+    ./0004-input-support-per-device-keyboard-settings.patch
   ];
   niriPatchVersionSuffix = lib.concatMapStrings (
     patch: "\n+ ${builtins.baseNameOf (toString patch)}"
   ) niriPatches;
   # Niri 26.04 predates Smithay's SHM damage fix and does not compile with current Smithay APIs.
   # Follow Niri main for compatible APIs, then pin Smithay to the current upstream master tip.
-  # Keep smithay-drm-extras on the fork containing the unmerged late-CRTC mapping fix.
+  # Keep smithay-drm-extras on the fork containing the unmerged late-CRTC mapping fix
+  # (Smithay/smithay#2125).
   niriPatched = pkgs.niri.overrideAttrs (old: {
     src = niriSource;
     patches = (old.patches or [ ]) ++ niriPatches;
@@ -52,7 +51,7 @@ let
       name = "${old.pname}-${old.version}";
       src = niriSource;
       patches = (old.cargoPatches or [ ]) ++ niriPatches;
-      hash = "sha256-wj7y+3wOsTaP/T5DDFHcFTqk0kP65IPZczHIH0x5Xns=";
+      hash = "sha256-SkyA7lWC6uA2Y2k7UXEuuHYdUb9ScqADmGiBowYesJo=";
     };
     env = (old.env or { }) // {
       NIRI_BUILD_COMMIT = niriRevision;

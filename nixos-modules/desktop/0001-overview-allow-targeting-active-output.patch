@@ -1,3 +1,30 @@
+From a17df57fb7f846eb198e35303428bf6fae593ae5 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Fri, 10 Jul 2026 13:43:58 -0400
+Subject: [PATCH] Let each Overview action narrow its output scope
+
+Preserve the existing all-output Overview behavior while adding an all-outputs
+property that bindings can disable to target only the active output. Keep
+hot-corner and gesture entry points unchanged.
+
+Constraint: Existing Overview bindings must retain global multi-output behavior
+Rejected: Default all-outputs to false | silently changes every existing Overview action on multi-output setups
+Confidence: high
+Scope-risk: moderate
+Directive: Every path writing monitor Overview progress must honor overview_output
+Tested: Action parser and multi-output render regressions; wiki parsing; workspace Clippy with warnings denied
+Not-tested: Packaged build and live three-output interaction after this revision
+---
+ docs/wiki/Overview.md    | 12 ++++++
+ niri-config/src/binds.rs |  8 ++--
+ niri-config/src/lib.rs   | 17 ++++++++
+ niri-ipc/src/lib.rs      | 20 ++++++++-
+ src/input/mod.rs         | 14 +++---
+ src/layout/mod.rs        | 93 +++++++++++++++++++++++++++++-----------
+ src/layout/tests.rs      | 37 +++++++++++++++-
+ src/ui/hotkey_overlay.rs |  4 +-
+ 8 files changed, 165 insertions(+), 40 deletions(-)
+
 diff --git a/docs/wiki/Overview.md b/docs/wiki/Overview.md
 index f9bb94a3..b60794bf 100644
 --- a/docs/wiki/Overview.md
@@ -22,10 +49,10 @@ index f9bb94a3..b60794bf 100644
  
  - Mouse: left click and drag windows to move them, right click and drag to scroll workspaces left/right, scroll to switch workspaces (no holding Mod required).
 diff --git a/niri-config/src/binds.rs b/niri-config/src/binds.rs
-index e1a6a546..4a8c028d 100644
+index 2266d877..77bcf91b 100644
 --- a/niri-config/src/binds.rs
 +++ b/niri-config/src/binds.rs
-@@ -362,8 +362,8 @@ pub enum Action {
+@@ -363,8 +363,8 @@ pub enum Action {
      ClearDynamicCastTarget,
      #[knuffel(skip)]
      StopCast(u64),
@@ -36,7 +63,7 @@ index e1a6a546..4a8c028d 100644
      CloseOverview,
      #[knuffel(skip)]
      ToggleWindowUrgent(u64),
-@@ -697,8 +697,8 @@ impl From<niri_ipc::Action> for Action {
+@@ -703,8 +703,8 @@ impl From<niri_ipc::Action> for Action {
              }
              niri_ipc::Action::ClearDynamicCastTarget {} => Self::ClearDynamicCastTarget,
              niri_ipc::Action::StopCast { session_id } => Self::StopCast(session_id),
@@ -48,10 +75,10 @@ index e1a6a546..4a8c028d 100644
              niri_ipc::Action::ToggleWindowUrgent { id } => Self::ToggleWindowUrgent(id),
              niri_ipc::Action::SetWindowUrgent { id } => Self::SetWindowUrgent(id),
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index 77f07967..1c9ba856 100644
+index b8989e8d..c7d04af7 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
-@@ -648,6 +648,23 @@ mod tests {
+@@ -640,6 +640,23 @@ mod tests {
          assert_eq!(config.input.keyboard.repeat_rate, 25);
      }
  
@@ -76,21 +103,10 @@ index 77f07967..1c9ba856 100644
      fn do_parse(text: &str) -> Config {
          Config::parse_mem(text)
 diff --git a/niri-ipc/src/lib.rs b/niri-ipc/src/lib.rs
-index 218e532c..f7487f6b 100644
+index c314d453..fbcd6460 100644
 --- a/niri-ipc/src/lib.rs
 +++ b/niri-ipc/src/lib.rs
-@@ -183,6 +183,10 @@ pub struct PickedColor {
-     pub rgb: [f64; 3],
- }
- 
-+const fn default_true() -> bool {
-+    true
-+}
-+
- /// Actions that niri can perform.
- // Variants in this enum should match the spelling of the ones in niri-config. Most, but not all,
- // variants from niri-config should be present here.
-@@ -909,9 +913,25 @@ pub enum Action {
+@@ -925,9 +925,25 @@ pub enum Action {
          session_id: u64,
      },
      /// Toggle (open/close) the Overview.
@@ -119,10 +135,10 @@ index 218e532c..f7487f6b 100644
      CloseOverview {},
      /// Toggle urgent status of a window.
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index 50567530..de552a67 100644
+index 10c1d02c..6880468a 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
-@@ -2271,12 +2271,12 @@ impl State {
+@@ -2343,12 +2343,12 @@ impl State {
              Action::StopCast(session_id) => {
                  self.niri.stop_cast(CastSessionId::from(session_id));
              }
@@ -139,7 +155,7 @@ index 50567530..de552a67 100644
                      self.niri.queue_redraw_all();
                  }
              }
-@@ -2631,7 +2631,7 @@ impl State {
+@@ -2709,7 +2709,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -148,7 +164,7 @@ index 50567530..de552a67 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -2718,7 +2718,7 @@ impl State {
+@@ -2800,7 +2800,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -157,7 +173,7 @@ index 50567530..de552a67 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -4737,7 +4737,7 @@ fn hardcoded_overview_bind(raw: Keysym, mods: ModifiersState) -> Option<Bind> {
+@@ -4940,7 +4940,7 @@ fn hardcoded_overview_bind(raw: Keysym, mods: ModifiersState) -> Option<Bind> {
      let action = match raw {
          Keysym::Escape | Keysym::Return => {
              repeat = false;
@@ -167,10 +183,10 @@ index 50567530..de552a67 100644
          Keysym::Left => Action::FocusColumnLeft,
          Keysym::Right => Action::FocusColumnRight,
 diff --git a/src/layout/mod.rs b/src/layout/mod.rs
-index 5c4dd639..d266ea08 100644
+index 8575a1af..8f418ff6 100644
 --- a/src/layout/mod.rs
 +++ b/src/layout/mod.rs
-@@ -364,6 +364,8 @@ pub struct Layout<W: LayoutElement> {
+@@ -371,6 +371,8 @@ pub struct Layout<W: LayoutElement> {
      overview_open: bool,
      /// The overview zoom progress.
      overview_progress: Option<OverviewProgress>,
@@ -179,7 +195,7 @@ index 5c4dd639..d266ea08 100644
      /// Configurable properties of the layout.
      options: Rc<Options>,
  }
-@@ -703,6 +705,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -728,6 +730,7 @@ impl<W: LayoutElement> Layout<W> {
              update_render_elements_time: Duration::ZERO,
              overview_open: false,
              overview_progress: None,
@@ -187,7 +203,7 @@ index 5c4dd639..d266ea08 100644
              options: Rc::new(options),
          }
      }
-@@ -728,6 +731,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -753,6 +756,7 @@ impl<W: LayoutElement> Layout<W> {
              update_render_elements_time: Duration::ZERO,
              overview_open: false,
              overview_progress: None,
@@ -195,7 +211,7 @@ index 5c4dd639..d266ea08 100644
              options: opts,
          }
      }
-@@ -799,7 +803,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -834,7 +838,7 @@ impl<W: LayoutElement> Layout<W> {
  
                  let ws_id_to_activate = self.last_active_workspace_id.remove(&output.name());
  
@@ -204,7 +220,7 @@ index 5c4dd639..d266ea08 100644
                      output,
                      workspaces,
                      ws_id_to_activate,
-@@ -807,8 +811,6 @@ impl<W: LayoutElement> Layout<W> {
+@@ -842,8 +846,6 @@ impl<W: LayoutElement> Layout<W> {
                      self.options.clone(),
                      layout_config,
                  );
@@ -213,7 +229,7 @@ index 5c4dd639..d266ea08 100644
                  monitors.push(monitor);
  
                  MonitorSet::Normal {
-@@ -820,7 +822,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -855,7 +857,7 @@ impl<W: LayoutElement> Layout<W> {
              MonitorSet::NoOutputs { workspaces } => {
                  let ws_id_to_activate = self.last_active_workspace_id.remove(&output.name());
  
@@ -222,7 +238,7 @@ index 5c4dd639..d266ea08 100644
                      output,
                      workspaces,
                      ws_id_to_activate,
-@@ -828,16 +830,14 @@ impl<W: LayoutElement> Layout<W> {
+@@ -863,16 +865,14 @@ impl<W: LayoutElement> Layout<W> {
                      self.options.clone(),
                      layout_config,
                  );
@@ -241,7 +257,7 @@ index 5c4dd639..d266ea08 100644
      }
  
      pub fn remove_output(&mut self, output: &Output) {
-@@ -2501,11 +2501,17 @@ impl<W: LayoutElement> Layout<W> {
+@@ -2565,11 +2565,17 @@ impl<W: LayoutElement> Layout<W> {
                  "monitor base options must be synchronized with layout"
              );
  
@@ -264,7 +280,7 @@ index 5c4dd639..d266ea08 100644
  
              monitor.verify_invariants();
  
-@@ -2709,10 +2715,11 @@ impl<W: LayoutElement> Layout<W> {
+@@ -2755,10 +2761,11 @@ impl<W: LayoutElement> Layout<W> {
              }
          }
  
@@ -277,7 +293,7 @@ index 5c4dd639..d266ea08 100644
                      mon.advance_animations();
                  }
              }
-@@ -2810,7 +2817,17 @@ impl<W: LayoutElement> Layout<W> {
+@@ -2856,7 +2863,17 @@ impl<W: LayoutElement> Layout<W> {
                  let is_active = self.is_active
                      && idx == *active_monitor_idx
                      && !matches!(self.interactive_move, Some(InteractiveMoveState::Moving(_)));
@@ -296,7 +312,7 @@ index 5c4dd639..d266ea08 100644
                  mon.update_render_elements(is_active);
              }
          }
-@@ -3721,6 +3738,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -3767,6 +3784,7 @@ impl<W: LayoutElement> Layout<W> {
  
      pub fn overview_gesture_begin(&mut self) {
          self.overview_open = true;
@@ -304,7 +320,7 @@ index 5c4dd639..d266ea08 100644
  
          let value = self.overview_progress.take().map_or(0., |p| p.value());
          let gesture = OverviewGesture {
-@@ -4583,18 +4601,45 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4629,18 +4647,45 @@ impl<W: LayoutElement> Layout<W> {
      }
  
      pub fn set_monitors_overview_state(&mut self) {
@@ -355,7 +371,7 @@ index 5c4dd639..d266ea08 100644
  
          let from = self.overview_progress.take().map_or(0., |p| p.value());
          let to = if self.overview_open { 1. } else { 0. };
-@@ -4610,12 +4655,12 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4656,12 +4701,12 @@ impl<W: LayoutElement> Layout<W> {
          self.set_monitors_overview_state();
      }
  
@@ -370,7 +386,7 @@ index 5c4dd639..d266ea08 100644
          true
      }
  
-@@ -4624,7 +4669,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4670,7 +4715,7 @@ impl<W: LayoutElement> Layout<W> {
              return false;
          }
  
@@ -379,7 +395,7 @@ index 5c4dd639..d266ea08 100644
          true
      }
  
-@@ -4633,7 +4678,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4679,7 +4724,7 @@ impl<W: LayoutElement> Layout<W> {
          if let Some(mon) = self.active_monitor() {
              mon.activate_workspace_with_anim_config(ws_idx, Some(config));
          }
@@ -389,10 +405,10 @@ index 5c4dd639..d266ea08 100644
  
      pub fn start_open_animation_for_window(&mut self, window: &W::Id) {
 diff --git a/src/layout/tests.rs b/src/layout/tests.rs
-index 31265dd9..c74359b0 100644
+index a2da4ce5..04c4cbe5 100644
 --- a/src/layout/tests.rs
 +++ b/src/layout/tests.rs
-@@ -1615,7 +1615,7 @@ impl Op {
+@@ -1618,7 +1618,7 @@ impl Op {
                  layout.interactive_resize_end(&window);
              }
              Op::ToggleOverview => {
@@ -401,7 +417,7 @@ index 31265dd9..c74359b0 100644
              }
              Op::UpdateConfig { layout_config } => {
                  let options = Options {
-@@ -3697,6 +3697,41 @@ fn expel_pending_left_from_fullscreen_tabbed_column() {
+@@ -3816,6 +3816,41 @@ fn expel_pending_left_from_fullscreen_tabbed_column() {
      check_ops(ops);
  }
  

@@ -1,4 +1,4 @@
-From e8a6ec130bd7906b94bf4d4af025d9805e64b5c3 Mon Sep 17 00:00:00 2001
+From 42800d145265563f2e049aa77232693256204fbc Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 09:22:06 -0400
 Subject: [PATCH 3/3] sprite: add kitty block shade patterns
@@ -12,10 +12,10 @@ Subject: [PATCH 3/3] sprite: add kitty block shade patterns
  5 files changed, 119 insertions(+), 6 deletions(-)
 
 diff --git a/src/App.zig b/src/App.zig
-index d17d6f1..4924ebd 100644
+index a831b2c..a6c6e72 100644
 --- a/src/App.zig
 +++ b/src/App.zig
-@@ -472,6 +472,7 @@ fn fontOptions(config: Config) Font.Options {
+@@ -506,6 +506,7 @@ fn fontOptions(config: Config) Font.Options {
          .weight = config.font_weight,
          .synthetic_italic = config.synthetic_italic,
          .synthetic_italic_weight = config.synthetic_italic_weight,
@@ -24,10 +24,10 @@ index d17d6f1..4924ebd 100644
  }
  
 diff --git a/src/Config.zig b/src/Config.zig
-index bf072b1..0eb2032 100644
+index e751783..0afadb1 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
-@@ -88,6 +88,10 @@ pub const MetricModifier = union(enum) {
+@@ -90,6 +90,10 @@ pub const MetricModifier = union(enum) {
      }
  };
  
@@ -38,7 +38,7 @@ index bf072b1..0eb2032 100644
  pub const FontWeight = enum {
      default,
      medium,
-@@ -108,6 +112,7 @@ font_size: FontSize = .{ .points = 12 },
+@@ -110,6 +114,7 @@ font_size: FontSize = .{ .points = 12 },
  /// Signed physical-pixel or percentage adjustment to the font's natural cell
  /// height. Unset preserves the natural metrics.
  adjust_cell_height: ?MetricModifier = null,
@@ -46,7 +46,7 @@ index bf072b1..0eb2032 100644
  /// Minimum window padding in logical pixels. One configured value applies to
  /// both sides; two values are left/right for X and top/bottom for Y.
  window_padding_x: WindowPadding = .{},
-@@ -261,6 +266,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+@@ -283,6 +288,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
          self.font_size = try parseFontSize(value);
      } else if (std.mem.eql(u8, key, "adjust-cell-height")) {
          self.adjust_cell_height = try parseMetricModifier(value);
@@ -55,7 +55,7 @@ index bf072b1..0eb2032 100644
      } else if (std.mem.eql(u8, key, "window-padding-x")) {
          self.window_padding_x = try parseWindowPadding(value);
      } else if (std.mem.eql(u8, key, "window-padding-y")) {
-@@ -562,6 +569,7 @@ test "defaults" {
+@@ -677,6 +684,7 @@ test "defaults" {
      try std.testing.expect(!config.synthetic_italic);
      try std.testing.expectEqual(SyntheticItalicWeight.regular, config.synthetic_italic_weight);
      try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
@@ -63,7 +63,7 @@ index bf072b1..0eb2032 100644
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
      try std.testing.expectEqual(@as(?Command, null), config.command);
-@@ -615,6 +623,7 @@ test "parse config" {
+@@ -734,6 +742,7 @@ test "parse config" {
          \\synthetic-italic = true
          \\synthetic-italic-weight = bold
          \\font-size = 14.5
@@ -71,7 +71,7 @@ index bf072b1..0eb2032 100644
          \\window-padding-x = 4
          \\window-padding-y = 6, 10
          \\command = /usr/bin/fish --login
-@@ -654,6 +663,7 @@ test "parse config" {
+@@ -773,6 +782,7 @@ test "parse config" {
      try std.testing.expectEqual(SyntheticItalicWeight.bold, config.synthetic_italic_weight);
      // invalid re-assignment keeps the previous valid value
      try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
@@ -80,7 +80,7 @@ index bf072b1..0eb2032 100644
      try std.testing.expectEqual(WindowPadding{ .first = 6, .second = 10 }, config.window_padding_y);
      try std.testing.expectEqualStrings("/usr/bin/fish --login", config.command.?.shell);
 diff --git a/src/Font.zig b/src/Font.zig
-index 995761d..69c7a1d 100644
+index 0b5a67d..2572b2c 100644
 --- a/src/Font.zig
 +++ b/src/Font.zig
 @@ -123,6 +123,7 @@ pub const Options = struct {
@@ -91,7 +91,7 @@ index 995761d..69c7a1d 100644
  };
  
  /// Immutable Fontconfig results. Rasterizers need independent FreeType,
-@@ -1218,7 +1219,14 @@ pub fn spriteGlyph(
+@@ -1221,7 +1222,14 @@ pub fn spriteGlyph(
      if (gop.found_existing) return gop.value_ptr;
      errdefer _ = self.sprite_glyphs.remove(key);
  
@@ -285,5 +285,5 @@ index 9b585e1..cca6efc 100644
  fn quadrant(
      metrics: font.Metrics,
 -- 
-2.54.0
+2.56.0
 

@@ -35,11 +35,11 @@ let
       };
     };
     KeePassXC = {
-      version = "2.7.12";
+      version = "2.8.0";
       bundle = "KeePassXC.app";
       src = fetchurl {
-        url = "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.12/KeePassXC-2.7.12-arm64.dmg";
-        hash = "sha256-ZfT2NgcYDAoVeUtKQGj4XpntU5HIfB+5MSZI8bNv7UA=";
+        url = "https://github.com/keepassxreboot/keepassxc/releases/download/2.8.0/KeePassXC-2.8.0-arm64.dmg";
+        hash = "sha256-Ij1cca5sEdSBksaf1YL9XxAEfpHrzrwBTeM6QlOblRk=";
       };
     };
   };
