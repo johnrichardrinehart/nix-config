@@ -206,6 +206,9 @@ Select a host profile before enabling host Bluetooth to choose the reconnection 
 Profile selection and Bluetooth Output do not enable host Bluetooth while it is off.
 The keyboard enables host Bluetooth after reboot.
 
+The central reports its own battery level through the standard Battery Service and each split peripheral's level through an additional Battery Service.
+Most host battery indicators show only the first service; reading the others needs a GATT client such as `bluetoothctl`'s `gatt` menu.
+
 The firmware uses the public SliceMK ZMK source and the local host-only Bluetooth patch.
 `packages/slicemk-update/firmware.nix` pins the firmware sources, Zephyr modules, and build tools.
 `render-keymap.py` generates the devicetree keymap directly from each JSON configuration.
