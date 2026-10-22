@@ -1,0 +1,170 @@
+From 528774446f497b0af8e822a10fbfd3fe9843f902 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 22 Oct 2026 16:00:57 -0400
+Subject: [PATCH] fix(gtk): forward XDG activation token to the running
+ instance
+
+A second deluge-gtk hands its arguments to the running instance over IPC
+and exits. The running instance then calls present(), but Wayland
+compositors only let a window take focus with the activation token the
+launcher issued, and that token went to the process that exited. The
+window stayed unfocused, whether opened from a launcher or a magnet link.
+
+The client now sends XDG_ACTIVATION_TOKEN with its arguments, and the
+server passes it to Gtk.Window.set_startup_id() after presenting, which
+asks the compositor to activate the window.
+
+Without a token the message is the same plain argument list as before,
+so older running versions still read it. A message that carries a token
+is a dict, which an older running version would misread as two file
+arguments.
+---
+ deluge/tests/test_ui_gtk3.py   | 31 +++++++++++++++++++++++
+ deluge/ui/gtk3/ipcinterface.py | 46 ++++++++++++++++++++++++++++++----
+ deluge/ui/gtk3/mainwindow.py   | 14 ++++++++++-
+ 3 files changed, 85 insertions(+), 6 deletions(-)
+
+diff --git a/deluge/tests/test_ui_gtk3.py b/deluge/tests/test_ui_gtk3.py
+index e6d025c7c..99cb58a35 100644
+--- a/deluge/tests/test_ui_gtk3.py
++++ b/deluge/tests/test_ui_gtk3.py
+@@ -28,3 +28,34 @@ def test_cmp(self):
+         assert cmp(None, 'bar') == -1
+         assert cmp('foo', None) == 1
+         assert cmp('', None) == 1
++
++
++class TestGTK3IPCMessage:
++    def test_without_token_older_servers_can_read_it(self):
++        import rencode
++
++        from deluge.ui.gtk3.ipcinterface import encode_ipc_message
++
++        args = ['magnet:?xt=urn:btih:abc', '/tmp/a.torrent']
++        assert encode_ipc_message(args) == rencode.dumps(args)
++        assert encode_ipc_message(args, '') == rencode.dumps(args)
++
++    def test_token_round_trip(self):
++        from deluge.ui.gtk3.ipcinterface import decode_ipc_message, encode_ipc_message
++
++        args, token = decode_ipc_message(encode_ipc_message([], 'token-1'))
++        assert list(args) == []
++        assert token == 'token-1'
++
++        args, token = decode_ipc_message(encode_ipc_message(['/tmp/a.torrent'], 't'))
++        assert list(args) == ['/tmp/a.torrent']
++        assert token == 't'
++
++    def test_message_from_older_client(self):
++        import rencode
++
++        from deluge.ui.gtk3.ipcinterface import decode_ipc_message
++
++        args, token = decode_ipc_message(rencode.dumps(['/tmp/a.torrent']))
++        assert list(args) == ['/tmp/a.torrent']
++        assert token is None
+diff --git a/deluge/ui/gtk3/ipcinterface.py b/deluge/ui/gtk3/ipcinterface.py
+index 0ef28d8c0..f05d3a731 100644
+--- a/deluge/ui/gtk3/ipcinterface.py
++++ b/deluge/ui/gtk3/ipcinterface.py
+@@ -28,16 +28,47 @@
+ log = logging.getLogger(__name__)
+ 
+ 
++def encode_ipc_message(args, activation_token=None):
++    """Encode the arguments a second instance sends to the running one.
++
++    Without an activation token this is the plain argument list that older
++    Deluge versions expect.
++
++    Args:
++        args (list): Torrent files, URLs or magnets to add.
++        activation_token (str): Wayland XDG activation token from the launcher.
++
++    Returns:
++        bytes: The rencoded message.
++    """
++    if activation_token:
++        return rencode.dumps({'args': args, 'activation_token': activation_token})
++    return rencode.dumps(args)
++
++
++def decode_ipc_message(data):
++    """Decode a message from encode_ipc_message, or from an older client.
++
++    Returns:
++        tuple: The arguments and the activation token, which is None when the
++            client sent none.
++    """
++    message = rencode.loads(data, decode_utf8=True)
++    if isinstance(message, dict):
++        return message.get('args') or [], message.get('activation_token')
++    return message, None
++
++
+ class IPCProtocolServer(Protocol):
+     def __init__(self):
+         pass
+ 
+     def dataReceived(self, data):  # NOQA: N802
+         config = ConfigManager('gtk3ui.conf')
+-        data = rencode.loads(data, decode_utf8=True)
+-        if not data or config['focus_main_window_on_add']:
+-            component.get('MainWindow').present()
+-        process_args(data)
++        args, activation_token = decode_ipc_message(data)
++        if not args or config['focus_main_window_on_add']:
++            component.get('MainWindow').present(activation_token)
++        process_args(args)
+ 
+ 
+ class IPCProtocolClient(Protocol):
+@@ -45,7 +76,12 @@ def __init__(self):
+         pass
+ 
+     def connectionMade(self):  # NOQA: N802
+-        self.transport.write(rencode.dumps(self.factory.args))
++        # The launcher gave the activation token to this process, but the
++        # running instance is the one that has to raise its window.
++        message = encode_ipc_message(
++            self.factory.args, os.environ.get('XDG_ACTIVATION_TOKEN')
++        )
++        self.transport.write(message)
+         self.transport.loseConnection()
+ 
+     def connectionLost(self, reason=connectionDone):  # NOQA: N802
+diff --git a/deluge/ui/gtk3/mainwindow.py b/deluge/ui/gtk3/mainwindow.py
+index b01bd9935..569db378e 100644
+--- a/deluge/ui/gtk3/mainwindow.py
++++ b/deluge/ui/gtk3/mainwindow.py
+@@ -181,7 +181,15 @@ def hide(self):
+         self.save_position()
+         self.window.hide()
+ 
+-    def present(self):
++    def present(self, activation_token=None):
++        """Show and raise the main window.
++
++        Args:
++            activation_token (str): Wayland XDG activation token. Wayland
++                compositors only let a window take focus with a token from
++                the launcher, so presenting without one may leave it unfocused.
++        """
++
+         def restore():
+             # Restore the proper x,y coords for the window prior to showing it
+             component.resume(self.child_components)
+@@ -193,6 +201,10 @@ def restore():
+                 self.window.get_window().set_user_time(timestamp)
+             else:
+                 self.window.present_with_time(timestamp)
++            if activation_token:
++                # Set after presenting, so a window hidden in the tray is
++                # mapped before the compositor is asked to activate it.
++                self.window.set_startup_id(activation_token)
+             self.load_window_state()
+ 
+         if self.config['lock_tray'] and not self.visible():
+-- 
+2.56.0
+

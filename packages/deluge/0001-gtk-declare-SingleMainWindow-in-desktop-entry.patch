@@ -1,0 +1,31 @@
+From eb9ff2052b825d69225dc3e1b376c230bc64addc Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 22 Oct 2026 15:55:18 -0400
+Subject: [PATCH] fix(gtk): declare SingleMainWindow in desktop entry
+
+Deluge allows only one GTK UI instance: a second deluge-gtk sends its
+arguments to the running one over IPC and exits. Launchers cannot see
+that, so they start a new instance, which on Wayland leaves the running
+window where it was.
+
+SingleMainWindow (Desktop Entry Specification 1.5) tells launchers and
+docks there is one main window, so they can focus it and drop "New
+Window".
+---
+ deluge/ui/data/share/applications/deluge.desktop.in | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/deluge/ui/data/share/applications/deluge.desktop.in b/deluge/ui/data/share/applications/deluge.desktop.in
+index 4335b6da4..919d74809 100644
+--- a/deluge/ui/data/share/applications/deluge.desktop.in
++++ b/deluge/ui/data/share/applications/deluge.desktop.in
+@@ -13,5 +13,6 @@ Type=Application
+ Categories=Network;FileTransfer;P2P;GTK;
+ StartupWMClass=deluge
+ StartupNotify=true
++SingleMainWindow=true
+ MimeType=application/x-bittorrent;x-scheme-handler/magnet;
+ X-GNOME-UsesNotifications=true
+-- 
+2.56.0
+

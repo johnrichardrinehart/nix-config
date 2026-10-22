@@ -121,7 +121,7 @@ in
         pkgs.obs-studio
         pkgs.playerctl
         pkgs.ffmpeg_7-full
-        pkgs.deluge
+        pkgs.dev.johnrinehart.deluge
       ];
     })
 
