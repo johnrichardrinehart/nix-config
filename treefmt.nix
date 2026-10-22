@@ -2,6 +2,10 @@
 {
   projectRootFile = "flake.nix";
 
+  # SOPS writes these files (.sops.yaml creation_rules). A formatter must not
+  # change them: the MAC covers the values, and ciphertext scalars are long.
+  settings.global.excludes = [ "secrets/*.yaml" ];
+
   settings.formatter = {
     markdownlint = {
       command = "${pkgs.markdownlint-cli}/bin/markdownlint";
@@ -49,12 +53,6 @@
           "false"
           "on"
           "off"
-        ];
-        # SOPS ciphertext and MAC values are indivisible YAML scalars.
-        rules.line-length.ignore = [
-          "secrets/nebula-ca.yaml"
-          "secrets/nebula-framework.yaml"
-          "secrets/share-webdav.yaml"
         ];
       };
     };
