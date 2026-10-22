@@ -67,6 +67,7 @@ inputs: {
           inherit (inputs) kitkat-rs;
           system = final.stdenv.hostPlatform.system;
         };
+        focus-or-spawn.fuzzel = johnPkgs.fuzzel_1_15_0;
         framework-ec-flash = {
           inherit (johnPkgs) framework-ec;
           frameworkTool = final.framework-tool;

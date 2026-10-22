@@ -21,6 +21,9 @@ let
 
   wormhole-send = pkgs.dev.johnrinehart.wormhole-send;
   display-layout = pkgs.dev.johnrinehart.display-layout;
+  focus-or-spawn = pkgs.dev.johnrinehart.focus-or-spawn.override {
+    niri = config.programs.niri.package;
+  };
 
   niriRevision = "aee25c9efcfa85b6029d5d1a2b7aaac7d87ae9d1";
   niriSource = pkgs.fetchFromGitHub {
@@ -334,6 +337,7 @@ in
       in
       [
         display-layout
+        focus-or-spawn
         niri-gather-windows
         niri-cycle-display-mode
         niri-screenshot
@@ -377,6 +381,7 @@ in
             terminal_emulator = lib.getExe terminalEmulator;
             terminal_emulator_name = lib.getName terminalEmulator;
             fuzzel_dmenu = lib.getExe fuzzelDmenu;
+            focus_or_spawn = lib.getExe focus-or-spawn;
             clipboard_watch = lib.getExe clipboard-watch;
             cliphist_picker = lib.getExe cliphist-picker;
             input_toggle_notify = lib.getExe input-toggle-notify;

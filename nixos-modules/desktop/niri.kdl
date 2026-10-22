@@ -312,7 +312,7 @@ binds {
         spawn "@terminal_emulator@"
     }
     Mod+P hotkey-overlay-title="Run an Application: fuzzel" {
-        spawn "fuzzel"
+        spawn "@focus_or_spawn@"
     }
     Mod+D hotkey-overlay-title="Select an Application: fuzzel --dmenu" {
         spawn "@fuzzel_dmenu@"
