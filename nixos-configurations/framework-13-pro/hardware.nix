@@ -14,6 +14,14 @@
 
   boot.kernelModules = [ "kvm-amd" ];
 
+  # The 890M's VRAM carve-out is 512 MiB; everything else it reaches is GTT,
+  # which TTM caps at half of RAM (46.8 GiB). Vulkan reports carve-out + GTT
+  # as the device's memory, so the cap is the largest model llama.cpp can
+  # offload. 80 GiB (in 4 KiB pages) fits a ~47 GB MoE plus KV cache and
+  # leaves ~13 GiB for the desktop. A cap, not a reservation: GTT pages are
+  # allocated on demand.
+  boot.kernelParams = [ "ttm.pages_limit=20971520" ];
+
   # The lid and power button can come up with wakeup disabled, so the machine
   # sleeps but only a long press of the power button wakes it.
   # https://github.com/NixOS/nixos-hardware/issues/1782#issuecomment-6254883883

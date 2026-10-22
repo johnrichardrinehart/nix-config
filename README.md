@@ -256,6 +256,8 @@ nixos-hardware's `framework-amd-ai-300-series` plus
 - udev rules that enable wakeup on the lid and power button
   ([nixos-hardware#1782](https://github.com/NixOS/nixos-hardware/issues/1782#issuecomment-6254883883)).
 - The US wireless regulatory domain for the MT7925.
+- GTT raised from half of RAM to 80 GiB (`ttm.pages_limit`), so the 890M
+  can hold large local models.
 - Voice dictation on ONNX Runtime's CPU provider: OpenVINO's GPU device is
   Intel graphics only.
 - Suspend, not suspend-then-hibernate (`dev.johnrinehart.system.suspendVerb`):
