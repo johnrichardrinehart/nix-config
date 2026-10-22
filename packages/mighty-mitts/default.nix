@@ -48,6 +48,11 @@ stdenv.mkDerivation {
     hash = "sha256-vqhhjiH+uD15wEO2UqMjuHB5oseAJUt8QCudXUDUZUI=";
   };
 
+  # Remember the selected keyboard by its CoreBluetooth identifier. Select it
+  # again when it is connected. Made with `git format-patch` from branch
+  # remember-keyboard of the repo-managed clone of codyd51/Mighty-Mitts.
+  patches = [ ./remember-keyboard.patch ];
+
   buildPhase = ''
     runHook preBuild
     $CC -O2 -fobjc-arc -fobjc-weak \

@@ -27,6 +27,8 @@ in
       smtpEncryption = "tls";
       smtpUser = "johnrichardrinehart@gmail.com";
     };
-    credential."smtp://johnrichardrinehart%40gmail.com@smtp.gmail.com:587".helper = "${credentialHelper}";
+    credential."smtp://johnrichardrinehart%40gmail.com@smtp.gmail.com:587".helper = "${
+      credentialHelper
+    }";
   };
 }

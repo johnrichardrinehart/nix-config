@@ -54,11 +54,13 @@ below).
 Until then it warps the pointer instead, which leaves it frozen for about a
 quarter of a second after each jump.
 
-Mighty Mitts (`packages/mighty-mitts`, built from source) is a launch agent
-showing the battery level of each SliceMK half in the menu bar, read from the
-keyboard's two Battery Services. Pick the keyboard from its menu after each
-start; it does not remember the choice. Its first start asks for Bluetooth
-access; as a signed copy (below), the grant carries over to later builds.
+Mighty Mitts (`packages/mighty-mitts`, built from source) is a launch agent.
+It shows the battery level of each SliceMK half in the menu bar.
+It reads the levels from the two Battery Services of the keyboard.
+Select the keyboard from its menu one time.
+A local patch saves the selection and selects the keyboard again when it is connected.
+At its first start, macOS asks for Bluetooth access.
+The copy is signed (below), so the grant stays valid for later builds.
 
 The VM launcher's SPICE viewer is `Spicy.app`, which Home Manager copies into
 `~/Applications/Home Manager Apps`; the launcher runs that copy when it matches

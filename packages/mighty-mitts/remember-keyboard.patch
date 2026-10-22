@@ -1,0 +1,90 @@
+From 6fb9d80df9863c9ee6c50106e3eeedf2a0379606 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 22 Oct 2026 17:41:46 -0400
+Subject: [PATCH] Remember the selected keyboard
+
+Save the identifier of the selected keyboard in the user defaults.
+When that keyboard is connected again, select it automatically.
+The user then does not select the keyboard after each start.
+---
+ Mighty Mitts/AppDelegate.m | 36 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/Mighty Mitts/AppDelegate.m b/Mighty Mitts/AppDelegate.m
+index b70b7ce..8ba9c14 100644
+--- a/Mighty Mitts/AppDelegate.m	
++++ b/Mighty Mitts/AppDelegate.m	
+@@ -15,6 +15,9 @@
+ // How often we should ping the keyboard for updates, in seconds
+ #define BATTERY_LEVEL_FETCH_INTERVAL_SECONDS 60
+ 
++// User defaults key holding the identifier of the last selected keyboard
++#define SELECTED_PERIPHERAL_DEFAULTS_KEY @"SelectedPeripheralIdentifier"
++
+ @interface AppDelegate () <CBCentralManagerDelegate, CBPeripheralDelegate>
+ @property (nonatomic, retain) NSStatusItem* menuIcon;
+ @property (nonatomic, retain) NSTimer* updateTimer;
+@@ -86,7 +89,13 @@
+         return;
+     }
+     
+-    self.selectedKeyboardPeripheral = foundPeripherals[0];
++    [self selectPeripheral:foundPeripherals[0]];
++    [[NSUserDefaults standardUserDefaults] setObject:self.selectedKeyboardPeripheral.identifier.UUIDString
++                                              forKey:SELECTED_PERIPHERAL_DEFAULTS_KEY];
++}
++
++- (void)selectPeripheral:(CBPeripheral*)peripheral {
++    self.selectedKeyboardPeripheral = peripheral;
+     NSLog(@"Selected keyboard peripheral: %@", self.selectedKeyboardPeripheral.name);
+     self.selectedKeyboardPeripheral.delegate = self;
+     // 'Connect' to the peripheral within the context of this app, so we can read the battery level (though the peripheral is already connected to this Mac)
+@@ -94,6 +103,24 @@
+     [self highlightSelectedPeripheralMenuButton];
+ }
+ 
++// Select the keyboard chosen in an earlier run, once it is connected
++- (void)restoreSelectedPeripheral {
++    if (self.selectedKeyboardPeripheral) {
++        return;
++    }
++    NSString* savedIdentifier = [[NSUserDefaults standardUserDefaults] stringForKey:SELECTED_PERIPHERAL_DEFAULTS_KEY];
++    if (!savedIdentifier) {
++        return;
++    }
++    for (CBPeripheral* p in self.availablePeripherals) {
++        if ([p.identifier.UUIDString isEqualToString:savedIdentifier]) {
++            [self deselectPreviousPeripheral];
++            [self selectPeripheral:p];
++            return;
++        }
++    }
++}
++
+ - (void)refreshAvailablePeripherals {
+     // Discard and recreate the dropdown menu each time we read the available peripherals
+     NSMenu* dropdown = [[NSMenu alloc] init];
+@@ -132,6 +159,7 @@
+     
+     // Ensure any selected peripheral still has the checkmark in the newly constructed menu
+     [self highlightSelectedPeripheralMenuButton];
++    [self restoreSelectedPeripheral];
+ }
+ 
+ - (void)quitButtonClicked {
+@@ -154,7 +182,11 @@
+     // Periodic job to refresh the UI / kick the tires
+     self.updateTimer = [NSTimer timerWithTimeInterval:BATTERY_LEVEL_FETCH_INTERVAL_SECONDS repeats:YES block:^(NSTimer* timer){
+         if (!self.selectedKeyboardPeripheral) {
+-            self.menuIcon.button.title = @"No keyboard selected.";
++            // The remembered keyboard may have connected since the last refresh
++            [self refreshAvailablePeripherals];
++            if (!self.selectedKeyboardPeripheral) {
++                self.menuIcon.button.title = @"No keyboard selected.";
++            }
+         }
+         else if (self.selectedKeyboardPeripheral.state == CBPeripheralStateDisconnected) {
+             self.menuIcon.button.title = @"Disconnected.";
+-- 
+2.56.0
+
