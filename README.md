@@ -178,6 +178,8 @@ Both configurations use native Dvorak, plain Tab, and three Bluetooth host profi
 The mouse layer moves the pointer at up to 3200 counts per second.
 It reaches that speed on a quadratic ramp over 350 ms, so short presses stay precise.
 Hold the mouse layer key (the lower tall key in the left inner column) and tap ↑ or ↓ for volume up or down.
+The upper tall keys in the inner columns send Page Up (left) and Page Down (right); hold either to repeat.
+Hold Fn and tap them for Home and End.
 The inner column of small keys in the right thumb cluster selects the profiles.
 The top key selects profile 0 for the work machine.
 The middle key selects profile 1 for Framie.

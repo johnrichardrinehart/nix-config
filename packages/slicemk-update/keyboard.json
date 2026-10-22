@@ -140,16 +140,16 @@
           "Args": ["Y"]
         },
         {
-          "Name": "PgUp / Home",
-          "Behavior": "$custom",
+          "Name": "PgUp",
+          "Behavior": "&kp",
           "Notes": "",
-          "Args": ["&home_pgup HOME PAGE_UP"]
+          "Args": ["PAGE_UP"]
         },
         {
-          "Name": "PgDn / End",
-          "Behavior": "$custom",
+          "Name": "PgDn",
+          "Behavior": "&kp",
           "Notes": "",
-          "Args": ["&end_pgdn END PAGE_DOWN"]
+          "Args": ["PAGE_DOWN"]
         },
         {
           "Name": "",
@@ -602,16 +602,16 @@
           "Args": ["PIPE"]
         },
         {
-          "Name": "",
-          "Behavior": "&trans",
+          "Name": "Home",
+          "Behavior": "&kp",
           "Notes": "",
-          "Args": []
+          "Args": ["HOME"]
         },
         {
-          "Name": "",
-          "Behavior": "&trans",
+          "Name": "End",
+          "Behavior": "&kp",
           "Notes": "",
-          "Args": []
+          "Args": ["END"]
         },
         {
           "Name": "",
@@ -1864,5 +1864,5 @@
       ]
     }
   ],
-  "Custom": "// Mouse keys: ZMK's defaults (600 counts/s, linear ramp over 300 ms)\n// crossed several displays too slowly. Reach 3200 counts/s over 350 ms\n// on a quadratic ramp: short presses stay about as fine as before, and\n// a held key moves about 5.3 times as fast.\n#undef ZMK_POINTING_DEFAULT_MOVE_VAL\n#define ZMK_POINTING_DEFAULT_MOVE_VAL 3200\n\n&mmv {\n    time-to-max-speed-ms = <350>;\n    acceleration-exponent = <2>;\n};\n\n/ {\n    behaviors {\n        home_pgup: home_pgup {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"hold-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&kp>, <&kp>;\n        };\n\n        end_pgdn: end_pgdn {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"hold-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&kp>, <&kp>;\n        };\n\n        tt_mouse: tt_mouse {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"tap-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&mo>, <&td_mouse>;\n        };\n\n        td_mouse: td_mouse {\n            compatible = \"zmk,behavior-tap-dance\";\n            #binding-cells = <0>;\n            tapping-term-ms = <250>;\n            bindings = <&none>, <&none>, <&none>, <&none>, <&tog 2>;\n        };\n    };\n};"
+  "Custom": "// Mouse keys: ZMK's defaults (600 counts/s, linear ramp over 300 ms)\n// crossed several displays too slowly. Reach 3200 counts/s over 350 ms\n// on a quadratic ramp: short presses stay about as fine as before, and\n// a held key moves about 5.3 times as fast.\n#undef ZMK_POINTING_DEFAULT_MOVE_VAL\n#define ZMK_POINTING_DEFAULT_MOVE_VAL 3200\n\n&mmv {\n    time-to-max-speed-ms = <350>;\n    acceleration-exponent = <2>;\n};\n\n/ {\n    behaviors {\n        tt_mouse: tt_mouse {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"tap-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&mo>, <&td_mouse>;\n        };\n\n        td_mouse: td_mouse {\n            compatible = \"zmk,behavior-tap-dance\";\n            #binding-cells = <0>;\n            tapping-term-ms = <250>;\n            bindings = <&none>, <&none>, <&none>, <&none>, <&tog 2>;\n        };\n    };\n};"
 }
