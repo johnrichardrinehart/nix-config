@@ -66,11 +66,15 @@ let
 
   inherit (pkgs.dev.johnrinehart)
     brightness-notify
-    input-toggle-notify
     keyboard-brightness-notify
-    monitor-power-notify
     volume-notify
     ;
+  input-toggle-notify = pkgs.dev.johnrinehart.input-toggle-notify.override {
+    niri = config.programs.niri.package;
+  };
+  monitor-power-notify = pkgs.dev.johnrinehart.monitor-power-notify.override {
+    niri = config.programs.niri.package;
+  };
 
   niri-cycle-display-mode = pkgs.dev.johnrinehart.niri-cycle-display-mode.override {
     niri = config.programs.niri.package;
@@ -245,7 +249,9 @@ in
     };
 
     # nixpkgs' niri with the downstream patches above and pinned Smithay sources.
-    programs.niri.package = niriPatched;
+    # Every niri consumer here and in home-manager reads this option, so a
+    # host that sets programs.niri.package swaps the build everywhere.
+    programs.niri.package = lib.mkDefault niriPatched;
 
     users.users.${primaryUser}.extraGroups = [ "seat" ];
 

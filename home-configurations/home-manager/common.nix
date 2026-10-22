@@ -294,7 +294,7 @@ in
         (pkgs.replaceVars ./hypridle.conf {
           lock_command = lib.getExe pkgs.hyprlock;
           loginctl = lib.getExe' pkgs.systemd "loginctl";
-          monitor_off = "${lib.getExe pkgs.niri} msg action power-off-monitors";
+          monitor_off = "${lib.getExe osConfig.programs.niri.package} msg action power-off-monitors";
           notify_send = lib.getExe' pkgs.libnotify "notify-send";
           on_idle = lib.getExe onIdlePackage;
           on_long_idle = lib.getExe onLongIdlePackage;
