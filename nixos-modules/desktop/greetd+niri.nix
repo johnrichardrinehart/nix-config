@@ -240,6 +240,9 @@ in
       NIXOS_OZONE_WL = "1";
       XCURSOR_THEME = xcursorTheme;
       XCURSOR_SIZE = toString xcursorSize;
+      # Qt apps (KeePassXC, OBS) otherwise draw their own file dialog instead
+      # of asking the portal below. qtbase ships this platform theme plugin.
+      QT_QPA_PLATFORMTHEME = "xdgdesktopportal";
     };
 
     programs.niri.enable = true;
@@ -250,6 +253,10 @@ in
       extraPortals = [ pkgs.xdg-desktop-portal-gnome ];
       config.niri."org.freedesktop.impl.portal.FileChooser" = "gnome";
     };
+
+    # kitty's entry claims inode/directory, and with no default set it wins,
+    # so "open containing folder" opened a terminal.
+    xdg.mime.defaultApplications."inode/directory" = "org.gnome.Nautilus.desktop";
 
     # nixpkgs' niri with the downstream patches above and pinned Smithay sources.
     # Every niri consumer here and in home-manager reads this option, so a
