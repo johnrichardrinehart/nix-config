@@ -29,6 +29,9 @@
       precision = "FP16";
     };
   },
+  # Intra-op threads per ORT CPU session (five sessions). Set from the
+  # voice-dictation module's cpuThreads option; README explains tuning.
+  cpuThreads ? 4,
 }:
 let
   version = "0.1.6";
@@ -217,13 +220,15 @@ stdenv.mkDerivation {
         return opts;
       };
 
-      // Build plain ORT CPU SessionOptions.
+      // Build plain ORT CPU SessionOptions with a bounded, non-spinning pool.
       [[maybe_unused]] auto make_cpu_options = [this]() -> OrtSessionOptions * {
         OrtSessionOptions *opts = nullptr;
         if (ort_api->CreateSessionOptions(&opts) != nullptr || opts == nullptr) return nullptr;
-        OrtStatus *graph_opt_status = ort_api->SetSessionGraphOptimizationLevel(opts, ORT_ENABLE_ALL);
-        if (graph_opt_status != nullptr) {
-          LOG_ORT_ERROR(ort_api, graph_opt_status);
+        OrtStatus *st = ort_api->SetSessionGraphOptimizationLevel(opts, ORT_ENABLE_ALL);
+        if (st == nullptr) st = ort_api->SetIntraOpNumThreads(opts, ${toString cpuThreads});
+        if (st == nullptr) st = ort_api->AddSessionConfigEntry(opts, "session.intra_op.allow_spinning", "0");
+        if (st != nullptr) {
+          LOG_ORT_ERROR(ort_api, st);
           ort_api->ReleaseSessionOptions(opts);
           return nullptr;
         }

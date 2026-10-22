@@ -235,6 +235,51 @@ no runtime service override is needed. After switching, use the normal
 RightCtrl leader and “start dictation” command to check first-text latency.
 Leader-key monitoring also survives USB and Bluetooth keyboard reconnects;
 there is no need to restart the service after changing keyboards.
+The model only hears audio while RightCtrl is held (plus its grace period and
+a 1 s pre-roll) or while dictating, so speech from a TV or call does not run
+inference in the background.
+
+### Tuning dictation CPU threads
+
+`dev.johnrinehart.voice-dictation.cpuThreads` sets the intra-op thread count
+of each ONNX Runtime CPU session. The streaming model has five sessions, so a
+value of N starts about 5×(N−1) worker threads. Pools sleep instead of
+busy-spinning. ONNX Runtime's default (one pool per session sized to every
+core, spinning) used 116 threads and about 12 cores to transcribe one speaker.
+The best value depends on core count, memory bandwidth, and what shares the
+machine, so measure it on each host:
+
+1. Build `libmoonshine` once per candidate value (`cpuThreads = N` in an
+   override) and load each build through the `moonshine_voice` bindings.
+2. Replay a speech WAV (Moonshine's `test-assets/two_cities.wav`, 44 s,
+   resampled to 16 kHz) as the daemon does: add 100 ms chunks at real-time
+   pace and call `update_transcription()` after each one. Use the daemon's
+   `Transcriber` options.
+3. Record the time each `update_transcription()` call takes (its 95th
+   percentile and maximum), whether the replay falls behind real time, and the
+   process CPU time divided by the audio length (cores used).
+4. Repeat with the GPU busy. On `framework-13-pro` the load was `llama-bench`
+   (llama.cpp Vulkan, Qwen2.5-Coder-7B Q4_K_M, `-ngl 99 -p 2048 -n 256`).
+5. Confirm the transcript is the same for every value, then pick the smallest
+   value whose latency under load is close to the best. Also check that
+   dictation running beside `llama-bench -p 512 -n 128` does not cut the LLM's
+   tokens per second much.
+
+Results on `framework-13-pro` (Ryzen AI 9 HX 370, 12 cores / 24 threads),
+October 2026:
+
+| Threads per session | p95 pass, GPU idle | p95 pass, LLM | Max pass, LLM | Cores used, idle / LLM |
+|---|---|---|---|---|
+| ORT default (spinning) | 289 ms | 476 ms | 914 ms | 12.3 / 19.3 |
+| 1 | 323 ms | 622 ms | 1460 ms, fell 2.7 s behind | 0.5 / 1.0 |
+| 2 | 204 ms | 373 ms | 840 ms | 0.6 / 1.1 |
+| 4 | 136 ms | 259 ms | 599 ms | 0.8 / 1.5 |
+| 8 | 148 ms | 234 ms | 548 ms | 1.4 / 2.1 |
+
+Four threads was the choice: under load, 8 threads were only about 10% faster
+and used about 40% more CPU. With dictation running, llama.cpp generated
+14.9 tokens/s at four threads and 12.7 tokens/s with ORT's defaults,
+against 16.9 tokens/s with no dictation.
 
 ## Framework 13 Pro (netboot)
 

@@ -10,6 +10,7 @@ import queue
 import asyncio
 import struct
 import select
+from collections import deque
 from contextlib import nullcontext
 
 import evdev
@@ -797,6 +798,11 @@ _MAX_UPDATE_BATCH_CHUNKS = int(_MAX_UPDATE_BATCH_SECONDS / _CHUNK_SECONDS)
 audio_q = queue.Queue(maxsize=_MAX_QUEUE_CHUNKS)
 _dropped_audio = 0
 _last_drop_log = 0.0
+# Audio kept while the model is idle, so the start phrase is not clipped when
+# the leader key is pressed a beat after speech begins.
+_PREROLL_SECONDS = 1.0
+_preroll = deque(maxlen=int(_PREROLL_SECONDS / _CHUNK_SECONDS))
+_transcribing = True
 
 
 def _enqueue_audio(samples):
@@ -866,6 +872,28 @@ def _pulse_reader():
     _restart_daemon("PulseAudio capture ended")
 
 
+def _sync_transcription_gate():
+    # The start phrase only counts with the leader held, so audio heard outside
+    # the leader window and outside dictation can never produce output. Keep it
+    # out of the model: otherwise any speech in the room (TV, calls) runs full
+    # inference continuously just to be thrown away by _check_trigger.
+    global _transcribing
+    wanted = _dictating or _leader_allows_start()
+    if wanted == _transcribing:
+        return wanted
+    _transcribing = wanted
+    if wanted:
+        for chunk in _preroll:
+            stream.add_audio(chunk.tolist(), SAMPLE_RATE)
+        _preroll.clear()
+    else:
+        # Finalize the open segment and reset, so the next window does not
+        # splice discontiguous audio onto it.
+        stream.stop()
+        stream.start()
+    return wanted
+
+
 stream = transcriber.get_default_stream()
 
 if AUDIO_BACKEND == "pulse":
@@ -898,6 +926,7 @@ with capture_context:
                 notify_close()
                 notify_msg("Aborted", timeout=2000, urgency="low")
                 continue
+            transcribing = _sync_transcription_gate()
             got_audio = False
             chunks_added = 0
             while True:
@@ -912,11 +941,14 @@ with capture_context:
                     continue
                 try:
                     chunk = audio_q.get_nowait()
-                    stream.add_audio(chunk.tolist(), SAMPLE_RATE)
-                    got_audio = True
-                    chunks_added += 1
                 except queue.Empty:
                     break
+                chunks_added += 1
+                if transcribing:
+                    stream.add_audio(chunk.tolist(), SAMPLE_RATE)
+                    got_audio = True
+                else:
+                    _preroll.append(chunk)
             if got_audio:
                 stream.update_transcription()
             else:

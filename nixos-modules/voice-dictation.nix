@@ -84,6 +84,19 @@ in
       };
     };
 
+    cpuThreads = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 4;
+      example = 8;
+      description = ''
+        Intra-op threads for each ONNX Runtime CPU session (the streaming
+        model has five). Pools never busy-spin. Only applies to models on the
+        "cpu" execution provider. The best value depends on the CPU and on
+        what else shares it; see "Tuning dictation CPU threads" in the README
+        for how to measure it.
+      '';
+    };
+
     modelSource = lib.mkOption {
       type = pathOrPackage;
       default = pkgs.dev.johnrinehart.moonshine-models-source;
@@ -169,8 +182,9 @@ in
       example = "KEY_SPACE";
       description = ''
         Linux evdev key name that must be held while saying startPhrase. This
-        does not apply to stopPhrase. Set null to allow the start phrase without
-        a keyboard leader.
+        does not apply to stopPhrase. Outside the leader window and dictation,
+        audio is not fed to the model. Set null to allow the start phrase
+        without a keyboard leader; the model then transcribes all audio.
       '';
     };
 
@@ -210,7 +224,7 @@ in
         moonshineVoice = pkgs.dev.johnrinehart.moonshine-voice.override {
           libmoonshine = pkgs.dev.johnrinehart.libmoonshine.override {
             onnxruntime = onnxruntimePackage;
-            inherit (cfg) executionProviders;
+            inherit (cfg) executionProviders cpuThreads;
           };
         };
       };

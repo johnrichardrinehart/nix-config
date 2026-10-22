@@ -83,6 +83,9 @@
     audio.provider = "cpu";
     decoder.provider = "cpu";
   };
+  # Measured on the HX 370 with and without llama.cpp loading the 890M:
+  # README "Tuning dictation CPU threads".
+  dev.johnrinehart.voice-dictation.cpuThreads = 4;
 
   # As on the mbp-apple-silicon guest: omp comes from llm-agents.nix, which
   # numtide prebuilds; without the cache every new version builds locally.
