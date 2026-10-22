@@ -84,6 +84,11 @@ in
       package = displaySeams;
       launchdLabel = "org.nix-community.home.display-seams";
     };
+    # Its Bluetooth grant follows the signature too.
+    mighty-mitts = {
+      package = inputs.self.packages.aarch64-darwin.mighty-mitts;
+      launchdLabel = "org.nix-community.home.mighty-mitts";
+    };
   };
 
   dev.johnrinehart.provisionMac.summary.shotedit = "${shotedit.meta.mainProgram} (${shoteditBin})";
@@ -282,7 +287,10 @@ in
     # to back up on every switch; replace the previous backup instead of
     # stopping at mv's prompt (the old backup is read-only, a store copy).
     overwriteBackup = true;
-    extraSpecialArgs = { inherit inputs shoteditBin displaySeamsBin; };
+    extraSpecialArgs = {
+      inherit inputs shoteditBin displaySeamsBin;
+      mightyMittsBin = config.dev.johnrinehart.mbp-host.signedCopies.mighty-mitts.path;
+    };
     users.${user} = ./home.nix;
   };
 }

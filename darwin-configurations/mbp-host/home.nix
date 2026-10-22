@@ -7,6 +7,7 @@
   # Signed copies outside the store (default.nix), installed by provision-mac.
   shoteditBin,
   displaySeamsBin,
+  mightyMittsBin,
   ...
 }:
 let
@@ -227,6 +228,18 @@ in
         KeepAlive = true;
         ProcessType = "Interactive";
         StandardErrorPath = "/tmp/display-seams.log";
+      };
+    };
+
+    # Menu bar battery levels of both SliceMK halves (packages/mighty-mitts).
+    launchd.agents.mighty-mitts = {
+      enable = true;
+      config = {
+        ProgramArguments = [ mightyMittsBin ];
+        RunAtLoad = true;
+        KeepAlive = true;
+        ProcessType = "Interactive";
+        StandardErrorPath = "/tmp/mighty-mitts.log";
       };
     };
 

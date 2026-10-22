@@ -36,8 +36,8 @@ with nix-darwin and Home Manager from `darwin-configurations/mbp-host`: shell
 Git and SSH identity, Terminal.app's "Clear Dark" profile, the FiraMono Nerd
 Font, macOS defaults (Dock placement, input sources, scrolling, appearance), Karabiner
 and spicy config, the VM share table, `shotedit` (Cmd+Shift+4 straight into
-the screenshot editor), `display-seams` (below), and the GUI apps
-Karabiner-Elements and KeePassXC.
+the screenshot editor), `display-seams` (below), Mighty Mitts (below), and
+the GUI apps Karabiner-Elements and KeePassXC.
 
 `display-seams` is a launch agent that removes the walls between displays of
 different sizes. macOS only lets the pointer cross where two edges overlap in
@@ -54,12 +54,18 @@ below).
 Until then it warps the pointer instead, which leaves it frozen for about a
 quarter of a second after each jump.
 
+Mighty Mitts (`packages/mighty-mitts`, built from source) is a launch agent
+showing the battery level of each SliceMK half in the menu bar, read from the
+keyboard's two Battery Services. Pick the keyboard from its menu after each
+start; it does not remember the choice. Its first start asks for Bluetooth
+access; as a signed copy (below), the grant carries over to later builds.
+
 The VM launcher's SPICE viewer is `Spicy.app`, which Home Manager copies into
 `~/Applications/Home Manager Apps`; the launcher runs that copy when it matches
 its own build. As a bundled app it keeps its Dock and app-switcher entry across
 Dock restarts, and "Keep in Dock" pins a path that survives rebuilds.
 
-`secretspec`, `shotedit` and `display-seams` run from copies of their Nix
+`secretspec`, `shotedit`, `display-seams` and `mighty-mitts` run from copies of their Nix
 builds that `provision-mac` signs with a self-signed code-signing
 certificate: `~/.local/libexec/<name>` for the launch agents,
 `~/.local/bin/secretspec` (linked onto PATH) for the command
