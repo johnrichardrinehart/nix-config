@@ -39,6 +39,11 @@
             # disko asks for the passphrase twice, on standard input, when it
             # formats the partition.
             askPassword = true;
+            # The endpoint security baseline asks for LUKS2 by name.
+            extraFormatArgs = [
+              "--type"
+              "luks2"
+            ];
             settings = {
               allowDiscards = true;
               bypassWorkqueues = true;

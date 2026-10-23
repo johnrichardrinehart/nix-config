@@ -350,13 +350,62 @@ formatted with `fast_commit`, for the many small reads, writes and fsyncs of
 reaches the drive through LUKS (`allowDiscards`) in fstrim's weekly batches,
 and `bypassWorkqueues` skips dm-crypt's queues, which only add latency on
 NVMe. The installed system unlocks LUKS in stage 1 and boots with
-systemd-boot.
+lanzaboote's signed systemd-boot (see "Endpoint security").
+
+### Endpoint security
+
+The installed system, and not the netbooted one, imports
+`nixos-configurations/framework-13-pro/endpoint-security.nix`. That module
+sets this baseline:
+
+- Secure Boot with lanzaboote and keys that the machine makes for itself.
+  The boot menu editor is off.
+- The kernel arguments `iommu.passthrough=0` and `iommu.strict=1`, so that
+  device DMA always goes through the IOMMU.
+- USBGuard. It blocks each USB device, also the devices that are present at
+  boot, unless a rule allows it. The module allows only devices on ports that
+  ACPI marks hardwired.
+- An assertion that the root file system is on LUKS. disko formats it as
+  LUKS2.
+- An assertion that the firewall is on. The NixOS firewall drops all inbound
+  traffic that no rule opens.
+- A desktop lock after 5 minutes of idle time
+  (`dev.johnrinehart.endpointSecurity.screenLockSeconds`).
+- An assertion that Tailscale is on.
+
+A downstream (work) flake supplies the values that identify the
+organisation. These values include its monitoring agents, the Tailscale
+settings, the USBGuard rules for other devices and the location of the
+recovery keys.
+
+Do these steps by hand after `install-to-disk`:
+
+1. In the BIOS, erase the Secure Boot keys. This puts the firmware in Setup
+   Mode.
+2. Boot the disk. The first boot creates the keys in `/var/lib/sbctl`,
+   signs the ESP and reboots. systemd-boot then enrolls the keys, with
+   Microsoft's keys, and the firmware enforces Secure Boot.
+3. Make sure that `sbctl status` shows "Secure Boot: Enabled".
+4. Copy the keys in `/var/lib/sbctl` to the key store of the organisation.
+5. Add a recovery key to LUKS with
+   `sudo systemd-cryptenroll --recovery-key /dev/nvme0n1p2`. Keep the key
+   where the organisation tells you to keep it.
+6. Set a supervisor password in the BIOS. Without it, a person at the
+   keyboard can turn off Secure Boot.
+7. Make sure that
+   `cat /sys/bus/thunderbolt/devices/domain*/iommu_dma_protection` shows
+   `1`. This value shows that the firmware supplies DMA protection.
+8. Change the account password. The first password is `john`.
+
+After a reinstall, do step 1 again or restore the earlier keys to
+`/var/lib/sbctl` before the first boot.
 
 ### Firmware settings
 
 BIOS 4.02 or later (the Pro chassis's touchpad, touch panel and battery need
 it). In the BIOS: Boot > Network Stack enabled, Secure Boot disabled (iPXE is
-not signed). The firmware PXE boots through its Realtek USB UNDI driver:
+not signed; the installed system turns it back on, see "Endpoint security").
+The firmware PXE boots through its Realtek USB UNDI driver:
 the WisdPi card ("network media not present") and ASIX dongles do not work;
 an RTL8153/RTL8156 dongle or Framework's 2.5G card does. The iPXE script
 runs `ifclose` before `boot`: with the firmware's network driver still open,
