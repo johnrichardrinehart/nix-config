@@ -69,8 +69,9 @@ in
 
     # USB devices are blocked unless a rule allows them, including those
     # plugged in before boot. The built-in keyboard (i8042) and touchpad
-    # (I2C) are not USB. The built-in USB devices (Bluetooth, camera,
-    # fingerprint reader) sit on ports that ACPI marks hardwired; every
+    # (I2C) are not USB. The built-in USB devices sit on ports that ACPI
+    # marks "hardwired" (camera, Bluetooth) or "not used" (fingerprint
+    # reader); the expansion card slots are "hotplug", so every card and
     # other device needs a rule downstream (`usbguard generate-policy` prints
     # them). Rules are read-only: `usbguard allow-device` lasts until reboot.
     services.usbguard = {
@@ -80,6 +81,7 @@ in
       insertedDevicePolicy = "apply-policy";
       rules = ''
         allow with-connect-type "hardwired"
+        allow with-connect-type "not used"
       '';
     };
 
