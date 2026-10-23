@@ -220,6 +220,9 @@ layout {
         // bottom 64
 
     }
+    // Let the awww wallpaper (placed in the backdrop below) show through
+    // around workspaces in the overview.
+    background-color "transparent"
 }
 // Add lines like this to spawn processes at startup.
 // Note that running niri as a session supports xdg-desktop-autostart,
@@ -291,6 +294,21 @@ block-out-from "screen-capture"
 /-window-rule {
 geometry-corner-radius 12
 clip-to-geometry true
+}
+// Put the awww wallpaper in the backdrop so it stays put behind the
+// zoomed-out workspaces in the overview.
+layer-rule {
+    match namespace="^awww-daemon$"
+    place-within-backdrop true
+}
+overview {
+    // Outline each workspace so it stands out against the wallpaper.
+    workspace-shadow {
+        softness 0
+        spread 5
+        offset x=0 y=0
+        color "#777777"
+    }
 }
 binds {
     // Keys consist of modifiers separated by + signs, followed by an XKB key name
