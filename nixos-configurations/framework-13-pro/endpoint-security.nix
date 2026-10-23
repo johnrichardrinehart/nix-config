@@ -69,20 +69,23 @@ in
 
     # USB devices are blocked unless a rule allows them, including those
     # plugged in before boot. The built-in keyboard (i8042) and touchpad
-    # (I2C) are not USB. The built-in USB devices sit on ports that ACPI
-    # marks "hardwired" (camera, Bluetooth) or "not used" (fingerprint
-    # reader); the expansion card slots are "hotplug", so every card and
-    # other device needs a rule downstream (`usbguard generate-policy` prints
-    # them). Rules are read-only: `usbguard allow-device` lasts until reboot.
+    # (I2C) are not USB. The expansion card slots are "hotplug" ports, so
+    # every card and other device needs a rule downstream
+    # (`usbguard generate-policy` prints them). Rules are read-only:
+    # `usbguard allow-device` lasts until reboot.
     services.usbguard = {
       enable = true;
       implicitPolicyTarget = "block";
       presentDevicePolicy = "apply-policy";
       insertedDevicePolicy = "apply-policy";
-      rules = ''
-        allow with-connect-type "hardwired"
-        allow with-connect-type "not used"
-      '';
+      rules = lib.concatLines [
+        # Built-in devices on ports that ACPI marks "hardwired": the webcam
+        # module and the MT7925's Bluetooth radio.
+        ''allow with-connect-type "hardwired"''
+        # Built-in devices on ports that ACPI marks "not used": the
+        # fingerprint reader in the power button.
+        ''allow with-connect-type "not used"''
+      ];
     };
 
     # The desktop module's 300 s would lock at 305 s.
