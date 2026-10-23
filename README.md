@@ -182,7 +182,7 @@ Do not hold Fn or clear Bluetooth profiles during the update.
 
 `packages/slicemk-update/keyboard.json` contains the dongleless configuration.
 `packages/slicemk-update/dongle.json` contains the separate dongle configuration.
-Both configurations use native Dvorak, plain Tab, and three Bluetooth host profiles.
+Both configurations use native Dvorak, plain Tab, and six Bluetooth host profiles.
 The mouse layer moves the pointer at up to 3200 counts per second.
 It reaches that speed on a quadratic ramp over 350 ms, so short presses stay precise.
 Hold the mouse layer key (the lower tall key in the left inner column) and tap ↑ or ↓ for volume up or down.
@@ -192,6 +192,7 @@ The inner column of small keys in the right thumb cluster selects the profiles.
 The top key selects profile 0 for the work machine.
 The middle key selects profile 1 for Framie.
 The bottom key selects profile 2 for the phone.
+Hold Shift and tap one of these keys to select the profile three higher: profile 3, 4, or 5.
 Hold Fn and tap the middle key to toggle the QWERTY overlay.
 The separate Caps Lock key remains available.
 On the right half, the key immediately right of L sends `/`.
