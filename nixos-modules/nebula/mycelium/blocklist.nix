@@ -11,7 +11,8 @@
   # Its private key was shredded on the lighthouse; blocklisted in case a copy
   # survives elsewhere.
   "b7f47c14215f37116e4e674fe3a9014afc756e53e4b62edf3c835f9177754740"
-  # `work-guest-nixos-vm` (10.77.0.3, no groups), replaced on 2026-09-28 by a
-  # `peer` certificate at 10.77.0.4. It duplicated pixel-9-pro-xl's address.
+  # The work guest's first certificate (10.77.0.3, no groups), replaced on
+  # 2026-09-28 by a `peer` certificate at 10.77.0.4. It duplicated
+  # pixel-9-pro-xl's address.
   "9fac0b4610c3008b29b7d0dc9f7438807097cd02ea96c99903caeb66ff990f1c"
 ]
