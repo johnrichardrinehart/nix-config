@@ -33,9 +33,35 @@ in
         fails when the idle settings lock later than this.
       '';
     };
+
+    rootHashedPassword = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "[$].+");
+      default = null;
+      example = "$y$j9T$...";
+      description = ''
+        crypt(3) hash of root's password, which every activation writes
+        back to /etc/shadow, so a `passwd` as root lasts only until the next
+        boot or switch. `null` locks root. The hash goes into the world-
+        readable Nix store. The primary user's password stays mutable: set
+        at account creation, then changed with `passwd`.
+      '';
+    };
   };
 
   config = {
+    # users.mutableUsers keeps every existing /etc/shadow entry, root's
+    # included, whatever users.users.root declares; the primary user needs
+    # that to change their own password. So root's entry is enforced here,
+    # after the users activation step.
+    system.activationScripts.rootPassword = {
+      deps = [ "users" ];
+      text = ''
+        ${lib.getExe' pkgs.shadow "usermod"} -p ${
+          lib.escapeShellArg (if cfg.rootHashedPassword == null then "!" else cfg.rootHashedPassword)
+        } root
+      '';
+    };
+
     # Secure Boot with our own keys (lanzaboote). The first boot after
     # `install-to-disk` runs unsigned, creates the keys in /var/lib/sbctl,
     # signs the ESP, puts the key enrollment files on it and reboots;
@@ -94,6 +120,20 @@ in
     );
 
     assertions = [
+      {
+        assertion =
+          config.users.mutableUsers
+          && lib.all (o: config.users.users.${primaryUser}.${o} == null) [
+            "hashedPassword"
+            "hashedPasswordFile"
+            "password"
+          ];
+        message = ''
+          The endpoint security baseline keeps ${primaryUser}'s password
+          mutable: users.mutableUsers must stay on, with no fixed password
+          for ${primaryUser}.
+        '';
+      }
       # Inbound default-deny: NixOS's firewall drops what no rule opens.
       {
         assertion = config.networking.firewall.enable;
