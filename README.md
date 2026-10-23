@@ -382,10 +382,14 @@ Do these steps by hand after `install-to-disk`:
 
 1. In the BIOS, erase the Secure Boot keys. This puts the firmware in Setup
    Mode.
-2. Boot the disk. The first boot creates the keys in `/var/lib/sbctl`,
-   signs the ESP and reboots. systemd-boot then enrolls the keys, with
-   Microsoft's keys, and the firmware enforces Secure Boot.
-3. Make sure that `sbctl status` shows "Secure Boot: Enabled".
+2. Boot the disk with Secure Boot off. The first boot creates the keys in
+   `/var/lib/sbctl`. If the firmware is in Setup Mode, it also signs the ESP,
+   stages the keys there and reboots; systemd-boot then enrolls the keys,
+   with Microsoft's keys. If the firmware is not in Setup Mode, it does not
+   reboot: `journalctl -u prepare-sb-auto-enroll` says so. Do step 1 and
+   boot again.
+3. Turn on Secure Boot in the BIOS. Make sure that `sbctl status` shows
+   "Secure Boot: Enabled".
 4. Copy the keys in `/var/lib/sbctl` to the key store of the organisation.
 5. Add a recovery key to LUKS with
    `sudo systemd-cryptenroll --recovery-key /dev/nvme0n1p2`. Keep the key

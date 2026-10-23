@@ -74,14 +74,32 @@ in
       pkiBundle = "/var/lib/sbctl";
       configurationLimit = 20;
       autoGenerateKeys.enable = true;
-      autoEnrollKeys = {
-        enable = true;
-        autoReboot = true;
-      };
+      # Rebooting is done below, only after the keys were staged.
+      autoEnrollKeys.enable = true;
       # No kernel command line edits at the boot menu (init=/bin/sh).
       settings.editor = false;
     };
     environment.systemPackages = [ pkgs.sbctl ];
+
+    # systemd-boot enrolls the staged keys only while the firmware is in
+    # Setup Mode. Out of it, staging them and rebooting achieves nothing, and
+    # leaves the ESP signed with keys the firmware rejects once Secure Boot
+    # is turned on. So stage only in Setup Mode; otherwise skip, and try
+    # again on the next boot. The reboot is an ExecStartPost, which runs only
+    # when staging ran and succeeded: lanzaboote's autoReboot is a
+    # SuccessAction, which a unit skipped by ExecCondition can still trigger.
+    systemd.services.prepare-sb-auto-enroll.serviceConfig = {
+      ExecCondition = pkgs.writeShellScript "require-setup-mode" ''
+        var=/sys/firmware/efi/efivars/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c
+        if [ -r "$var" ] && [ "$(${lib.getExe' pkgs.coreutils "od"} -An -tu1 -j4 -N1 "$var" | ${lib.getExe' pkgs.coreutils "tr"} -d ' ')" = 1 ]; then
+          exit 0
+        fi
+        echo "The firmware is not in Setup Mode: not staging Secure Boot keys and not rebooting." \
+          "Erase the Secure Boot keys in the BIOS, then boot again." >&2
+        exit 1
+      '';
+      ExecStartPost = "${config.systemd.package}/bin/systemctl --no-block reboot";
+    };
 
     # DMA from devices goes through the IOMMU, translated, with the IOTLB
     # flushed before a page is reused. External Thunderbolt/USB4 devices are
