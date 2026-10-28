@@ -22,7 +22,7 @@ stdenv.mkDerivation {
   # With more than one source file, only main.swift may hold top-level code.
   buildPhase = ''
     runHook preBuild
-    swiftc -O Rules.swift Devices.swift Apps.swift main.swift -o keyboard-remap
+    swiftc -O Rules.swift Pause.swift Devices.swift Apps.swift main.swift -o keyboard-remap
     runHook postBuild
   '';
 

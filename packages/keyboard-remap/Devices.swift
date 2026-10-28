@@ -38,14 +38,14 @@ private final class DeviceRemapper {
   }
 
   /// Sets UserKeyMapping on every keyboard whose mapping differs from the
-  /// declared one.
+  /// declared one, or from none while paused.
   func apply() {
     for (id, service) in services()
     where IOHIDServiceClientConformsTo(
       service, UInt32(kHIDPage_GenericDesktop), UInt32(kHIDUsage_GD_Keyboard)) != 0
     {
       let property = { (key: String) in IOHIDServiceClientCopyProperty(service, key as CFString) as Any? }
-      let want = userKeyMapping(remaps, property)
+      let want = isPaused ? [] : userKeyMapping(remaps, property)
       let have =
         (property(userKeyMappingKey) as? [[String: NSNumber]])?.map { $0.mapValues(\.uint64Value) } ?? []
       if have == want { continue }
@@ -122,6 +122,12 @@ func runDevices(_ remaps: [DeviceRemap]) -> Never {
     exit(1)
   }
   CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+
+  // The menu bar item or `keyboard-remap pause|resume`.
+  onPauseChange {
+    log(isPaused ? "paused" : "resumed")
+    remapper.apply()
+  }
 
   remapper.apply()
   CFRunLoopRun()

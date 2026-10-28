@@ -48,9 +48,13 @@ no driver extension, so device management cannot block it. It has two parts:
   before all other software, so the remap also works at the login window and
   in password fields. The daemon sets the mapping again when a keyboard
   connects and when a user logs in. It logs to `/var/log/keyboard-remap.log`.
-- A launch agent swallows keys while a specified app is frontmost. It uses a
-  session event tap, which needs Accessibility. It logs to
-  `/tmp/keyboard-remap.log`.
+- A launch agent shows a keyboard item in the menu bar. Its menu pauses and
+  resumes all remapping, for example while another person uses the Mac. The
+  item is dimmed while remapping is paused. `keyboard-remap pause`,
+  `keyboard-remap resume` and `keyboard-remap status` do the same in a shell.
+  A restart resumes remapping. The agent also swallows keys while a
+  specified app is frontmost. For this it uses a session event tap, which
+  needs Accessibility. It logs to `/tmp/keyboard-remap.log`.
 
 `darwin-configurations/mbp-host/keyboard.nix` declares the rules. The
 built-in keyboard types Dvorak, and Cmd+H does not hide the QEMU cocoa

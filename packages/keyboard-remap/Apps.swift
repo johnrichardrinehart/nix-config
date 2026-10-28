@@ -1,4 +1,5 @@
-// `keyboard-remap apps`: swallows keys while a given app is frontmost.
+// `keyboard-remap apps`: the menu bar item that pauses and resumes all
+// remapping, and the keys swallowed while a given app is frontmost.
 //
 // A session event tap sees each key after the device remaps and before any
 // app does. Dropping events there needs Accessibility, which TCC keys to the
@@ -12,6 +13,7 @@ import Foundation
 
 private var filter: KeyFilter!
 private var tap: CFMachPort?
+private var paused = isPaused
 
 private func log(_ message: String) {
   FileHandle.standardError.write("keyboard-remap: \(message)\n".data(using: .utf8)!)
@@ -33,6 +35,9 @@ private let callback: CGEventTapCallBack = { _, type, event, _ in
   case .tapDisabledByTimeout, .tapDisabledByUserInput:
     if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
   case .keyDown, .keyUp:
+    // While paused, presses pass; a release still pairs with a press
+    // swallowed before the pause.
+    if paused && type == .keyDown { break }
     let keyCode = UInt16(truncatingIfNeeded: event.getIntegerValueField(.keyboardEventKeycode))
     if filter.drop(
       down: type == .keyDown, keyCode: keyCode, flags: event.flags.rawValue, frontmost: frontmostApp)
@@ -72,6 +77,31 @@ private func installTap() -> Bool {
   return true
 }
 
+/// Menu bar item: a keyboard symbol, dimmed while paused, with one toggle.
+private final class StatusItem: NSObject {
+  let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+  let toggle = NSMenuItem(title: "", action: #selector(flip), keyEquivalent: "")
+
+  override init() {
+    super.init()
+    item.button?.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "keyboard-remap")
+    toggle.target = self
+    let menu = NSMenu()
+    menu.addItem(toggle)
+    item.menu = menu
+    update()
+  }
+
+  @objc func flip() { setPaused(!paused) }
+
+  func update() {
+    paused = isPaused
+    item.button?.appearsDisabled = paused
+    item.button?.toolTip = paused ? "Keyboard remapping paused" : "Keyboard remapping active"
+    toggle.title = paused ? "Resume Keyboard Remapping" : "Pause Keyboard Remapping"
+  }
+}
+
 func runApps(_ rules: [AppRule]) -> Never {
   do {
     filter = try KeyFilter(rules)
@@ -80,16 +110,21 @@ func runApps(_ rules: [AppRule]) -> Never {
     exit(1)
   }
 
-  let prompt = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-  if !AXIsProcessTrustedWithOptions(prompt) {
-    log("grant Accessibility in System Settings; until then no keys are swallowed")
-  }
-  if !installTap() {
-    Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { timer in
-      if installTap() { timer.invalidate() }
+  NSApplication.shared.setActivationPolicy(.accessory)
+  let status = StatusItem()
+  onPauseChange { status.update() }
+
+  if !rules.isEmpty {
+    let prompt = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+    if !AXIsProcessTrustedWithOptions(prompt) {
+      log("grant Accessibility in System Settings; until then no keys are swallowed")
+    }
+    if !installTap() {
+      Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { timer in
+        if installTap() { timer.invalidate() }
+      }
     }
   }
-  NSApplication.shared.setActivationPolicy(.prohibited)
   NSApplication.shared.run()
   exit(0)
 }

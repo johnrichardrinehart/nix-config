@@ -4,9 +4,11 @@
 #
 # Device remaps set each matching keyboard's UserKeyMapping in the HID event
 # system from a root launch daemon: no driver and no privacy grant, and they
-# hold at the login window and in secure input fields. App rules run in a
-# per-user launch agent with a session event tap, which sees keys after the
-# device remaps and needs Accessibility.
+# hold at the login window and in secure input fields. A per-user launch
+# agent shows a menu bar item that pauses and resumes all remapping (for
+# when someone else uses the machine), and runs the app rules with a session
+# event tap, which sees keys after the device remaps and needs Accessibility.
+# `keyboard-remap pause|resume|status` does the same from a shell.
 {
   config,
   lib,
@@ -193,6 +195,9 @@ in
         message = "keyboardRemap.appRules \"${rule.description}\": ${rule.key} is a modifier key";
       }) cfg.appRules;
 
+    # `keyboard-remap pause|resume|status` from a shell.
+    environment.systemPackages = [ cfg.package ];
+
     launchd.daemons.keyboard-remap-devices = lib.mkIf (cfg.deviceRemaps != [ ]) {
       serviceConfig = {
         ProgramArguments = [
@@ -206,7 +211,8 @@ in
       };
     };
 
-    launchd.user.agents.keyboard-remap-apps = lib.mkIf (cfg.appRules != [ ]) {
+    # Always: it carries the pause item even without app rules.
+    launchd.user.agents.keyboard-remap-apps = {
       serviceConfig = {
         ProgramArguments = [
           cfg.agentProgram
