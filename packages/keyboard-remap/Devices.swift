@@ -1,12 +1,16 @@
-// `keyboard-remap devices`: keeps each keyboard's UserKeyMapping (the
-// property `hidutil property --set` writes) as the device remaps declare.
+// Device remaps: keeps each keyboard's UserKeyMapping (the property
+// `hidutil property --set` writes) as the device remaps declare.
 //
 // The HID event system applies the mapping to the keyboard's events before
-// anything else sees them, so it holds at the login window and in secure
-// input fields, and needs no driver or privacy grant. It lives in the event
-// system's service, not in the device, so it is set again whenever a
+// anything else sees them, so it holds in secure input fields and needs no
+// driver or privacy grant. Only a mapping set from within the login session
+// that uses the keyboard takes effect: one set by a launch daemon, outside
+// any session, reads back but changes nothing. So the per-user agent sets it
+// in the user's session (`keyboard-remap agent`), and an agent in the login
+// window session sets it there (`keyboard-remap devices`). It lives in the
+// event system's service, not in the device, so it is set again whenever a
 // keyboard service appears (attach, reconnect) and whenever the console user
-// changes. Run as root from launchd, so it is in place before anyone logs in.
+// changes.
 import Foundation
 import IOKit
 import IOKit.hid
@@ -85,12 +89,20 @@ private func drain(_ iterator: io_iterator_t) -> Set<UInt64> {
   return ids
 }
 
-func runDevices(_ remaps: [DeviceRemap]) -> Never {
+// Kept for the life of the process: IOKit and SystemConfiguration stop
+// notifying once these are released.
+private var notificationPort: IONotificationPortRef?
+private var consoleUserStore: SCDynamicStore?
+
+/// Applies the remaps now and on every keyboard arrival, console user change
+/// and pause switch, from the main run loop the caller runs.
+func startDeviceRemapping(_ remaps: [DeviceRemap]) {
   let remapper = DeviceRemapper(remaps)
   let context = Unmanaged.passRetained(remapper).toOpaque()
 
   // New HID services: keyboards attached or reconnected after start.
   let port = IONotificationPortCreate(kIOMainPortDefault)
+  notificationPort = port
   CFRunLoopAddSource(
     CFRunLoopGetMain(), IONotificationPortGetRunLoopSource(port).takeUnretainedValue(), .defaultMode)
   var iterator: io_iterator_t = 0
@@ -122,6 +134,7 @@ func runDevices(_ remaps: [DeviceRemap]) -> Never {
     exit(1)
   }
   CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+  consoleUserStore = store
 
   // The menu bar item or `keyboard-remap pause|resume`.
   onPauseChange {
@@ -130,6 +143,11 @@ func runDevices(_ remaps: [DeviceRemap]) -> Never {
   }
 
   remapper.apply()
+}
+
+/// `keyboard-remap devices`: device remaps alone, for the login window.
+func runDevices(_ remaps: [DeviceRemap]) -> Never {
+  startDeviceRemapping(remaps)
   CFRunLoopRun()
   exit(0)
 }

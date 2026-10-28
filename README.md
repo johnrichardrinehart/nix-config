@@ -43,12 +43,14 @@ Mighty Mitts (below), and the GUI app KeePassXC.
 `darwinModules.keyboard-remap`) remaps keys per keyboard and per app. It needs
 no driver extension, so device management cannot block it. It has two parts:
 
-- A launch daemon (root) sets the `UserKeyMapping` property of each keyboard
-  that a device remap matches. The HID event system applies this mapping
-  before all other software, so the remap also works at the login window and
-  in password fields. The daemon sets the mapping again when a keyboard
-  connects and when a user logs in. It logs to `/var/log/keyboard-remap.log`.
-- A launch agent shows a keyboard item in the menu bar. Its menu pauses and
+- Launch agents set the `UserKeyMapping` property of each keyboard that a
+  device remap matches. The HID event system applies this mapping before all
+  other software, so the remap also works in password fields. A mapping has
+  an effect only if a process in the session that uses the keyboard sets it.
+  A launch daemon outside all sessions cannot set it. Thus one agent runs at
+  the login window, and one agent runs in the user session. The agents set
+  the mapping again when a keyboard connects and when a user logs in.
+- The user agent also shows a keyboard item in the menu bar. Its menu pauses and
   resumes all remapping, for example while another person uses the Mac. The
   item is dimmed while remapping is paused. `keyboard-remap pause`,
   `keyboard-remap resume` and `keyboard-remap status` do the same in a shell.

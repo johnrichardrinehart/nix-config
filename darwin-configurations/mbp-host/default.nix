@@ -76,7 +76,7 @@ in
     };
     keyboard-remap = {
       inherit (config.dev.johnrinehart.keyboardRemap) package;
-      launchdLabel = "org.nixos.keyboard-remap-apps";
+      launchdLabel = "org.nixos.keyboard-remap-agent";
     };
     # Its Bluetooth grant follows the signature too.
     mighty-mitts = {

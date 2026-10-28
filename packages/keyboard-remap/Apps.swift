@@ -1,5 +1,6 @@
-// `keyboard-remap apps`: the menu bar item that pauses and resumes all
-// remapping, and the keys swallowed while a given app is frontmost.
+// `keyboard-remap agent`: the device remaps in the user's session, the menu
+// bar item that pauses and resumes all remapping, and the keys swallowed
+// while a given app is frontmost.
 //
 // A session event tap sees each key after the device remaps and before any
 // app does. Dropping events there needs Accessibility, which TCC keys to the
@@ -102,7 +103,8 @@ private final class StatusItem: NSObject {
   }
 }
 
-func runApps(_ rules: [AppRule]) -> Never {
+func runAgent(_ config: Config) -> Never {
+  let rules = config.apps
   do {
     filter = try KeyFilter(rules)
   } catch {
@@ -111,6 +113,7 @@ func runApps(_ rules: [AppRule]) -> Never {
   }
 
   NSApplication.shared.setActivationPolicy(.accessory)
+  startDeviceRemapping(config.devices)
   let status = StatusItem()
   onPauseChange { status.update() }
 

@@ -3,11 +3,13 @@
 # management can forbid (an MDM system-extension allow list).
 #
 # Device remaps set each matching keyboard's UserKeyMapping in the HID event
-# system from a root launch daemon: no driver and no privacy grant, and they
-# hold at the login window and in secure input fields. A per-user launch
-# agent shows a menu bar item that pauses and resumes all remapping (for
-# when someone else uses the machine), and runs the app rules with a session
-# event tap, which sees keys after the device remaps and needs Accessibility.
+# system: no driver and no privacy grant, and they hold in secure input
+# fields. Only a mapping set from within the session that uses the keyboard
+# takes effect, so a login window agent sets it there and the per-user
+# agent in the user's session. The per-user agent also shows a menu bar item
+# that pauses and resumes all remapping (for when someone else uses the
+# machine), and runs the app rules with a session event tap, which sees keys
+# after the device remaps and needs Accessibility.
 # `keyboard-remap pause|resume|status` does the same from a shell.
 {
   config,
@@ -198,25 +200,29 @@ in
     # `keyboard-remap pause|resume|status` from a shell.
     environment.systemPackages = [ cfg.package ];
 
-    launchd.daemons.keyboard-remap-devices = lib.mkIf (cfg.deviceRemaps != [ ]) {
+    # The device remaps at the login window. A mapping only takes effect when
+    # it is set from the session that uses the keyboard, so this is a launch
+    # agent of the login window session, not a daemon.
+    launchd.agents.keyboard-remap-login-window = lib.mkIf (cfg.deviceRemaps != [ ]) {
       serviceConfig = {
         ProgramArguments = [
           (lib.getExe cfg.package)
           "devices"
           "${configFile}"
         ];
+        LimitLoadToSessionType = "LoginWindow";
         RunAtLoad = true;
         KeepAlive = true;
-        StandardErrorPath = "/var/log/keyboard-remap.log";
+        StandardErrorPath = "/tmp/keyboard-remap-login-window.log";
       };
     };
 
-    # Always: it carries the pause item even without app rules.
-    launchd.user.agents.keyboard-remap-apps = {
+    # The device remaps, pause item and app rules in the user's session.
+    launchd.user.agents.keyboard-remap-agent = {
       serviceConfig = {
         ProgramArguments = [
           cfg.agentProgram
-          "apps"
+          "agent"
           "${configFile}"
         ];
         RunAtLoad = true;

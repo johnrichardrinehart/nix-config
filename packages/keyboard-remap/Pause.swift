@@ -1,8 +1,8 @@
-// The pause switch, shared by the daemon, the agent and the command line: a
+// The pause switch, shared by the agents and the command line: a
 // notifyd state value (0 = active, 1 = paused) plus a notification on each
 // change. notifyd keeps the value only while some process holds the name;
-// the daemon and the agent both do, so it survives either restarting, but
-// a reboot resumes remapping. Any local user may set it; pausing only gives
+// the agents do, so it survives one of them restarting, but a reboot
+// resumes remapping. Any local user may set it; pausing only gives
 // the keyboards their own layout back.
 import Foundation
 import notify
