@@ -100,7 +100,7 @@ in
         pkgs.dev.johnrinehart.legacy-network-configs.toIwd
       ]
       ++ lib.optionals cfg.tools.enable [
-        pkgs.impala
+        pkgs.dev.johnrinehart.impala
       ];
 
       system.activationScripts.importLegacyNetworkConfigsToIwd = lib.mkIf cfg.migrateLegacyConfigs ''

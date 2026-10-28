@@ -77,6 +77,7 @@ inputs: {
           inherit (final) niri;
         };
         fuzzel_1_15_0.fuzzel = prev.fuzzel;
+        impala.impala = prev.impala;
         kill-idle-group.onIdlePackage = johnPkgs.on-idle;
         libmoonshine = {
           diarizationModels = johnPkgs.moonshine-diarization-models;
