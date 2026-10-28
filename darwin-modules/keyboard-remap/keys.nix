@@ -1,4 +1,4 @@
-# Keys by Karabiner-Elements' key_code names: the HID usage on the
+# Keys by name: the HID usage on the
 # keyboard/keypad page (0x07), which device remaps use, and the macOS virtual
 # key code (Carbon kVK_*), which app rules use.
 let

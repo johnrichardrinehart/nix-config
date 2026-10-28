@@ -6,10 +6,8 @@
 # remap acts below macOS's input sources, so QEMU and spicy forward Dvorak
 # key codes to the guest, whose XKB layout is U.S. as well. FileVault's
 # pre-boot unlock runs before any of this and stays U.S.
-{ config, lib, ... }:
+{ config, ... }:
 let
-  user = config.system.primaryUser;
-
   dvorak = {
     hyphen = "open_bracket";
     equal_sign = "close_bracket";
@@ -47,9 +45,6 @@ let
   };
 
   qemuPath = "^/nix/store/[0-9a-df-np-sv-z]{32}-qemu-[0-9][^/]*/bin/(\\.qemu-system-aarch64-wrapped|qemu-system-aarch64)$";
-
-  karabiner = "/Library/Application Support/org.pqrs/Karabiner-Elements";
-  karabinerAgents = "${karabiner}/Karabiner-Elements Non-Privileged Agents v2.app/Contents/MacOS/Karabiner-Elements Non-Privileged Agents v2";
 in
 {
   dev.johnrinehart.keyboardRemap = {
@@ -77,20 +72,4 @@ in
       }
     ];
   };
-
-  # keyboard-remap replaces Karabiner-Elements, whose driver extension device
-  # management now denies. Remove an installation the way Karabiner's own
-  # uninstaller does: its agents are unregistered as the user, then
-  # uninstall.sh removes the apps, daemons and driver files as root.
-  system.activationScripts.postActivation.text = lib.mkAfter ''
-    if [[ -f ${lib.escapeShellArg karabiner}/uninstall.sh ]]; then
-      echo "removing Karabiner-Elements..." >&2
-      /bin/launchctl asuser "$(/usr/bin/id -u ${user})" /usr/bin/sudo -u ${user} \
-        ${lib.escapeShellArg karabinerAgents} unregister-core-agents || true
-      for daemon in Karabiner-Core-Service Karabiner-VirtualHIDDevice-Daemon; do
-        /bin/launchctl bootout "system/org.pqrs.service.daemon.$daemon" 2>/dev/null || true
-      done
-      /bin/bash ${lib.escapeShellArg karabiner}/uninstall.sh || true
-    fi
-  '';
 }

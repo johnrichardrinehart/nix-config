@@ -40,9 +40,8 @@ Font, macOS defaults (Dock placement, input sources, scrolling, appearance),
 Mighty Mitts (below), and the GUI app KeePassXC.
 
 `keyboard-remap` (`packages/keyboard-remap`, module
-`darwinModules.keyboard-remap`) does what Karabiner-Elements did on this Mac.
-Device management denies the Karabiner driver extension, and
-`keyboard-remap` needs no driver. It has two parts:
+`darwinModules.keyboard-remap`) remaps keys per keyboard and per app. It needs
+no driver extension, so device management cannot block it. It has two parts:
 
 - A launch daemon (root) sets the `UserKeyMapping` property of each keyboard
   that a device remap matches. The HID event system applies this mapping
@@ -56,7 +55,6 @@ Device management denies the Karabiner driver extension, and
 `darwin-configurations/mbp-host/keyboard.nix` declares the rules. The
 built-in keyboard types Dvorak, and Cmd+H does not hide the QEMU cocoa
 window. External keyboards with Dvorak in their firmware are not changed.
-`provision-mac` removes an installed Karabiner-Elements.
 
 `display-seams` is a launch agent that removes the walls between displays of
 different sizes. macOS only lets the pointer cross where two edges overlap in

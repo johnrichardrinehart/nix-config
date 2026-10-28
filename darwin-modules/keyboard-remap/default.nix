@@ -1,6 +1,6 @@
-# keyboard-remap (packages/keyboard-remap): Karabiner-Elements' per-device
-# remaps and app-specific key rules without its DriverKit virtual keyboard,
-# which device management can forbid (an MDM system-extension allow list).
+# keyboard-remap (packages/keyboard-remap): per-keyboard key remaps and
+# per-app key rules for macOS without a driver extension, which device
+# management can forbid (an MDM system-extension allow list).
 #
 # Device remaps set each matching keyboard's UserKeyMapping in the HID event
 # system from a root launch daemon: no driver and no privacy grant, and they
@@ -119,7 +119,7 @@ in
               example = {
                 caps_lock = "escape";
               };
-              description = "Key names (Karabiner's key_code names, keys.nix): from = to.";
+              description = "Key names (keys.nix): from = to.";
             };
           };
         }
@@ -157,7 +157,7 @@ in
             };
             key = mkOption {
               type = keyName;
-              description = "Key name (Karabiner's key_code names, keys.nix); not a modifier.";
+              description = "Key name (keys.nix); not a modifier.";
             };
             modifiers = {
               mandatory = mkOption {

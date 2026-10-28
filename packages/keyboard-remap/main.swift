@@ -1,5 +1,5 @@
-// keyboard-remap: the parts of Karabiner-Elements this Mac uses, without its
-// DriverKit virtual keyboard (which device management may forbid).
+// keyboard-remap: per-keyboard key remaps and per-app key rules for macOS,
+// without a driver extension (which device management may forbid).
 //
 //   keyboard-remap devices CONFIG   per-keyboard key remaps (root daemon)
 //   keyboard-remap apps CONFIG      keys swallowed in given apps (user agent)
