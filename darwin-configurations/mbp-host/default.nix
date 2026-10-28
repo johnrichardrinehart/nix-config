@@ -17,13 +17,14 @@
 }:
 let
   user = "john";
-  # Accessibility grants follow the code signature, so both run from signed
+  # Accessibility grants follow the code signature, so these run from signed
   # copies at fixed paths (signed-copies.nix): a grant then survives rebuilds
   # instead of leaving an entry per build behind.
   shotedit = pkgs.callPackage ../../packages/shotedit/package.nix { };
   shoteditBin = config.dev.johnrinehart.mbp-host.signedCopies.shotedit.path;
   displaySeams = pkgs.callPackage ../../packages/display-seams/package.nix { };
   displaySeamsBin = config.dev.johnrinehart.mbp-host.signedCopies.display-seams.path;
+  keyboardRemapBin = config.dev.johnrinehart.mbp-host.signedCopies.keyboard-remap.path;
 
   # Each writes its own path to ~/.local/state/<name>/trusted-binary whenever
   # it starts (or later becomes) trusted. Newer than the copy means the build
@@ -45,8 +46,10 @@ in
 {
   imports = [
     inputs.home-manager.darwinModules.home-manager
+    ../../darwin-modules/keyboard-remap
     ./apps.nix
     ./dock.nix
+    ./keyboard.nix
     ./manual-steps.nix
     ./secretspec.nix
     ./signed-copies.nix
@@ -62,19 +65,6 @@ in
     }
   ];
 
-  # Karabiner uses its system default profile at the login window, where no
-  # user's profile is loaded. Copy the user's file there, as Karabiner's own
-  # "copy to system default" does, so the built-in keyboard types Dvorak
-  # there too. FileVault's pre-boot unlock runs before Karabiner and stays
-  # U.S.
-  system.activationScripts.postActivation.text = lib.mkAfter ''
-    echo "setting Karabiner's system default profile..." >&2
-    /usr/bin/install -d -m 0755 "/Library/Application Support/org.pqrs/config"
-    /usr/bin/install -m 0644 ${
-      config.home-manager.users.${user}.xdg.configFile."karabiner/karabiner.json".source
-    } "/Library/Application Support/org.pqrs/config/karabiner.json"
-  '';
-
   dev.johnrinehart.mbp-host.signedCopies = {
     shotedit = {
       package = shotedit;
@@ -83,6 +73,10 @@ in
     display-seams = {
       package = displaySeams;
       launchdLabel = "org.nix-community.home.display-seams";
+    };
+    keyboard-remap = {
+      inherit (config.dev.johnrinehart.keyboardRemap) package;
+      launchdLabel = "org.nixos.keyboard-remap-apps";
     };
     # Its Bluetooth grant follows the signature too.
     mighty-mitts = {
@@ -117,6 +111,17 @@ in
       '';
       settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
     };
+    "keyboard-remap: Accessibility" = {
+      check = trusted "keyboard-remap" keyboardRemapBin;
+      instructions = ''
+        Allow keyboard-remap under Privacy & Security > Accessibility; add it
+        with + (Cmd+Shift+G) if it is not listed. Without it Cmd+H hides
+        QEMU's window. Signed with your certificate, the grant carries over
+        to later builds:
+          ${keyboardRemapBin}
+      '';
+      settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+    };
     # Grants for anything but the current copies (builds run straight from
     # the store, copies at earlier paths) stay listed after the program is
     # gone. tccutil cannot remove a path entry, so list them for removal by
@@ -125,8 +130,8 @@ in
       let
         stale = lib.removeSuffix "\n" ''
           { /usr/bin/tccutil list -s Accessibility |
-            grep -E '/(shotedit|display-seams)(-[0-9a-f]{8})?$' |
-            grep -vxF -e ${shoteditBin} -e ${displaySeamsBin}; } || true
+            grep -E '/(shotedit|display-seams|keyboard-remap)(-[0-9a-f]{8})?$' |
+            grep -vxF -e ${shoteditBin} -e ${displaySeamsBin} -e ${keyboardRemapBin}; } || true
         '';
       in
       {
@@ -241,8 +246,8 @@ in
         "com.apple.sound.beep.volume" = 0.0;
       };
 
-      # Keep macOS on U.S. Karabiner maps only the built-in keyboard to Dvorak,
-      # so firmware-native external keyboards pass through unchanged.
+      # Keep macOS on U.S.; keyboard.nix maps only the built-in keyboard to
+      # Dvorak, so firmware-native external keyboards pass through unchanged.
       "com.apple.HIToolbox" = {
         AppleEnabledInputSources = [
           {
@@ -283,9 +288,9 @@ in
     # Pre-existing hand-made dotfiles (~/.zshrc, ~/.gitconfig, ~/.ssh/config,
     # ...) are moved aside rather than refused on the first switch.
     backupFileExtension = "before-home-manager";
-    # Apps that rewrite a managed file (spicy, Karabiner) leave a real file
-    # to back up on every switch; replace the previous backup instead of
-    # stopping at mv's prompt (the old backup is read-only, a store copy).
+    # Apps that rewrite a managed file (spicy) leave a real file to back up
+    # on every switch; replace the previous backup instead of stopping at
+    # mv's prompt (the old backup is read-only, a store copy).
     overwriteBackup = true;
     extraSpecialArgs = {
       inherit inputs shoteditBin displaySeamsBin;

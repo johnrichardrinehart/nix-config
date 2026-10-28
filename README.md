@@ -34,10 +34,29 @@ The Apple Silicon MacBook Pro that runs the `mbp-apple-silicon` guest is managed
 with nix-darwin and Home Manager from `darwin-configurations/mbp-host`: shell
 (zsh, direnv + nix-direnv, zoxide as `j`, the NixOS hosts' oh-my-posh prompt),
 Git and SSH identity, Terminal.app's "Clear Dark" profile, the FiraMono Nerd
-Font, macOS defaults (Dock placement, input sources, scrolling, appearance), Karabiner
-and spicy config, the VM share table, `shotedit` (Cmd+Shift+4 straight into
-the screenshot editor), `display-seams` (below), Mighty Mitts (below), and
-the GUI apps Karabiner-Elements and KeePassXC.
+Font, macOS defaults (Dock placement, input sources, scrolling, appearance),
+`keyboard-remap` (below), spicy config, the VM share table, `shotedit`
+(Cmd+Shift+4 straight into the screenshot editor), `display-seams` (below),
+Mighty Mitts (below), and the GUI app KeePassXC.
+
+`keyboard-remap` (`packages/keyboard-remap`, module
+`darwinModules.keyboard-remap`) does what Karabiner-Elements did on this Mac.
+Device management denies the Karabiner driver extension, and
+`keyboard-remap` needs no driver. It has two parts:
+
+- A launch daemon (root) sets the `UserKeyMapping` property of each keyboard
+  that a device remap matches. The HID event system applies this mapping
+  before all other software, so the remap also works at the login window and
+  in password fields. The daemon sets the mapping again when a keyboard
+  connects and when a user logs in. It logs to `/var/log/keyboard-remap.log`.
+- A launch agent swallows keys while a specified app is frontmost. It uses a
+  session event tap, which needs Accessibility. It logs to
+  `/tmp/keyboard-remap.log`.
+
+`darwin-configurations/mbp-host/keyboard.nix` declares the rules. The
+built-in keyboard types Dvorak, and Cmd+H does not hide the QEMU cocoa
+window. External keyboards with Dvorak in their firmware are not changed.
+`provision-mac` removes an installed Karabiner-Elements.
 
 `display-seams` is a launch agent that removes the walls between displays of
 different sizes. macOS only lets the pointer cross where two edges overlap in
@@ -67,7 +86,7 @@ The VM launcher's SPICE viewer is `Spicy.app`, which Home Manager copies into
 its own build. As a bundled app it keeps its Dock and app-switcher entry across
 Dock restarts, and "Keep in Dock" pins a path that survives rebuilds.
 
-`secretspec`, `shotedit`, `display-seams` and `mighty-mitts` run from copies of their Nix
+`secretspec`, `shotedit`, `display-seams`, `keyboard-remap` and `mighty-mitts` run from copies of their Nix
 builds that `provision-mac` signs with a self-signed code-signing
 certificate: `~/.local/libexec/<name>` for the launch agents,
 `~/.local/bin/secretspec` (linked onto PATH) for the command
@@ -123,9 +142,8 @@ the hand-made setup it replaces (moving existing files aside as
 `*.before-nix-darwin` / `*.before-home-manager`), and activates. Run it again
 to apply later changes.
 
-Some steps macOS only accepts from the user: approving Karabiner's background
-items, driver extension, Input Monitoring and Accessibility, Accessibility for
-`shotedit` and `display-seams`, and putting the SSH keys in
+Some steps macOS only accepts from the user: Accessibility for `shotedit`,
+`display-seams` and `keyboard-remap`, and putting the SSH keys in
 place. Modules declare these under `dev.johnrinehart.provisionMac.manualSteps`
 with a check for each; after activating, `provision-mac` lists the ones still
 pending, launches the app that asks for them, and opens System Settings at

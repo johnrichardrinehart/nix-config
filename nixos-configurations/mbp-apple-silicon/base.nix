@@ -62,8 +62,9 @@
   # card0 instead. Pairs with the software-EGL patches in
   # niri-software-egl.nix (niri-wm/niri#3959 and niri-wm/niri#4614).
 
-  # input: Karabiner sends Dvorak key codes from both physical keyboards.
-  # SPICE combines them into one virtual keyboard. U.S. XKB preserves those codes.
+  # input: the Mac sends Dvorak key codes from both physical keyboards: the
+  # built-in one through keyboard-remap, the SliceMK from its firmware. SPICE
+  # combines them into one virtual keyboard. U.S. XKB preserves those codes.
   #
   # output: QEMU advertises the MacBook panel's native mode (3024x1898) to the
   # guest at scale 1, which leaves the bar, windows and text tiny. 1.5 gives a

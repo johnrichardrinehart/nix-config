@@ -14,7 +14,6 @@ let
   cfg = config.dev.johnrinehart.mbp-host;
   # One build for PATH and the activation step below.
   displayMode = pkgs.callPackage ../../packages/display-mode/package.nix { };
-  karabinerJson = (pkgs.formats.json { }).generate "karabiner.json" (import ./karabiner.nix);
 in
 {
   options.dev.johnrinehart.mbp-host.github.personalSshKey = lib.mkOption {
@@ -330,19 +329,7 @@ in
       '';
     };
 
-    # Karabiner rewrites its file on GUI edits, replacing the link with a
-    # file; `force` lets the next switch put the declared version back.
     xdg.configFile = {
-      # Keep macOS on U.S. and map only the built-in keyboard to Dvorak.
-      # Firmware-native external keyboards pass through unchanged.
-      #
-      # QEMU's cocoa window has a menu that handles Cmd+H. Swallow the
-      # physical Dvorak H key on the built-in keyboard and H on external
-      # keyboards. Spicy.app has no menu and sends Cmd+H to the guest.
-      "karabiner/karabiner.json" = {
-        source = karabinerJson;
-        force = true;
-      };
       # spicy is the SPICE viewer the VM launcher opens. The launcher runs it
       # with --no-save-settings, and it leaves an unwritable settings file
       # alone anyway, so this link stays put; `force` covers older builds.
