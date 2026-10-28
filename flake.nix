@@ -307,7 +307,10 @@
           };
         };
 
-        darwinModules.mbp-host = mbpHostModule;
+        darwinModules = {
+          keyboard-remap = ./darwin-modules/keyboard-remap;
+          mbp-host = mbpHostModule;
+        };
         darwinConfigurations.mbp-host = mbpHost;
 
         legacyPackages = pkgsBySystem;

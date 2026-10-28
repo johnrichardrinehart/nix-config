@@ -26,6 +26,9 @@ in
   ssh-session = import ./ssh-session.nix { inherit lib pkgs; };
 
 }
+// lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+  keyboard-remap = import ./keyboard-remap.nix { inherit pkgs; };
+}
 // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
   slicemk-host-bluetooth = import ../../packages/slicemk-update/host-bluetooth-check.nix {
     inherit pkgs;
