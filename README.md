@@ -47,9 +47,10 @@ no driver extension, so device management cannot block it. It has two parts:
   device remap matches. The HID event system applies this mapping before all
   other software, so the remap also works in password fields. A mapping has
   an effect only if a process in the session that uses the keyboard sets it.
-  A launch daemon outside all sessions cannot set it. Thus one agent runs at
-  the login window, and one agent runs in the user session. The agents set
-  the mapping again when a keyboard connects and when a user logs in.
+  A launch daemon outside all sessions cannot set it. Thus one agent runs in
+  the user session, and the module can run one at the login window
+  (`loginWindow`). The agents set the mapping again when a keyboard connects
+  and when a user logs in.
 - The user agent also shows a keyboard item in the menu bar. Its menu pauses and
   resumes all remapping, for example while another person uses the Mac. The
   item is dimmed while remapping is paused. `keyboard-remap pause`,
@@ -61,6 +62,15 @@ no driver extension, so device management cannot block it. It has two parts:
 `darwin-configurations/mbp-host/keyboard.nix` declares the rules. The
 built-in keyboard types Dvorak, and Cmd+H does not hide the QEMU cocoa
 window. External keyboards with Dvorak in their firmware are not changed.
+
+No remap can run before login. With FileVault, the first screen after a
+boot is the pre-boot unlock screen, and it also logs you in. This screen
+uses the input sources of the login window. Thus the login window uses
+Dvorak by default, with U.S. as the second input source.
+`provision-mac` copies them to the Preboot volume. The built-in keyboard
+types Dvorak there. For a keyboard with Dvorak in its firmware, select U.S.
+in the input menu of that screen. The login window after a logout is the
+same, so the login window agent is off on this Mac.
 
 `display-seams` is a launch agent that removes the walls between displays of
 different sizes. macOS only lets the pointer cross where two edges overlap in

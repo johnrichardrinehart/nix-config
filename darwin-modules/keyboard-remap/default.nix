@@ -75,6 +75,16 @@ in
       description = "The keyboard-remap build.";
     };
 
+    loginWindow = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Apply the device remaps at the login window too. Turn it off when the
+        login window's input source already gives those keyboards the wanted
+        layout, or they would be remapped twice there.
+      '';
+    };
+
     agentProgram = mkOption {
       type = types.str;
       default = lib.getExe cfg.package;
@@ -203,7 +213,7 @@ in
     # The device remaps at the login window. A mapping only takes effect when
     # it is set from the session that uses the keyboard, so this is a launch
     # agent of the login window session, not a daemon.
-    launchd.agents.keyboard-remap-login-window = lib.mkIf (cfg.deviceRemaps != [ ]) {
+    launchd.agents.keyboard-remap-login-window = lib.mkIf (cfg.loginWindow && cfg.deviceRemaps != [ ]) {
       serviceConfig = {
         ProgramArguments = [
           (lib.getExe cfg.package)
