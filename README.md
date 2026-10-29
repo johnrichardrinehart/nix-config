@@ -283,6 +283,11 @@ The model only hears audio while RightCtrl is held (plus its grace period and
 a 1 s pre-roll) or while dictating, so speech from a TV or call does not run
 inference in the background.
 
+The moonshine tray icon is green while dictating and red while it waits for
+the start phrase. Click the green icon to stop dictation at once. Typing stops
+even while the model is busy, and text from the open line is discarded. A click
+on the red icon does nothing.
+
 ### Tuning dictation CPU threads
 
 `dev.johnrinehart.voice-dictation.cpuThreads` sets the intra-op thread count

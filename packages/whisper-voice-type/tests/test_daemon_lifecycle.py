@@ -1,4 +1,5 @@
 import ast
+import threading
 import os
 import types
 import unittest
@@ -47,6 +48,29 @@ def load_restart_daemon(*, shutting_down=False, notification_error=None):
     return namespace["_restart_daemon"], exit_mock, exec_mock, log_mock, notify_mock
 
 
+def load_force_off(*, dictating):
+    tree = ast.parse(DAEMON_PATH.read_text(), filename=str(DAEMON_PATH))
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_force_off"
+    )
+    namespace = {
+        "_dictating": dictating,
+        "_abort_until": 0.0,
+        "_abort_pending": threading.Event(),
+        "_stop_requested": threading.Event(),
+        "_kill_wtype": mock.Mock(),
+        "log_msg": mock.Mock(),
+        "time": types.SimpleNamespace(time=lambda: 100.0),
+    }
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), str(DAEMON_PATH), "exec"),
+        namespace,
+    )
+    return namespace
+
+
 class DaemonLifecycleTests(unittest.TestCase):
     def test_restart_exits_for_service_supervisor(self):
         restart, exit_mock, exec_mock, log_mock, notify_mock = load_restart_daemon()
@@ -92,6 +116,26 @@ class DaemonLifecycleTests(unittest.TestCase):
         exec_mock.assert_not_called()
         log_mock.assert_not_called()
         notify_mock.assert_not_called()
+
+    def test_tray_click_while_idle_changes_nothing(self):
+        namespace = load_force_off(dictating=False)
+
+        namespace["_force_off"]()
+
+        self.assertFalse(namespace["_stop_requested"].is_set())
+        self.assertFalse(namespace["_abort_pending"].is_set())
+        self.assertEqual(namespace["_abort_until"], 0.0)
+        namespace["_kill_wtype"].assert_not_called()
+
+    def test_tray_click_while_dictating_stops_typing_and_requests_stop(self):
+        namespace = load_force_off(dictating=True)
+
+        namespace["_force_off"]()
+
+        self.assertTrue(namespace["_stop_requested"].is_set())
+        self.assertTrue(namespace["_abort_pending"].is_set())
+        self.assertGreater(namespace["_abort_until"], 100.0)
+        namespace["_kill_wtype"].assert_called_once_with()
 
 
 if __name__ == "__main__":

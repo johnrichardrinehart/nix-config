@@ -21,6 +21,7 @@ from dbus_next.aio import MessageBus
 from dbus_next.service import (
     ServiceInterface,
     dbus_property,
+    method as dbus_method,
     signal as dbus_signal,
     PropertyAccess,
 )
@@ -79,6 +80,8 @@ def _on_sighup(_sig, _frame):
 signal.signal(signal.SIGHUP, _on_sighup)
 
 _abort_pending = threading.Event()
+# Set with _abort_pending when the tray icon stops dictation.
+_stop_requested = threading.Event()
 _abort_until = 0.0
 _shutting_down = False
 
@@ -104,16 +107,21 @@ def _make_pixmap(color, size=22):
     return Variant("a(iiay)", [[size, size, bytes(pixels)]])
 
 
+def _tooltip(state):
+    text = "dictating: click to stop" if state == "dictating" else state
+    return Variant("(sa(iiay)ss)", ["", [], "moonshine", text])
+
+
 class StatusNotifierItem(ServiceInterface):
     def __init__(self):
         super().__init__("org.kde.StatusNotifierItem")
         self._icon_pixmap = _make_pixmap(_TRAY_COLORS["loading"])
-        self._tooltip = Variant("(sa(iiay)ss)", ["", [], "moonshine", "loading"])
+        self._tooltip = _tooltip("loading")
         self._status = "Active"
 
     def set_state(self, state):
         self._icon_pixmap = _make_pixmap(_TRAY_COLORS[state])
-        self._tooltip = Variant("(sa(iiay)ss)", ["", [], "moonshine", state])
+        self._tooltip = _tooltip(state)
         self.NewIcon()
         self.NewToolTip()
 
@@ -172,6 +180,15 @@ class StatusNotifierItem(ServiceInterface):
     @dbus_signal()
     def NewToolTip(self):
         pass
+
+    @dbus_method()
+    def Activate(self, x: "i", y: "i"):
+        # A click while the model loads cannot interrupt dictation, because
+        # dictation cannot start before _force_off exists.
+        force_off = globals().get("_force_off")
+        if force_off is not None:
+            # Killing wtype waits up to 0.2 s; keep that off the D-Bus loop.
+            threading.Thread(target=force_off, daemon=True).start()
 
 
 _sni = StatusNotifierItem()
@@ -493,6 +510,20 @@ def _restart_daemon(reason):
 
 _prev = ""
 _dictating = False
+
+
+def _force_off():
+    # Tray kill switch. Suppress typing at once, even while inference blocks
+    # the main loop; the main loop then finishes the stop. A click while not
+    # dictating does nothing.
+    global _abort_until
+    if not _dictating:
+        return
+    log_msg("tray click: stopping dictation")
+    _stop_requested.set()
+    _abort_pending.set()
+    _abort_until = time.time() + 5.0
+    _kill_wtype()
 
 
 def _phrase_re(phrase):
@@ -924,7 +955,19 @@ with capture_context:
                         break
                 _prev = ""
                 notify_close()
-                notify_msg("Aborted", timeout=2000, urgency="low")
+                if _stop_requested.is_set():
+                    _stop_requested.clear()
+                    # Typing stays suppressed by _abort_until while the open
+                    # line is finalized, so its text is not typed. A start
+                    # phrase in that line cannot restart dictation, because
+                    # dictation ends only after the reset.
+                    stream.stop()
+                    stream.start()
+                    _dictating = False
+                    _tray_set("listening")
+                    notify_msg("Dictation stopped", timeout=2000, urgency="low")
+                else:
+                    notify_msg("Aborted", timeout=2000, urgency="low")
                 continue
             transcribing = _sync_transcription_gate()
             got_audio = False
