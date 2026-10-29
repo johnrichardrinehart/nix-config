@@ -41,9 +41,10 @@ in
       description = ''
         crypt(3) hash of root's password, which every activation writes
         back to /etc/shadow, so a `passwd` as root lasts only until the next
-        boot or switch. `null` locks root. The hash goes into the world-
-        readable Nix store. The primary user's password stays mutable: set
-        at account creation, then changed with `passwd`.
+        boot or switch. The initrd's emergency shell takes the same password.
+        `null` locks root in both. The hash goes into the world-readable Nix
+        store. The primary user's password stays mutable: set at account
+        creation, then changed with `passwd`.
       '';
     };
   };
@@ -61,6 +62,12 @@ in
         } root
       '';
     };
+
+    # The initrd has its own root account, locked by default, so a failed
+    # file system check of the LUKS root left an emergency shell that no one
+    # could open. lanzaboote signs the initrd's hash into the UKI, so the
+    # hash cannot be changed without breaking Secure Boot.
+    boot.initrd.systemd.emergencyAccess = cfg.rootHashedPassword;
 
     # Secure Boot with our own keys (lanzaboote). The first boot after
     # `install-to-disk` runs unsigned, creates the keys in /var/lib/sbctl,
