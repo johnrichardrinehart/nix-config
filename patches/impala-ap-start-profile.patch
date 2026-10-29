@@ -1,0 +1,47 @@
+diff --git a/src/mode/ap.rs b/src/mode/ap.rs
+index 76267d6..870fe8f 100644
+--- a/src/mode/ap.rs
++++ b/src/mode/ap.rs
+@@ -174,8 +174,8 @@ impl AccessPoint {
+         };
+ 
+         let psk_text = match self.focused_section {
+-            APFocusedSection::PSK => Text::from("> SSID password"),
+-            _ => Text::from("  SSID password"),
++            APFocusedSection::PSK => Text::from("> SSID password (empty: iwd profile)"),
++            _ => Text::from("  SSID password (empty: iwd profile)"),
+         };
+ 
+         let ssid_msg = Paragraph::new(ssid_text)
+@@ -270,16 +270,26 @@ impl AccessPoint {
+             .await?
+             .pop()
+             .context("No AP found")?;
+-        match iwd_access_point
+-            .start(self.ssid.value(), self.psk.value())
+-            .await
+-        {
++        // An empty passphrase starts the iwd profile named by the SSID
++        // (/var/lib/iwd/ap/<SSID>.ap, iwd.ap(5)); iwd's Start needs >= 8 chars.
++        let result = if self.psk.value().is_empty() {
++            iwd_access_point
++                .start_profile(self.ssid.value())
++                .await
++                .map_err(|e| e.to_string())
++        } else {
++            iwd_access_point
++                .start(self.ssid.value(), self.psk.value())
++                .await
++                .map_err(|e| e.to_string())
++        };
++        match result {
+             Ok(()) => Notification::send(
+                 format!("AP Started\nSSID: {}", self.ssid.value()),
+                 NotificationLevel::Info,
+                 &sender,
+             )?,
+-            Err(e) => Notification::send(e.to_string(), NotificationLevel::Error, &sender.clone())?,
++            Err(e) => Notification::send(e, NotificationLevel::Error, &sender.clone())?,
+         }
+         self.ap_start
+             .store(false, std::sync::atomic::Ordering::Relaxed);
