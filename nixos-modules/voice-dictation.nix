@@ -190,7 +190,7 @@ in
 
     leaderGraceSeconds = lib.mkOption {
       type = lib.types.float;
-      default = 8.0;
+      default = 2.0;
       description = ''
         Number of seconds after the leader key is seen during which startPhrase
         may begin dictation. This compensates for speech recognition latency

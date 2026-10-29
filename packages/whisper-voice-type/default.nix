@@ -6,7 +6,7 @@
   audioBackend ? "pulse",
   inputDevice ? null,
   leaderKey ? "KEY_RIGHTCTRL",
-  leaderGraceSeconds ? 8.0,
+  leaderGraceSeconds ? 2.0,
   startPhrase ? "start dictation",
   stopPhrase ? "stop dictation",
   moonshineVoice,
