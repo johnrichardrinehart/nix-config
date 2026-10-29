@@ -1302,16 +1302,16 @@
           "Args": ["F18"]
         },
         {
-          "Name": "",
-          "Behavior": "&kp",
-          "Notes": "",
-          "Args": ["C_VOLUME_UP"]
+          "Name": "Volume up (Cmd: scroll up)",
+          "Behavior": "$custom",
+          "Notes": "Raise the volume; with Cmd, scroll up",
+          "Args": ["&vol_up_scroll"]
         },
         {
-          "Name": "",
-          "Behavior": "&kp",
-          "Notes": "",
-          "Args": ["C_VOLUME_DOWN"]
+          "Name": "Volume down (Cmd: scroll down)",
+          "Behavior": "$custom",
+          "Notes": "Lower the volume; with Cmd, scroll down",
+          "Args": ["&vol_down_scroll"]
         },
         {
           "Name": "",
@@ -1868,5 +1868,5 @@
       ]
     }
   ],
-  "Custom": "// Mouse keys: ZMK's defaults (600 counts/s, linear ramp over 300 ms)\n// crossed several displays too slowly. Reach 3200 counts/s over 350 ms\n// on a quadratic ramp: short presses stay about as fine as before, and\n// a held key moves about 5.3 times as fast.\n#undef ZMK_POINTING_DEFAULT_MOVE_VAL\n#define ZMK_POINTING_DEFAULT_MOVE_VAL 3200\n\n&mmv {\n    time-to-max-speed-ms = <350>;\n    acceleration-exponent = <2>;\n};\n\n/ {\n    behaviors {\n        tt_mouse: tt_mouse {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"tap-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&mo>, <&td_mouse>;\n        };\n\n        td_mouse: td_mouse {\n            compatible = \"zmk,behavior-tap-dance\";\n            #binding-cells = <0>;\n            tapping-term-ms = <250>;\n            bindings = <&none>, <&none>, <&none>, <&none>, <&tog 2>;\n        };\n\n        // Shift + a profile key selects the profile three higher:\n        // Shift + BT 0 selects BT 3, Shift + BT 1 BT 4, Shift + BT 2 BT 5.\n        // mod-morph drops Shift before it invokes the binding.\n        bt_sel_0_3: bt_sel_0_3 {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&bt BT_SEL 0>, <&bt BT_SEL 3>;\n            mods = <(MOD_LSFT|MOD_RSFT)>;\n        };\n\n        bt_sel_1_4: bt_sel_1_4 {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&bt BT_SEL 1>, <&bt BT_SEL 4>;\n            mods = <(MOD_LSFT|MOD_RSFT)>;\n        };\n\n        bt_sel_2_5: bt_sel_2_5 {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&bt BT_SEL 2>, <&bt BT_SEL 5>;\n            mods = <(MOD_LSFT|MOD_RSFT)>;\n        };\n    };\n};"
+  "Custom": "// Mouse keys: ZMK's defaults (600 counts/s, linear ramp over 300 ms)\n// crossed several displays too slowly. Reach 3200 counts/s over 350 ms\n// on a quadratic ramp: short presses stay about as fine as before, and\n// a held key moves about 5.3 times as fast.\n#undef ZMK_POINTING_DEFAULT_MOVE_VAL\n#define ZMK_POINTING_DEFAULT_MOVE_VAL 3200\n\n&mmv {\n    time-to-max-speed-ms = <350>;\n    acceleration-exponent = <2>;\n};\n\n/ {\n    behaviors {\n        tt_mouse: tt_mouse {\n            compatible = \"zmk,behavior-hold-tap\";\n            #binding-cells = <2>;\n            flavor = \"tap-preferred\";\n            tapping-term-ms = <250>;\n            bindings = <&mo>, <&td_mouse>;\n        };\n\n        td_mouse: td_mouse {\n            compatible = \"zmk,behavior-tap-dance\";\n            #binding-cells = <0>;\n            tapping-term-ms = <250>;\n            bindings = <&none>, <&none>, <&none>, <&none>, <&tog 2>;\n        };\n\n        // Shift + a profile key selects the profile three higher:\n        // Shift + BT 0 selects BT 3, Shift + BT 1 BT 4, Shift + BT 2 BT 5.\n        // mod-morph drops Shift before it invokes the binding.\n        bt_sel_0_3: bt_sel_0_3 {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&bt BT_SEL 0>, <&bt BT_SEL 3>;\n            mods = <(MOD_LSFT|MOD_RSFT)>;\n        };\n\n        bt_sel_1_4: bt_sel_1_4 {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&bt BT_SEL 1>, <&bt BT_SEL 4>;\n            mods = <(MOD_LSFT|MOD_RSFT)>;\n        };\n\n        bt_sel_2_5: bt_sel_2_5 {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&bt BT_SEL 2>, <&bt BT_SEL 5>;\n            mods = <(MOD_LSFT|MOD_RSFT)>;\n        };\n\n        // Cmd + Volume Up/Down on the mouse layer scrolls up/down.\n        // ZMK sends no keyboard report for &msc, so the host sees Cmd\n        // held during the scroll anyway: keep Cmd instead of masking it.\n        // macOS Terminal.app scrolls on Cmd + wheel as on a plain wheel.\n        vol_up_scroll: vol_up_scroll {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&kp C_VOLUME_UP>, <&msc SCRL_UP>;\n            mods = <(MOD_LGUI|MOD_RGUI)>;\n            keep-mods = <(MOD_LGUI|MOD_RGUI)>;\n        };\n\n        vol_down_scroll: vol_down_scroll {\n            compatible = \"zmk,behavior-mod-morph\";\n            #binding-cells = <0>;\n            bindings = <&kp C_VOLUME_DOWN>, <&msc SCRL_DOWN>;\n            mods = <(MOD_LGUI|MOD_RGUI)>;\n            keep-mods = <(MOD_LGUI|MOD_RGUI)>;\n        };\n    };\n};"
 }
