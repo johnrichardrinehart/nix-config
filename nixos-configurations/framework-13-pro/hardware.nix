@@ -2,7 +2,7 @@
 # framework-amd-ai-300-series module (imported by default.nix) covers the
 # board; this file adds what it does not. The Pro chassis parts (haptic
 # touchpad, touch panel, 74 Wh battery, speakers) need BIOS 4.02 or later.
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   # Linux 7.3 or later. 7.3 carries the amdgpu DCN vblank/flip rework that
   # fixes flip_done timeouts and freezes on Strix Point, including the 13 Pro
@@ -36,4 +36,12 @@
   boot.extraModprobeConfig = ''
     options cfg80211 ieee80211_regdom="US"
   '';
+
+  # MT7925 driver fixes, built out of tree against this kernel so a change
+  # needs no kernel rebuild (packages/mt76).
+  boot.extraModulePackages = [
+    (pkgs.dev.johnrinehart.mt76.override {
+      inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
+    })
+  ];
 }

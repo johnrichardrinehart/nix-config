@@ -101,6 +101,9 @@ inputs: {
         moonshine-voice = {
           inherit (johnPkgs) libmoonshine;
         };
+        mt76 = {
+          inherit (final.linuxPackages_latest) kernel kernelModuleMakeFlags;
+        };
         nebula.nebula = prev.nebula;
         niri-cycle-display-mode = {
           fuzzel = johnPkgs.fuzzel_1_15_0;
