@@ -1,8 +1,12 @@
-# Keys by name: the HID usage on the
-# keyboard/keypad page (0x07), which device remaps use, and the macOS virtual
-# key code (Carbon kVK_*), which app rules use.
+# Keys by name: the HID usage as UserKeyMapping takes it (usage page << 32 |
+# usage ID), which device remaps use, and the macOS virtual key code (Carbon
+# kVK_*), which app rules use.
 let
-  key = usage: keyCode: { inherit usage keyCode; };
+  # A key on the keyboard/keypad page (0x07).
+  key = usage: keyCode: {
+    usage = 30064771072 + usage; # 0x700000000
+    inherit keyCode;
+  };
 in
 {
   a = key 4 0;
@@ -80,6 +84,7 @@ in
   down_arrow = key 81 125;
   up_arrow = key 82 126;
   non_us_backslash = key 100 10;
+  f18 = key 109 79;
   left_control = key 224 59;
   left_shift = key 225 56;
   left_option = key 226 58;
@@ -88,4 +93,9 @@ in
   right_shift = key 229 60;
   right_option = key 230 61;
   right_command = key 231 54;
+  # Apple's fn (globe) key: usage 0x03 on Apple's vendor page 0xFF.
+  fn = {
+    usage = 1095216660483; # 0xFF00000003
+    keyCode = 63;
+  };
 }

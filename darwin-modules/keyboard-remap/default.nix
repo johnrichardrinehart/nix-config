@@ -40,6 +40,7 @@ let
     "right_shift"
     "right_option"
     "right_command"
+    "fn"
   ];
 
   configFile = pkgs.writeText "keyboard-remap.json" (

@@ -26,8 +26,8 @@ let terminal = App(executablePath: "/System/Applications/Utilities/Terminal.app/
 let json = """
   {
     "devices": [
-      {"description": "built-in", "match": {"Built-In": true, "Transport": "FIFO"}, "map": [[20, 52], [13, 11]]},
-      {"description": "by id", "match": {"VendorID": 7504}, "map": [[4, 5]]}
+      {"description": "built-in", "match": {"Built-In": true, "Transport": "FIFO"}, "map": [[30064771092, 30064771124], [30064771085, 30064771083]]},
+      {"description": "by id", "match": {"VendorID": 7504}, "map": [[30064771181, 1095216660483]]}
     ],
     "apps": [
       {
@@ -71,8 +71,11 @@ check(
   userKeyMapping(config.devices, builtIn) == [
     ["HIDKeyboardModifierMappingSrc": q, "HIDKeyboardModifierMappingDst": quote],
     ["HIDKeyboardModifierMappingSrc": 0x7_0000_000D, "HIDKeyboardModifierMappingDst": 0x7_0000_000B],
-  ], "usages are put on the keyboard page, in order")
-check(userKeyMapping(config.devices, external).count == 1, "an external keyboard gets only its own remap")
+  ], "the matching remap's usages, in order")
+check(
+  userKeyMapping(config.devices, external) == [
+    ["HIDKeyboardModifierMappingSrc": 0x7_0000_006D, "HIDKeyboardModifierMappingDst": 0xFF_0000_0003]
+  ], "an external keyboard gets only its own remap; usages off the keyboard page pass unchanged")
 check(userKeyMapping(config.devices, unknown).isEmpty, "a keyboard no remap matches gets an empty mapping")
 
 // Apps.

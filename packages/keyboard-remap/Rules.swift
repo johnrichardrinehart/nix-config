@@ -53,25 +53,21 @@ struct DeviceRemap: Decodable {
   /// HID service properties a keyboard must have, e.g. `{"Built-In": true}`
   /// or `{"VendorID": 7504, "ProductID": 24926}`.
   var match: [String: PropertyValue]
-  /// `[from, to]` usages on the keyboard/keypad page (0x07).
-  var map: [[UInt32]]
+  /// `[from, to]` HID usages as UserKeyMapping takes them: usage page << 32
+  /// | usage ID, e.g. 0x7_0000_0004 for A or 0xFF_0000_0003 for fn.
+  var map: [[UInt64]]
 
   func matches(_ property: (String) -> Any?) -> Bool {
     match.allSatisfy { key, value in value.matches(property(key)) }
   }
 }
 
-let keyboardPage: UInt64 = 0x7_0000_0000
-
 /// The `UserKeyMapping` a keyboard gets: the pairs of every remap it
 /// matches, in order. Empty for keyboards no remap matches, so a keyboard
 /// that stops matching loses its mapping.
 func userKeyMapping(_ remaps: [DeviceRemap], _ property: (String) -> Any?) -> [[String: UInt64]] {
   remaps.filter { $0.matches(property) }.flatMap(\.map).map { pair in
-    [
-      "HIDKeyboardModifierMappingSrc": keyboardPage | UInt64(pair[0]),
-      "HIDKeyboardModifierMappingDst": keyboardPage | UInt64(pair[1]),
-    ]
+    ["HIDKeyboardModifierMappingSrc": pair[0], "HIDKeyboardModifierMappingDst": pair[1]]
   }
 }
 

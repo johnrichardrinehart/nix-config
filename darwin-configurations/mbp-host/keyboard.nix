@@ -3,9 +3,9 @@
 # The user's macOS input source stays U.S. (default.nix). In the user's
 # session the built-in keyboard types Dvorak through a device remap;
 # external keyboards with Dvorak in their firmware (SliceMK, Moonlander)
-# pass through unchanged. The remap acts below macOS's input sources, so
-# QEMU and spicy forward Dvorak key codes to the guest, whose XKB layout is
-# U.S. as well.
+# keep their layout (the SliceMK gets only an fn key). The remap acts below
+# macOS's input sources, so QEMU and spicy forward Dvorak key codes to the
+# guest, whose XKB layout is U.S. as well.
 #
 # Before login no remap can run: with FileVault, the first screen after a
 # boot is the pre-boot unlock, which also logs in. It takes its layouts from
@@ -71,6 +71,18 @@ in
         description = "Dvorak on the built-in keyboard";
         match."Built-In" = true;
         map = dvorak;
+      }
+      # ZMK cannot send Apple's fn usage, so the SliceMK firmware sends F18
+      # for it (Fn on the mouse layer). Fn + click then selects text in
+      # Terminal.app windows whose app has turned on mouse reporting.
+      # 7504/24926 are ZMK's default IDs: the SliceMK left half and dongle.
+      {
+        description = "fn from the SliceMK mouse layer";
+        match = {
+          VendorID = 7504;
+          ProductID = 24926;
+        };
+        map.f18 = "fn";
       }
     ];
     # QEMU's cocoa window has a menu whose Hide item takes Cmd+H. Spicy.app

@@ -1297,9 +1297,9 @@
         },
         {
           "Name": "",
-          "Behavior": "&mkp",
-          "Notes": "",
-          "Args": ["RCLK"]
+          "Behavior": "&kp",
+          "Notes": "Mouse + Fn holds the macOS fn modifier: the Mac remaps F18 from this keyboard to fn. Fn + click selects text in Terminal.app past mouse reporting",
+          "Args": ["F18"]
         },
         {
           "Name": "",

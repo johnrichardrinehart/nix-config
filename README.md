@@ -218,6 +218,10 @@ Both configurations use native Dvorak, plain Tab, and six Bluetooth host profile
 The mouse layer moves the pointer at up to 3200 counts per second.
 It reaches that speed on a quadratic ramp over 350 ms, so short presses stay precise.
 Hold the mouse layer key (the lower tall key in the left inner column) and tap ↑ or ↓ for volume up or down.
+On the mouse layer, Fn sends F18, which the Mac changes to the macOS fn key (`darwin-configurations/mbp-host/keyboard.nix`).
+To select text in Terminal.app while an app uses mouse reporting, activate the mouse layer, hold Fn, and click or drag.
+Activate the mouse layer before you push Fn; otherwise Fn selects the Fn layer.
+Right click is on the right half of the mouse layer only.
 The upper tall keys in the inner columns send Page Up (left) and Page Down (right); hold either to repeat.
 Hold Fn and tap them for Home and End.
 The inner column of small keys in the right thumb cluster selects the profiles.
