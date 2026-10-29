@@ -25,12 +25,18 @@ private func log(_ message: String) {
 
 private final class DeviceRemapper {
   let remaps: [DeviceRemap]
-  let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
 
   init(_ remaps: [DeviceRemap]) { self.remaps = remaps }
 
-  /// The services the HID event system knows, by registry ID.
-  func services() -> [UInt64: IOHIDServiceClient] {
+  /// A new HID event system client. A simple client's service list is fixed
+  /// when the client is created, so a kept client never sees a keyboard that
+  /// connects later; each pass makes its own.
+  func newClient() -> IOHIDEventSystemClient {
+    IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
+  }
+
+  /// The services the client knows, by registry ID.
+  func services(_ client: IOHIDEventSystemClient) -> [UInt64: IOHIDServiceClient] {
     let services = (IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient]) ?? []
     var result: [UInt64: IOHIDServiceClient] = [:]
     for service in services {
@@ -44,20 +50,23 @@ private final class DeviceRemapper {
   /// Sets UserKeyMapping on every keyboard whose mapping differs from the
   /// declared one, or from none while paused.
   func apply() {
-    for (id, service) in services()
-    where IOHIDServiceClientConformsTo(
-      service, UInt32(kHIDPage_GenericDesktop), UInt32(kHIDUsage_GD_Keyboard)) != 0
-    {
-      let property = { (key: String) in IOHIDServiceClientCopyProperty(service, key as CFString) as Any? }
-      let want = isPaused ? [] : userKeyMapping(remaps, property)
-      let have =
-        (property(userKeyMappingKey) as? [[String: NSNumber]])?.map { $0.mapValues(\.uint64Value) } ?? []
-      if have == want { continue }
-      let name = "\(property("Product") as? String ?? "keyboard") (registry 0x\(String(id, radix: 16)))"
-      if IOHIDServiceClientSetProperty(service, userKeyMappingKey as CFString, want as CFArray) {
-        log("set \(want.count) key mappings on \(name)")
-      } else {
-        log("could not set UserKeyMapping on \(name)")
+    let client = newClient()
+    withExtendedLifetime(client) {
+      for (id, service) in services(client)
+      where IOHIDServiceClientConformsTo(
+        service, UInt32(kHIDPage_GenericDesktop), UInt32(kHIDUsage_GD_Keyboard)) != 0
+      {
+        let property = { (key: String) in IOHIDServiceClientCopyProperty(service, key as CFString) as Any? }
+        let want = isPaused ? [] : userKeyMapping(remaps, property)
+        let have =
+          (property(userKeyMappingKey) as? [[String: NSNumber]])?.map { $0.mapValues(\.uint64Value) } ?? []
+        if have == want { continue }
+        let name = "\(property("Product") as? String ?? "keyboard") (registry 0x\(String(id, radix: 16)))"
+        if IOHIDServiceClientSetProperty(service, userKeyMappingKey as CFString, want as CFArray) {
+          log("set \(want.count) key mappings on \(name)")
+        } else {
+          log("could not set UserKeyMapping on \(name)")
+        }
       }
     }
   }
@@ -65,7 +74,7 @@ private final class DeviceRemapper {
   /// IOKit announces a service before the HID event system has a client
   /// for it. Retry until every new service has one, for up to 10 seconds.
   func applyWhenPresent(_ ids: Set<UInt64>, attempt: Int = 0) {
-    let missing = ids.subtracting(services().keys)
+    let missing = ids.subtracting(services(newClient()).keys)
     if missing.count < ids.count { apply() }
     if !missing.isEmpty && attempt < 40 {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
