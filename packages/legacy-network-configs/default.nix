@@ -26,6 +26,9 @@ stdenvNoCC.mkDerivation {
     runHook postCheck
   '';
 
+  # -B: activation runs these as root, also in stage 1 before /nix/store is
+  # read-only, and Python would write __pycache__ into this output and break
+  # its hash.
   installPhase = ''
     runHook preInstall
 
@@ -33,19 +36,19 @@ stdenvNoCC.mkDerivation {
     install -Dm755 legacy-network-configs-to-nm.py "$out/bin/legacy-network-configs-to-nm"
     install -Dm644 wifi_profile_convert.py "$out/bin/wifi_profile_convert.py"
     substituteInPlace "$out/bin/legacy-network-config-to-iwd" \
-      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3"
+      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3 -B"
     substituteInPlace "$out/bin/legacy-network-configs-to-nm" \
-      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3"
+      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3 -B"
 
     install -Dm755 legacy-network-config-to-iwd.py "$toIwd/bin/legacy-network-config-to-iwd"
     install -Dm644 wifi_profile_convert.py "$toIwd/bin/wifi_profile_convert.py"
     substituteInPlace "$toIwd/bin/legacy-network-config-to-iwd" \
-      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3"
+      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3 -B"
 
     install -Dm755 legacy-network-configs-to-nm.py "$toNetworkManager/bin/legacy-network-configs-to-nm"
     install -Dm644 wifi_profile_convert.py "$toNetworkManager/bin/wifi_profile_convert.py"
     substituteInPlace "$toNetworkManager/bin/legacy-network-configs-to-nm" \
-      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3"
+      --replace-fail "/usr/bin/env python3" "${python3}/bin/python3 -B"
 
     runHook postInstall
   '';
