@@ -16,6 +16,8 @@
   board ? "slicemk_ergodox_202207_green_left",
   shield ? "slicemk_ergodox_leftcentral",
   hostBluetoothPatch ? ./host-bluetooth.patch,
+  # Zephyr snippets, e.g. "zmk-usb-logging" (serial log on the USB port).
+  snippets ? [ ],
 }:
 let
   sourceRevision = "71f8242b8ab2e9f9c86ebbb221ba15876413f295";
@@ -211,6 +213,9 @@ stdenv.mkDerivation {
     cmake -S app -B build -G Ninja \
       -DBOARD=${lib.escapeShellArg board} \
       -DSHIELD=${lib.escapeShellArg shield} \
+      ${lib.optionalString (
+        snippets != [ ]
+      ) "-DSNIPPET=${lib.escapeShellArg (lib.concatStringsSep ";" snippets)} \\"}
       -DZephyr_DIR=${zephyr}/share/zephyr-package/cmake \
       -DZMK_CONFIG="$PWD/generated-config" \
       -DKEYMAP_FILE="$PWD/generated-config/slicemk_ergodox.keymap" \

@@ -262,6 +262,17 @@ nix build .#slicemk-dongle-firmware
 # result/zmk.uf2 is the dongle firmware.
 ```
 
+Both firmwares enable the `zmk-usb-logging` snippet.
+When the device is connected by USB, it shows a serial port with the ZMK log.
+The log shows profile selection, advertising, and Bluetooth connections and disconnections.
+On macOS, read the log:
+
+```console
+screen /dev/tty.usbmodem* 115200
+```
+
+Press `Ctrl-A` and then `K` to stop `screen`.
+
 The vendor configurator cannot build the custom host Bluetooth commands.
 Use [SliceMK's firmware guide](https://docs.slicemk.com/firmware/zmk/wireless/guide/) for hardware and role changes.
 
