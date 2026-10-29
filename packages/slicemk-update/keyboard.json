@@ -381,13 +381,13 @@
           "Name": "",
           "Behavior": "&kp",
           "Notes": "",
-          "Args": ["UP_ARROW"]
+          "Args": ["DOWN_ARROW"]
         },
         {
           "Name": "",
           "Behavior": "&kp",
           "Notes": "",
-          "Args": ["DOWN_ARROW"]
+          "Args": ["UP_ARROW"]
         },
         {
           "Name": "",
@@ -1302,16 +1302,16 @@
           "Args": ["F18"]
         },
         {
-          "Name": "Volume up (Cmd: scroll up)",
-          "Behavior": "$custom",
-          "Notes": "Raise the volume; with Cmd, scroll up",
-          "Args": ["&vol_up_scroll"]
-        },
-        {
           "Name": "Volume down (Shift: mute, Cmd: scroll down)",
           "Behavior": "$custom",
           "Notes": "Lower the volume; with Shift, toggle mute; with Cmd, scroll down",
           "Args": ["&vol_down_scroll"]
+        },
+        {
+          "Name": "Volume up (Cmd: scroll up)",
+          "Behavior": "$custom",
+          "Notes": "Raise the volume; with Cmd, scroll up",
+          "Args": ["&vol_up_scroll"]
         },
         {
           "Name": "",
