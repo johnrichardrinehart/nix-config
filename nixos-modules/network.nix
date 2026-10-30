@@ -96,10 +96,16 @@ in
       networking.networkmanager.enable = lib.mkForce false;
       networking.wireless.iwd = {
         enable = true;
-        # DefaultInterface makes iwd wait for the driver's interface. The patch
-        # stops iwd's own P2P device from ending that wait at boot.
+        # DefaultInterface makes iwd wait for the driver's interface. The first
+        # patch stops iwd's own P2P device from ending that wait at boot. The
+        # second makes scans for hidden networks dwell 15 TU per channel where
+        # the driver allows it (packages/iwlwifi does), so slow-answering
+        # hidden APs are found.
         package = pkgs.iwd.overrideAttrs (old: {
-          patches = (old.patches or [ ]) ++ [ ../patches/iwd-create-p2p-after-default-interface.patch ];
+          patches = (old.patches or [ ]) ++ [
+            ../patches/iwd-create-p2p-after-default-interface.patch
+            ../patches/iwd-dwell-longer-on-scans-for-hidden-networks.patch
+          ];
         });
         settings = {
           General.EnableNetworkConfiguration = true;
