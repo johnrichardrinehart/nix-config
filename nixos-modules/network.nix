@@ -6,6 +6,22 @@
 }:
 let
   cfg = config.dev.johnrinehart.network;
+  uplinkWatchdog = pkgs.writeShellApplication {
+    name = "uplink-watchdog";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.iproute2
+      pkgs.iputils
+      pkgs.jq
+      pkgs.systemd
+    ];
+    # A route that vanishes mid-round must not kill the loop.
+    bashOptions = [
+      "nounset"
+      "pipefail"
+    ];
+    text = builtins.readFile ./uplink-watchdog.sh;
+  };
 in
 {
   options = {
@@ -124,6 +140,26 @@ in
         interface entether*
         metric 1000
       '';
+
+      # dhcpcd and iwd rank default routes by link type alone. Demote any
+      # whose uplink cannot reach the internet; see uplink-watchdog.sh.
+      systemd.services.uplink-watchdog = {
+        description = "Demote default routes whose uplink cannot reach the internet";
+        wantedBy = [ "multi-user.target" ];
+        environment.UPLINK_RESOLVED = if config.services.resolved.enable then "1" else "0";
+        serviceConfig = {
+          ExecStart = lib.getExe uplinkWatchdog;
+          Restart = "always";
+          RestartSec = 5;
+          CapabilityBoundingSet = [
+            "CAP_NET_ADMIN"
+            "CAP_NET_RAW"
+          ];
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+        };
+      };
     })
   ];
 }
