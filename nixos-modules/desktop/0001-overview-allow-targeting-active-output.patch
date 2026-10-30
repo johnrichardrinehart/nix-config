@@ -1,4 +1,4 @@
-From a17df57fb7f846eb198e35303428bf6fae593ae5 Mon Sep 17 00:00:00 2001
+From 16388e38e715c9b8f40327ed260f52d52a540a5b Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Fri, 10 Jul 2026 13:43:58 -0400
 Subject: [PATCH] Let each Overview action narrow its output scope
@@ -17,13 +17,13 @@ Not-tested: Packaged build and live three-output interaction after this revision
 ---
  docs/wiki/Overview.md    | 12 ++++++
  niri-config/src/binds.rs |  8 ++--
- niri-config/src/lib.rs   | 17 ++++++++
+ niri-config/src/lib.rs   | 25 +++++++++--
  niri-ipc/src/lib.rs      | 20 ++++++++-
- src/input/mod.rs         | 14 +++---
+ src/input/mod.rs         | 16 +++----
  src/layout/mod.rs        | 93 +++++++++++++++++++++++++++++-----------
  src/layout/tests.rs      | 37 +++++++++++++++-
- src/ui/hotkey_overlay.rs |  4 +-
- 8 files changed, 165 insertions(+), 40 deletions(-)
+ src/ui/hotkey_overlay.rs | 10 ++---
+ 8 files changed, 174 insertions(+), 47 deletions(-)
 
 diff --git a/docs/wiki/Overview.md b/docs/wiki/Overview.md
 index f9bb94a3..b60794bf 100644
@@ -49,10 +49,10 @@ index f9bb94a3..b60794bf 100644
  
  - Mouse: left click and drag windows to move them, right click and drag to scroll workspaces left/right, scroll to switch workspaces (no holding Mod required).
 diff --git a/niri-config/src/binds.rs b/niri-config/src/binds.rs
-index 2266d877..77bcf91b 100644
+index 7448c8f8..f2e12da9 100644
 --- a/niri-config/src/binds.rs
 +++ b/niri-config/src/binds.rs
-@@ -363,8 +363,8 @@ pub enum Action {
+@@ -482,8 +482,8 @@ pub enum Action {
      ClearDynamicCastTarget,
      #[knuffel(skip)]
      StopCast(u64),
@@ -63,7 +63,7 @@ index 2266d877..77bcf91b 100644
      CloseOverview,
      #[knuffel(skip)]
      ToggleWindowUrgent(u64),
-@@ -703,8 +703,8 @@ impl From<niri_ipc::Action> for Action {
+@@ -822,8 +822,8 @@ impl From<niri_ipc::Action> for Action {
              }
              niri_ipc::Action::ClearDynamicCastTarget {} => Self::ClearDynamicCastTarget,
              niri_ipc::Action::StopCast { session_id } => Self::StopCast(session_id),
@@ -75,10 +75,10 @@ index 2266d877..77bcf91b 100644
              niri_ipc::Action::ToggleWindowUrgent { id } => Self::ToggleWindowUrgent(id),
              niri_ipc::Action::SetWindowUrgent { id } => Self::SetWindowUrgent(id),
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index b8989e8d..c7d04af7 100644
+index 378da877..bc62f1fd 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
-@@ -640,6 +640,23 @@ mod tests {
+@@ -642,6 +642,23 @@ mod tests {
          assert_eq!(config.input.keyboard.repeat_rate, 25);
      }
  
@@ -91,17 +91,46 @@ index b8989e8d..c7d04af7 100644
 +
 +        assert_eq!(
 +            config.binds.0[0].action,
-+            binds::Action::ToggleOverview(false)
++            binds::BoundAction::Press(binds::Action::ToggleOverview(false))
 +        );
 +        assert_eq!(
 +            config.binds.0[1].action,
-+            binds::Action::ToggleOverview(true)
++            binds::BoundAction::Press(binds::Action::ToggleOverview(true))
 +        );
 +    }
 +
      #[track_caller]
      fn do_parse(text: &str) -> Config {
          Config::parse_mem(text)
+@@ -852,7 +869,7 @@ mod tests {
+         // A release section binds only the release phase.
+         assert!(matches!(
+             action(2),
+-            BoundAction::Release(Action::ToggleOverview)
++            BoundAction::Release(Action::ToggleOverview(true))
+         ));
+ 
+         // Both sections bind both phases.
+@@ -860,7 +877,7 @@ mod tests {
+             action(3),
+             BoundAction::Both {
+                 press: Action::CloseWindow,
+-                release: Action::ToggleOverview,
++                release: Action::ToggleOverview(true),
+             }
+         ));
+     }
+@@ -2749,7 +2766,9 @@ mod tests {
+                             ),
+                         },
+                         action: Release(
+-                            ToggleOverview,
++                            ToggleOverview(
++                                true,
++                            ),
+                         ),
+                         repeat: false,
+                         cooldown: None,
 diff --git a/niri-ipc/src/lib.rs b/niri-ipc/src/lib.rs
 index c314d453..fbcd6460 100644
 --- a/niri-ipc/src/lib.rs
@@ -135,10 +164,10 @@ index c314d453..fbcd6460 100644
      CloseOverview {},
      /// Toggle urgent status of a window.
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index 10c1d02c..6880468a 100644
+index 80d18e06..4b715714 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
-@@ -2343,12 +2343,12 @@ impl State {
+@@ -2511,12 +2511,12 @@ impl State {
              Action::StopCast(session_id) => {
                  self.niri.stop_cast(CastSessionId::from(session_id));
              }
@@ -155,7 +184,7 @@ index 10c1d02c..6880468a 100644
                      self.niri.queue_redraw_all();
                  }
              }
-@@ -2709,7 +2709,7 @@ impl State {
+@@ -2877,7 +2877,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -164,7 +193,7 @@ index 10c1d02c..6880468a 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -2800,7 +2800,7 @@ impl State {
+@@ -2968,7 +2968,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -173,8 +202,8 @@ index 10c1d02c..6880468a 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -4940,7 +4940,7 @@ fn hardcoded_overview_bind(raw: Keysym, mods: ModifiersState) -> Option<Bind> {
-     let action = match raw {
+@@ -5277,7 +5277,7 @@ fn hardcoded_overview_bind(key: Keysym, mods: Modifiers) -> Option<Bind> {
+     let action = match key {
          Keysym::Escape | Keysym::Return => {
              repeat = false;
 -            Action::ToggleOverview
@@ -182,6 +211,15 @@ index 10c1d02c..6880468a 100644
          }
          Keysym::Left => Action::FocusColumnLeft,
          Keysym::Right => Action::FocusColumnRight,
+@@ -5865,7 +5865,7 @@ mod tests {
+             bind(
+                 Trigger::Keysym(Keysym::Super_L),
+                 Modifiers::empty(),
+-                BoundAction::Release(Action::ToggleOverview),
++                BoundAction::Release(Action::ToggleOverview(true)),
+             ),
+         ]);
+ 
 diff --git a/src/layout/mod.rs b/src/layout/mod.rs
 index 8575a1af..8f418ff6 100644
 --- a/src/layout/mod.rs
@@ -460,10 +498,10 @@ index a2da4ce5..04c4cbe5 100644
  fn workspace_render_geo_at_fractional_scale() {
      let ops = [
 diff --git a/src/ui/hotkey_overlay.rs b/src/ui/hotkey_overlay.rs
-index 34bc3955..ef749046 100644
+index 0b92e474..5b4d8fb1 100644
 --- a/src/ui/hotkey_overlay.rs
 +++ b/src/ui/hotkey_overlay.rs
-@@ -257,7 +257,7 @@ fn collect_actions(config: &Config) -> Vec<&Action> {
+@@ -277,7 +277,7 @@ fn collect_actions(config: &Config) -> Vec<&Action> {
          &Action::ConsumeOrExpelWindowRight,
          &Action::ToggleWindowFloating,
          &Action::SwitchFocusBetweenFloatingAndTiling,
@@ -472,7 +510,7 @@ index 34bc3955..ef749046 100644
      ]);
  
      // Screenshot is not as important, can omit if not bound.
-@@ -478,7 +478,7 @@ fn action_name(action: &Action) -> String {
+@@ -506,7 +506,7 @@ fn action_name(action: &Action) -> String {
          Action::SwitchFocusBetweenFloatingAndTiling => {
              String::from("Switch Focus Between Floating and Tiling")
          }
@@ -481,3 +519,33 @@ index 34bc3955..ef749046 100644
          Action::Screenshot(_, _) => String::from("Take a Screenshot"),
          Action::Spawn(args) => format!(
              "Spawn <span face='monospace' bgcolor='#000000'>{}</span>",
+@@ -755,7 +755,7 @@ mod tests {
+                         release { toggle-overview; }
+                     }
+                 }"#,
+-                Action::ToggleOverview,
++                Action::ToggleOverview(true),
+             ),
+             @" Super : Open the Overview"
+         );
+@@ -769,7 +769,7 @@ mod tests {
+                         release { toggle-overview; }
+                     }
+                 }"#,
+-                Action::ToggleOverview,
++                Action::ToggleOverview(true),
+             ),
+             @" Super + Shift + Q : Open the Overview"
+         );
+@@ -917,7 +917,7 @@ mod tests {
+         )
+         .unwrap();
+ 
+-        assert!(collect_actions(&config).contains(&&Action::ToggleOverview));
++        assert!(collect_actions(&config).contains(&&Action::ToggleOverview(true)));
+ 
+         // A release bind with a custom title adds its action to the list.
+         let config = Config::parse_mem(
+-- 
+2.56.0
+

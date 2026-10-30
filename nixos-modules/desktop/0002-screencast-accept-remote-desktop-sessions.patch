@@ -1,4 +1,4 @@
-From 001e28813a52c566474a45c7529573010d046b54 Mon Sep 17 00:00:00 2001
+From 12e40e1add2fa72b848c64a7fb007a33b958f012 Mon Sep 17 00:00:00 2001
 From: John Rinehart <john@johnrinehart.com>
 Date: Thu, 15 Oct 2026 13:37:06 -0400
 Subject: [PATCH] dbus: accept remote desktop screencast sessions
@@ -30,3 +30,6 @@ index 194c9724..4b93e231 100644
          let session_id = CastSessionId::next();
          let path = format!("/org/gnome/Mutter/ScreenCast/Session/u{}", session_id.get());
          let path = OwnedObjectPath::try_from(path).unwrap();
+-- 
+2.56.0
+

@@ -1,4 +1,4 @@
-From b0a947e453b9c07e9fdc6feb509c1cd769dbb733 Mon Sep 17 00:00:00 2001
+From 48c9bfc8f89449eda500abe569d3f84ea5cc4e95 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 15 Oct 2026 13:37:06 -0400
 Subject: [PATCH] version: report downstream patches
@@ -58,3 +58,6 @@ index 6d513eb6..fb4366c4 100644
  }
  
  pub fn get_monotonic_time() -> Duration {
+-- 
+2.56.0
+

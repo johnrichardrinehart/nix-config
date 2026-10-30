@@ -28,14 +28,14 @@ _: {
           # https://github.com/niri-wm/niri/pull/3959
           (prev.fetchpatch2 {
             name = "render-allow-software-rendering-as-last-resort.patch";
-            url = "https://github.com/niri-wm/niri/commit/b01319783309c41eddb4e10ed1f8ab55847101bd.patch?full_index=1";
-            hash = "sha256-BAmHDvJqZwH2Yhw+6PPUBSlacgueX8WiFn1HGxstIRo=";
+            url = "https://github.com/niri-wm/niri/compare/e19df12cf81ffe805609fee497da1a097066ad2f...a6d7aef58835cd8e7f763878288e7300df0f7a60.patch?full_index=1";
+            hash = "sha256-KPVHINi9cLZPQ3eMG1DdbFgqUew094fLv0S/ZLH/mq4=";
           })
           # https://github.com/niri-wm/niri/pull/4614
           (prev.fetchpatch2 {
             name = "tty-honor-configured-node-for-software-egl.patch";
-            url = "https://github.com/johnrichardrinehart/niri/commit/38982c5f59ef94afd9f6795669e39518540bccd0.patch?full_index=1";
-            hash = "sha256-EH5JbAzNOJTZsgXtSEjwreDvO1LxS/REcy1E3xAtjeo=";
+            url = "https://github.com/johnrichardrinehart/niri/commit/2240c34b9ec4f84d7d9b6269311912c626d56e0c.patch?full_index=1";
+            hash = "sha256-O7kU24QSvg/KVYZF6Znyc4belMEgg79ZigGCpqwOnW0=";
           })
         ];
       });
