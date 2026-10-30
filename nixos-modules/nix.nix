@@ -1,6 +1,7 @@
 {
   inputs,
   config,
+  pkgs,
   lib,
   ...
 }:
@@ -31,6 +32,25 @@ in
     # the Nix settings are enabled, and by name rather than through
     # isNormalUser, which an account pinned below uid 1000 no longer satisfies.
     { nix.settings.trusted-users = [ primaryUser ]; }
+
+    # Git worktrees here use relative paths (`worktree.useRelativePaths`), which
+    # makes git set `extensions.relativeWorktrees` in the shared repo config.
+    # Nix reads `git+file:` flakes through libgit2, which must refuse a repo
+    # carrying an extension it doesn't know; before libgit2 1.9.4 that refusal
+    # ("unsupported extension name extensions.relativeworktrees") breaks every
+    # flake command in every worktree of such a repo, including rebuilds of
+    # this config. Nix 2.35 on our nixpkgs links a libgit2 with the fix
+    # (libgit2/libgit2#7254, NixOS/nix#14987); the assertion keeps a future
+    # package or nixpkgs bump from silently regressing it.
+    {
+      nix.package = pkgs.nixVersions.nix_2_35;
+      assertions = [
+        {
+          assertion = lib.versionAtLeast pkgs.libgit2.version "1.9.4";
+          message = "nix.package must link libgit2 >= 1.9.4 to open repos with extensions.relativeWorktrees; found ${pkgs.libgit2.version}.";
+        }
+      ];
+    }
 
     (lib.mkIf (cfg.allowedUnfreePackages != [ ]) {
       nixpkgs.config.allowUnfreePredicate =
