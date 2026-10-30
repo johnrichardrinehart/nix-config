@@ -106,6 +106,24 @@ in
       system.activationScripts.importLegacyNetworkConfigsToIwd = lib.mkIf cfg.migrateLegacyConfigs ''
         ${pkgs.dev.johnrinehart.legacy-network-configs.toIwd}/bin/legacy-network-config-to-iwd
       '';
+
+      # Phone USB tethers rank behind iwd's Wi-Fi route (300 + ifindex), so a
+      # tethered phone is a fallback, not the uplink. The rename lets dhcpcd
+      # match them by name; the "en" prefix keeps them inside hosts'
+      # `allowInterfaces = [ "en*" ... ]`. Vendor IDs (Google, Samsung,
+      # Motorola, OnePlus, Xiaomi) keep cdc_ncm/cdc_ether Ethernet adapters and
+      # docks out. ENV, not ATTRS: the driver and the vendor ID sit on
+      # different parent devices, and one rule's ATTRS must match one parent.
+      services.udev.extraRules = ''
+        SUBSYSTEM=="net", ACTION=="add", ENV{ID_USB_DRIVER}=="ipheth|rndis_host", NAME="entether$attr{ifindex}"
+        SUBSYSTEM=="net", ACTION=="add", ENV{ID_USB_DRIVER}=="cdc_ncm|cdc_ether", ENV{ID_VENDOR_ID}=="18d1|04e8|22b8|2a70|2717", NAME="entether$attr{ifindex}"
+      '';
+      # Must stay last in dhcpcd.conf: dhcpcd applies every line after an
+      # `interface` line to that interface only.
+      networking.dhcpcd.extraConfig = lib.mkAfter ''
+        interface entether*
+        metric 1000
+      '';
     })
   ];
 }
