@@ -1,0 +1,123 @@
+From ab46c3161fe4bf2c2a6d49f40ecfa09639383ae6 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 21:19:56 -0400
+Subject: [PATCH] wifi: mt76: mt7925: tell the firmware the SSID of a hidden AP
+
+In AP mode the MT7925 firmware answers probe requests itself, from the
+beacon template, and does not pass them to the host. For a hidden AP the
+template has an empty or zeroed SSID, so the firmware cannot match a
+directed probe request and clients that know the SSID never find the AP.
+
+Send the SoftAP BSS info TLV (tag 0x0d: hidden flag and SSID), as the
+vendor driver for this firmware does, when the AP starts and before each
+beacon template update. The firmware then answers directed probe
+requests with the real SSID, while beacons stay hidden.
+---
+ .../wireless/mediatek/mt76/mt76_connac_mcu.h  |  1 +
+ .../net/wireless/mediatek/mt76/mt7925/main.c  | 10 ++++++
+ .../net/wireless/mediatek/mt76/mt7925/mcu.c   | 35 +++++++++++++++++++
+ .../wireless/mediatek/mt76/mt7925/mt7925.h    |  2 ++
+ 4 files changed, 48 insertions(+)
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h
+index 0ededa5..9b2d524 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h
++++ b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h
+@@ -1426,6 +1426,7 @@ enum {
+ 	UNI_BSS_INFO_BCN_BCC = 9,
+ 	UNI_BSS_INFO_BCN_MBSSID = 10,
+ 	UNI_BSS_INFO_RATE = 11,
++	UNI_BSS_INFO_SAP = 13,
+ 	UNI_BSS_INFO_QBSS = 15,
+ 	UNI_BSS_INFO_SEC = 16,
+ 	UNI_BSS_INFO_BCN_PROT = 17,
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7925/main.c b/drivers/net/wireless/mediatek/mt76/mt7925/main.c
+index 549f9c0..f5dfc39 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7925/main.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7925/main.c
+@@ -1958,6 +1958,10 @@ mt7925_start_ap(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+ 	if (err)
+ 		goto out;
+ 
++	err = mt7925_mcu_bss_sap(dev, vif, link_conf);
++	if (err)
++		goto out;
++
+ 	err = mt7925_mcu_set_bss_pm(dev, link_conf, true);
+ 	if (err)
+ 		goto out;
+@@ -2183,6 +2187,12 @@ static void mt7925_link_info_changed(struct ieee80211_hw *hw,
+ 		mconf->mt76.beacon_rates_idx =
+ 				mt7925_get_rates_table(hw, vif, true, false);
+ 
++		/* The firmware answers probe requests itself from the beacon
++		 * template, which carries no SSID when the AP is hidden.
++		 */
++		if (vif->type == NL80211_IFTYPE_AP && info->enable_beacon)
++			mt7925_mcu_bss_sap(dev, vif, info);
++
+ 		mt7925_mcu_uni_add_beacon_offload(dev, hw, vif,
+ 						  info->enable_beacon);
+ 	}
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7925/mcu.c b/drivers/net/wireless/mediatek/mt76/mt7925/mcu.c
+index fa29c48..8db5f13 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7925/mcu.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7925/mcu.c
+@@ -4113,6 +4113,41 @@ int mt7925_mcu_wf_rf_pin_ctrl(struct mt792x_phy *phy)
+ 	return ret;
+ }
+ 
++/* SoftAP BSS info: whether the AP is hidden, and its SSID. The firmware
++ * answers probe requests itself, and for a hidden AP the beacon template it
++ * works from has no SSID; this is where it learns the SSID that directed
++ * probes must match.
++ */
++int mt7925_mcu_bss_sap(struct mt792x_dev *dev, struct ieee80211_vif *vif,
++		       struct ieee80211_bss_conf *link_conf)
++{
++	struct mt792x_bss_conf *mconf = mt792x_link_conf_to_mconf(link_conf);
++	struct {
++		struct bss_req_hdr hdr;
++		struct {
++			__le16 tag;
++			__le16 len;
++			u8 hidden;
++			u8 pad[2];
++			u8 ssid_len;
++			u8 ssid[IEEE80211_MAX_SSID_LEN];
++		} __packed sap;
++	} __packed req = {
++		.hdr.bss_idx = mconf->mt76.idx,
++		.sap = {
++			.tag = cpu_to_le16(UNI_BSS_INFO_SAP),
++			.len = cpu_to_le16(sizeof(req.sap)),
++			.hidden = link_conf->hidden_ssid,
++			.ssid_len = vif->cfg.ssid_len,
++		},
++	};
++
++	memcpy(req.sap.ssid, vif->cfg.ssid, vif->cfg.ssid_len);
++
++	return mt76_mcu_send_msg(&dev->mt76, MCU_UNI_CMD(BSS_INFO_UPDATE),
++				 &req, sizeof(req), true);
++}
++
+ int mt7925_mcu_set_rxfilter(struct mt792x_dev *dev, u32 fif,
+ 			    u8 bit_op, u32 bit_map)
+ {
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7925/mt7925.h b/drivers/net/wireless/mediatek/mt76/mt7925/mt7925.h
+index 321e732..3ac61ef 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7925/mt7925.h
++++ b/drivers/net/wireless/mediatek/mt76/mt7925/mt7925.h
+@@ -297,6 +297,8 @@ void mt7925_mcu_rx_event(struct mt792x_dev *dev, struct sk_buff *skb);
+ int mt7925_mcu_chip_config(struct mt792x_dev *dev, const char *cmd);
+ int mt7925_mcu_set_rxfilter(struct mt792x_dev *dev, u32 fif,
+ 			    u8 bit_op, u32 bit_map);
++int mt7925_mcu_bss_sap(struct mt792x_dev *dev, struct ieee80211_vif *vif,
++		       struct ieee80211_bss_conf *link_conf);
+ 
+ int mt7925_mac_init(struct mt792x_dev *dev);
+ int mt7925_mac_sta_add(struct mt76_dev *mdev, struct ieee80211_vif *vif,
+-- 
+2.56.0
+
