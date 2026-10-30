@@ -413,8 +413,11 @@ in
       #   matchThreshold        Similarity to an enrolled face for a match.
       #                         0.45 is below the page's lowest, "Less strict"
       #                         (0.58); Glance's default is 0.66.
-      #   faceDetectionSeconds  Length of one scan (default 5, range 3-10):
-      #                         more time to blink for Heavy liveness.
+      #   livenessMode          "light" runs only the deny cues (screen glare,
+      #                         device rectangle) and confirms after 3 frames.
+      #                         "heavy" also waits for a blink or head turn,
+      #                         which made unlocks take ~3 s. Light lets a
+      #                         printed photo through.
       # Changing a setting on the Recognition page writes over these values
       # until the next activation. Glance reads them only when it starts, so
       # restart it after a change. The launchd agent above starts it again.
@@ -439,9 +442,9 @@ in
                 shown = "0.45";
                 typed = "-float 0.45";
               };
-              faceDetectionSeconds = {
-                shown = "8";
-                typed = "-int 8";
+              livenessMode = {
+                shown = "light";
+                typed = "-string light";
               };
             }
         )}
