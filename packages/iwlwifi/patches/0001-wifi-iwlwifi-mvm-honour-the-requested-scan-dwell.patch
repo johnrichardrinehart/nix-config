@@ -1,0 +1,110 @@
+From 364504e7786f1b10fa303c609f4520f4ee4b9ead Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Fri, 30 Oct 2026 01:21:27 -0400
+Subject: [PATCH] wifi: iwlwifi: mvm: honour the requested scan dwell
+
+The UMAC scan used a fixed 10 TU active dwell with adaptive dwell, and
+NL80211_ATTR_MEASUREMENT_DURATION only enabled the per-channel
+iteration notification. A directed probe for a hidden network whose AP
+answers after about 10 ms (MT7925 in AP mode answers in 9 to 10 ms) was
+then mostly missed: the scan had left the channel.
+
+Use the requested duration as the active dwell (capped at 255 TU) for
+UMAC scans, skip adaptive dwell when the duration is mandatory, and
+advertise NL80211_EXT_FEATURE_SET_SCAN_DWELL so userspace can ask.
+---
+ .../net/wireless/intel/iwlwifi/mvm/mac80211.c |  8 ++++++--
+ drivers/net/wireless/intel/iwlwifi/mvm/scan.c | 20 ++++++++++++++-----
+ 2 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c b/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+index 5bd246e..3e978b6 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
++++ b/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+@@ -590,10 +590,14 @@ int iwl_mvm_mac_setup_register(struct iwl_mvm *mvm)
+ 	BUILD_BUG_ON(IWL_MAX_UMAC_SCANS > HWEIGHT32(IWL_MVM_SCAN_MASK) ||
+ 		     IWL_MAX_LMAC_SCANS > HWEIGHT32(IWL_MVM_SCAN_MASK));
+ 
+-	if (fw_has_capa(&mvm->fw->ucode_capa, IWL_UCODE_TLV_CAPA_UMAC_SCAN))
++	if (fw_has_capa(&mvm->fw->ucode_capa, IWL_UCODE_TLV_CAPA_UMAC_SCAN)) {
+ 		mvm->max_scans = IWL_MAX_UMAC_SCANS;
+-	else
++		/* UMAC scans take the active dwell from the scan request */
++		wiphy_ext_feature_set(hw->wiphy,
++				      NL80211_EXT_FEATURE_SET_SCAN_DWELL);
++	} else {
+ 		mvm->max_scans = IWL_MAX_LMAC_SCANS;
++	}
+ 
+ 	if (mvm->nvm_data->bands[NL80211_BAND_2GHZ].n_channels)
+ 		hw->wiphy->bands[NL80211_BAND_2GHZ] =
+diff --git a/drivers/net/wireless/intel/iwlwifi/mvm/scan.c b/drivers/net/wireless/intel/iwlwifi/mvm/scan.c
+index 3831b3c..d670477 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mvm/scan.c
++++ b/drivers/net/wireless/intel/iwlwifi/mvm/scan.c
+@@ -99,6 +99,11 @@ struct iwl_mvm_scan_params {
+ 	int n_scan_plans;
+ 	struct cfg80211_sched_scan_plan *scan_plans;
+ 	bool iter_notif;
++	/* Requested active dwell (TU), 0 for the default; mandatory disables
++	 * adaptive dwell, which could otherwise leave the channel earlier.
++	 */
++	u8 active_dwell;
++	bool dwell_mandatory;
+ 	struct cfg80211_scan_6ghz_params *scan_6ghz_params;
+ 	u32 n_6ghz_params;
+ 	bool scan_6ghz;
+@@ -1297,7 +1302,7 @@ static void iwl_mvm_scan_umac_dwell(struct iwl_mvm *mvm,
+ 	u8 active_dwell, passive_dwell;
+ 
+ 	timing = &scan_timing[params->type];
+-	active_dwell = IWL_SCAN_DWELL_ACTIVE;
++	active_dwell = params->active_dwell ?: IWL_SCAN_DWELL_ACTIVE;
+ 	passive_dwell = IWL_SCAN_DWELL_PASSIVE;
+ 
+ 	if (iwl_mvm_is_adaptive_dwell_supported(mvm)) {
+@@ -1405,7 +1410,7 @@ iwl_mvm_scan_umac_dwell_v11(struct iwl_mvm *mvm,
+ 	u8 active_dwell, passive_dwell;
+ 
+ 	timing = &scan_timing[params->type];
+-	active_dwell = IWL_SCAN_DWELL_ACTIVE;
++	active_dwell = params->active_dwell ?: IWL_SCAN_DWELL_ACTIVE;
+ 	passive_dwell = IWL_SCAN_DWELL_PASSIVE;
+ 
+ 	general_params->adwell_default_social_chn =
+@@ -2123,7 +2128,7 @@ static u16 iwl_mvm_scan_umac_flags_v2(struct iwl_mvm *mvm,
+ 	    mvm->sched_scan_pass_all == SCHED_SCAN_PASS_ALL_ENABLED)
+ 		flags |= IWL_UMAC_SCAN_GEN_FLAGS_V2_NTFY_ITER_COMPLETE;
+ 
+-	if (IWL_MVM_ADWELL_ENABLE)
++	if (IWL_MVM_ADWELL_ENABLE && !params->dwell_mandatory)
+ 		flags |= IWL_UMAC_SCAN_GEN_FLAGS_V2_ADAPTIVE_DWELL;
+ 
+ 	if (type == IWL_MVM_SCAN_SCHED || type == IWL_MVM_SCAN_NETDETECT)
+@@ -2221,7 +2226,8 @@ static u16 iwl_mvm_scan_umac_flags(struct iwl_mvm *mvm,
+ 	if (mvm->sched_scan_pass_all == SCHED_SCAN_PASS_ALL_ENABLED)
+ 		flags |= IWL_UMAC_SCAN_GEN_FLAGS_ITER_COMPLETE;
+ 
+-	if (iwl_mvm_is_adaptive_dwell_supported(mvm) && IWL_MVM_ADWELL_ENABLE)
++	if (iwl_mvm_is_adaptive_dwell_supported(mvm) && IWL_MVM_ADWELL_ENABLE &&
++	    !params->dwell_mandatory)
+ 		flags |= IWL_UMAC_SCAN_GEN_FLAGS_ADAPTIVE_DWELL;
+ 
+ 	/*
+@@ -3019,8 +3025,12 @@ static int _iwl_mvm_single_scan_start(struct iwl_mvm *mvm,
+ 	iwl_mvm_fill_scan_type(mvm, &params, vif);
+ 	iwl_mvm_fill_respect_p2p_go(mvm, &params, vif);
+ 
+-	if (req->duration)
++	if (req->duration) {
+ 		params.iter_notif = true;
++		/* NL80211_ATTR_MEASUREMENT_DURATION is in TU, as the dwells */
++		params.active_dwell = min_t(u16, req->duration, U8_MAX);
++		params.dwell_mandatory = req->duration_mandatory;
++	}
+ 
+ 	params.tsf_report_link_id = req->tsf_report_link_id;
+ 	if (params.tsf_report_link_id < 0)
+-- 
+2.56.0
+

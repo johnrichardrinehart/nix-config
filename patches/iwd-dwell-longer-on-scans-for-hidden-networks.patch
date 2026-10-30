@@ -1,0 +1,96 @@
+From 2f26a5492d64f449bb67095439f6bf75b179036e Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Fri, 30 Oct 2026 01:34:40 -0400
+Subject: [PATCH] scan: Dwell longer on scans for hidden networks
+
+A hidden network is only found through a probe response to a probe
+request naming it. An MT7925 access point answers such a request after
+9 to 10 ms, which is about the 10 TU default active dwell of iwlwifi:
+the scan has usually left the channel before the response arrives, so
+neither ConnectHiddenNetwork nor the scans for known hidden networks
+find the network.
+
+Active scans that name an SSID now request a mandatory dwell of
+[Scan].HiddenNetworkDwellTime TU (default 15) per channel, where the
+driver supports NL80211_EXT_FEATURE_SET_SCAN_DWELL. Other scans keep
+the driver default.
+---
+ src/iwd.config.rst | 10 ++++++++++
+ src/scan.c         | 27 ++++++++++++++++++++++++++-
+ 2 files changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/src/iwd.config.rst b/src/iwd.config.rst
+index b54670de..3e244e33 100644
+--- a/src/iwd.config.rst
++++ b/src/iwd.config.rst
+@@ -406,6 +406,16 @@ No modification from defaults is normally required.
+        disconnected.  The behavior of the user-initiated scans isn't affected.
+        The periodic scan is enabled by default.
+ 
++   * - HiddenNetworkDwellTime
++     - Values: unsigned int value in TU, 1024 µs (default: **15**)
++
++       Active dwell time, per channel, of scans that send probe requests
++       naming an SSID: connecting to a hidden network and the scans for
++       known hidden networks. Some access points answer after the driver's
++       default active dwell has ended, so the hidden network is not found.
++       Only used where the driver supports setting the dwell; 0 leaves the
++       driver default.
++
+    * - InitialPeriodicScanInterval
+      - Values: unsigned int value in seconds (default: **10**)
+ 
+diff --git a/src/scan.c b/src/scan.c
+index 46ea79ef..afe3cd7f 100644
+--- a/src/scan.c
++++ b/src/scan.c
+@@ -547,20 +547,45 @@ static bool scan_cmds_add_hidden(const struct network_info *network,
+ 	return true;
+ }
+ 
++/*
++ * A hidden network is only found through a probe response to a probe
++ * request naming it, and some APs answer after the default active dwell
++ * has ended. Active scans that name an SSID dwell longer, where the
++ * driver allows setting the dwell.
++ */
++static uint16_t scan_hidden_dwell_time(void)
++{
++	const struct l_settings *config = iwd_get_config();
++	unsigned int tu;
++
++	if (!l_settings_get_uint(config, "Scan", "HiddenNetworkDwellTime", &tu))
++		return 15;
++
++	return tu > UINT16_MAX ? UINT16_MAX : tu;
++}
++
+ static void scan_build_next_cmd(struct l_queue *cmds, struct scan_context *sc,
+ 				bool passive,
+ 				const struct scan_parameters *params,
+ 				const struct scan_freq_set *freqs)
+ {
++	struct scan_parameters active = *params;
+ 	struct l_genl_msg *cmd;
+ 	struct scan_cmds_add_data data = {
+ 		sc,
+-		params,
++		&active,
+ 		cmds,
+ 		&cmd,
+ 		wiphy_get_max_num_ssids_per_scan(sc->wiphy),
+ 	};
+ 
++	if (!passive && !active.duration &&
++			(active.ssid || known_networks_has_hidden())) {
++		active.duration = scan_hidden_dwell_time();
++		active.duration_mandatory = active.duration != 0;
++	}
++
++	params = &active;
+ 	cmd = scan_build_cmd(sc, false, passive, params, freqs);
+ 
+ 	if (passive) {
+-- 
+2.56.0
+

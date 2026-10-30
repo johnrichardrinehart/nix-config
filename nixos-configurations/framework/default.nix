@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   imports = [
     ./framie.nix
@@ -37,5 +37,13 @@
 
   environment.systemPackages = [
     pkgs.intel-gpu-tools
+  ];
+
+  # iwlwifi with debugfs and the requested scan dwell honoured, built out of
+  # tree against this kernel (packages/iwlwifi).
+  boot.extraModulePackages = [
+    (pkgs.dev.johnrinehart.iwlwifi.override {
+      inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
+    })
   ];
 }
