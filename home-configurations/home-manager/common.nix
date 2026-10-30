@@ -249,7 +249,23 @@ in
         palette = 15=#A5ADCB
       '';
       ".config/powerline/themes/gruvbox.theme".source = ./gruvbox.theme;
-      ".config/hypr/hyprlock.conf".source = ./hyprlock.conf;
+      # The face label runs only at start and on SIGUSR2 (update:0:1). The
+      # Super+Alt+F binding sends SIGUSR2 when a scan starts and ends.
+      ".config/hypr/hyprlock.conf".text =
+        builtins.readFile ./hyprlock.conf
+        + lib.optionalString osConfig.dev.johnrinehart.desktop.greetd_niri.face.enable ''
+
+          label {
+              monitor =
+              text = cmd[update:0:1] ${lib.getExe pkgs.dev.johnrinehart.face-auth} status
+              font_size = 16
+              font_family = $font
+
+              position = 0, -100
+              halign = center
+              valign = center
+          }
+        '';
       ".codex/skills/usage-status".source = ./skills/usage-status;
       ".config/hypr/hyprpaper.conf".source =
         let

@@ -26,6 +26,14 @@
   dev.johnrinehart.firmware.framework-ec.features = [ "F9-display-toggle" ];
   dev.johnrinehart.firmware.framework-ec.flashService.enable = true;
 
+  # The built-in camera has no infrared sensor, so a photo can pass for a
+  # face. The check can only reject an attempt. The password is always required.
+  dev.johnrinehart.desktop.greetd_niri.face = {
+    enable = true;
+    device = "/dev/v4l/by-id/usb-Generic_Laptop_Camera_200901010001-video-index0";
+    inputFormat = "mjpeg";
+  };
+
   dev.johnrinehart.desktop.greetd_niri.niri.extraConfig = ''
     output "eDP-1" {
         mode "1920x1200@60.001"

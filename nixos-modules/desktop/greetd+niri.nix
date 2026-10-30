@@ -140,19 +140,86 @@ let
     wait "$daemon_pid"
   '';
 
-  # Shared PAM configuration for password authentication with an optional
-  # fingerprint factor.
-  fprintPamConfig = ''
-    # Account management
-    account required pam_unix.so
+  faceAuth = pkgs.dev.johnrinehart.face-auth;
 
-    # Authentication management
-    ${lib.optionalString cfg.fingerprint.enable ''
-      # Fingerprint: success→continue, timeout/unavailable→continue, wrong→reject immediately
-      auth [success=ok ignore=ignore authinfo_unavail=ignore default=die] ${pkgs.fprintd}/lib/security/pam_fprintd.so timeout=${toString cfg.fingerprint.timeoutSeconds}
-    ''}
-    # Password is always required (do NOT use try_first_pass - we need fresh password for keyring)
-    auth required pam_unix.so nullok
+  # Mod+Alt+F starts a face scan for any password prompt in the session: sudo,
+  # polkit, and hyprlock. Niri runs it on the lock screen too. SIGUSR2 makes
+  # hyprlock refresh the face status label.
+  face-auth-key = pkgs.writeShellApplication {
+    name = "face-auth-key";
+    runtimeInputs = [
+      faceAuth
+      pkgs.procps
+    ];
+    text = ''
+      refresh() { pkill -USR2 -u "$UID" -x hyprlock || true; }
+      face-auth scan >/dev/null || true
+      refresh
+      face-auth wait >/dev/null
+      refresh
+    '';
+  };
+  faceAuthKeybinding = ''
+    Mod+Alt+F allow-when-locked=true hotkey-overlay-title="Scan Face for Authentication" {
+        spawn "${lib.getExe face-auth-key}"
+    }
+  '';
+
+  # Shared PAM configuration for password authentication with optional
+  # fingerprint and face factors. The password is always required.
+  #
+  # Without the face check, the fingerprint comes first and can only reject an
+  # attempt.
+  #
+  # With the face check, the password comes first. tuigreet with --remember
+  # starts PAM before any key press, so a biometric step before the password
+  # would start before the user could press Super+Alt+F. pam_biometrics then waits
+  # for a fingerprint or a face. The first match satisfies it. Without a match,
+  # a wrong finger or another face rejects the attempt. No finger and no face
+  # leave the decision to the password.
+  fingerprintPamRule = ''
+    # Fingerprint: success→continue, timeout/unavailable→continue, wrong→reject immediately
+    auth [success=ok ignore=ignore authinfo_unavail=ignore default=die] ${pkgs.fprintd}/lib/security/pam_fprintd.so timeout=${toString cfg.fingerprint.timeoutSeconds}
+  '';
+  biometricsPamRule = lib.concatStringsSep " " (
+    [
+      "auth [success=ok ignore=ignore default=die]"
+      "${faceAuth}/lib/security/pam_biometrics.so"
+      (lib.getExe faceAuth)
+      "pam-biometrics"
+      "--timeout"
+      (toString cfg.fingerprint.timeoutSeconds)
+    ]
+    ++ lib.optionals cfg.fingerprint.enable [
+      "--fingerprint-command"
+      (lib.getExe' pkgs.fprintd "fprintd-verify")
+    ]
+  );
+  authPamConfig =
+    if cfg.face.enable then
+      ''
+        # Account management
+        account required pam_unix.so
+
+        # Authentication management
+        # Password is always required (do NOT use try_first_pass - we need fresh password for keyring)
+        auth requisite pam_unix.so nullok
+        # Biometrics: fingerprint or face. Match→continue, none→continue, wrong→reject
+        ${biometricsPamRule}
+        ${commonPamConfig}
+      ''
+    else
+      ''
+        # Account management
+        account required pam_unix.so
+
+        # Authentication management
+        ${lib.optionalString cfg.fingerprint.enable fingerprintPamRule}
+        # Password is always required (do NOT use try_first_pass - we need fresh password for keyring)
+        auth required pam_unix.so nullok
+        ${commonPamConfig}
+      '';
+  commonPamConfig = ''
     auth optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so
 
     # Password management
@@ -180,7 +247,27 @@ in
         timeoutSeconds = lib.mkOption {
           type = lib.types.ints.positive;
           default = 15;
-          description = "Seconds to wait for fingerprint authentication before timing out.";
+          description = "Seconds to wait for a fingerprint, or for a fingerprint or face with the face check, before timing out.";
+        };
+      };
+      face = {
+        enable = lib.mkEnableOption ''
+          a webcam face check for every password prompt. Super+Alt+F starts a
+          scan. A fingerprint or a face satisfies the biometric step. A
+          password is always required'';
+        device = lib.mkOption {
+          type = lib.types.str;
+          example = "/dev/v4l/by-id/usb-Generic_Laptop_Camera_200901010001-video-index0";
+          description = "V4L2 capture device of the webcam.";
+        };
+        inputFormat = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          example = "mjpeg";
+          description = ''
+            V4L2 input format to request at 640x360. Null lets ffmpeg use the
+            current format of the device.
+          '';
         };
       };
       niri = {
@@ -374,7 +461,8 @@ in
       ]
       ++ [
         myMako
-      ];
+      ]
+      ++ lib.optional cfg.face.enable faceAuth;
 
     environment.etc."niri/config.kdl".source =
       let
@@ -405,9 +493,10 @@ in
             wormhole_send = lib.getExe wormhole-send;
             xcursor_theme = xcursorTheme;
             extra_niri_config = cfg.niri.extraConfig;
-            extra_niri_keybindings = lib.optionalString (
-              cfg.niri.extraKeybindings != ""
-            ) "\n${indentKdlLines "    " cfg.niri.extraKeybindings}";
+            extra_niri_keybindings = lib.concatMapStrings (bindings: "\n${indentKdlLines "    " bindings}") (
+              lib.optional cfg.face.enable faceAuthKeybinding
+              ++ lib.optional (cfg.niri.extraKeybindings != "") cfg.niri.extraKeybindings
+            );
           };
         };
       in
@@ -458,9 +547,8 @@ in
           checkPhase = null;
         });
 
-    # Custom PAM config: fingerprint as first factor (rejects bad
-    # fingerprints), then mandatory password - applied to authentication
-    # services
+    # Custom PAM config - applied to authentication services. See
+    # authPamConfig for the order of the password and biometric factors.
     security.pam.services =
       lib.genAttrs
         [
@@ -473,8 +561,45 @@ in
         ]
         (_: {
           enableGnomeKeyring = true;
-          text = fprintPamConfig;
+          text = authPamConfig;
         });
+
+    # The daemon owns the camera and the face models. PAM, the greeter, and
+    # the lock-screen binding talk to it through /run/face-auth/socket.
+    systemd.services.face-auth = lib.mkIf cfg.face.enable {
+      description = "Webcam face check for PAM";
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        ExecStart = lib.escapeShellArgs (
+          [
+            (lib.getExe' faceAuth "face-authd")
+            "daemon"
+            "--device"
+            cfg.face.device
+            "--greeter-user"
+            config.services.greetd.settings.default_session.user
+            "--state-dir"
+            "/var/lib/face-auth"
+          ]
+          ++ lib.optionals (cfg.face.inputFormat != null) [
+            "--input-format"
+            cfg.face.inputFormat
+          ]
+        );
+        DynamicUser = true;
+        SupplementaryGroups = [ "video" ];
+        StateDirectory = "face-auth";
+        StateDirectoryMode = "0700";
+        RuntimeDirectory = "face-auth";
+        RuntimeDirectoryMode = "0755";
+        DevicePolicy = "closed";
+        DeviceAllow = [ "char-video4linux rw" ];
+        PrivateNetwork = true;
+        RestrictAddressFamilies = [ "AF_UNIX" ];
+        ProtectHome = true;
+        Restart = "on-failure";
+      };
+    };
 
     services.hypridle.enable = true;
     programs.hyprlock.enable = true;
