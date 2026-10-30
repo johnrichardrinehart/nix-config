@@ -406,16 +406,16 @@ in
       '';
 
       # Glance only scans faces wider than this fraction of the camera frame.
-      # The Recognition page goes down to 0.15 ("Far"); 0.125 lets the face
-      # be about 1.2 times farther from the camera. Moving the slider on that
+      # The Recognition page goes down to 0.15 ("Far"); 0.1 lets the face be
+      # about 1.5 times farther from the camera. Moving the slider on that
       # page writes over this value until the next activation. Glance reads
       # the value only when it starts, so restart it after a change.
       # The launchd agent above starts it again.
       # The new Glance session is locked: unlock it from the menu bar item
       # (Touch ID), or face unlock stays off.
       glanceMinimumFaceWidth = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [[ $(/usr/bin/defaults read com.jonathan.glance GlanceSettings.minimumFaceWidth 2>/dev/null) != 0.125 ]]; then
-          run /usr/bin/defaults write com.jonathan.glance GlanceSettings.minimumFaceWidth -float 0.125
+        if [[ $(/usr/bin/defaults read com.jonathan.glance GlanceSettings.minimumFaceWidth 2>/dev/null) != 0.1 ]]; then
+          run /usr/bin/defaults write com.jonathan.glance GlanceSettings.minimumFaceWidth -float 0.1
           if /usr/bin/pgrep -qx glance; then
             run /usr/bin/pkill -x glance
             warnEcho "Glance restarted for a new minimum face width; unlock its session from the menu bar item."
