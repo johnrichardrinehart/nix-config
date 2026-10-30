@@ -681,7 +681,7 @@ generated on the lighthouse under `/var/lib/nebula-console` and
 has ever seen in `/var/lib/nebula-registry/registry.db`. A peer is online
 while it has a tunnel to the lighthouse and goes offline after 30 seconds
 without one; events (first seen, online, offline, address and certificate
-changes) are kept for 365 days, peers forever.
+changes, archive and restore) are kept for 365 days, peers forever.
 
 DNS for `mycelium.nebula.johnrinehart.dev` comes from that history:
 `<certificate name>.mycelium.nebula.johnrinehart.dev`, for example
@@ -697,6 +697,28 @@ The lighthouse and those resolvers see those queries.
 `https://lighthouse.mycelium.nebula.johnrinehart.dev/` show peers inside the caller's certificate networks.
 `/api/peers` returns the same view as JSON.
 The registry identifies the caller from its source overlay address.
+
+Each row shows the certificate fingerprint prefix and flags identity collisions:
+
+- **superseded by `<fingerprint>`**: a certificate with the same name was
+  first seen later. Rotation leaves the old row.
+- **duplicate**: another certificate with the same name is online at the same
+  time. Either one identity runs on several machines or an old certificate
+  is still deployed.
+- **`<address>` also held by `<name>`**: an unarchived certificate with
+  another name carries the same overlay address.
+
+Archiving hides a certificate from the **Active** view, the counts, the
+address-collision flags, and DNS. The row and its history remain under
+**Archived** and in `/api/peers` (`archived_at`, `archived_by`). Only offline
+certificates can be archived. An archived certificate that connects again is
+restored automatically, with a `restored`/`reconnected` event. Archive and
+restore are available to callers whose **connected** certificate carries a
+group in `dev.johnrinehart.mycelium.registry.adminGroups` (default
+`registry-admin`); everyone else gets a read-only view. Requests must be
+same-origin JSON `POST`s to `/api/archive` or `/api/restore` with
+`{"fingerprint": "…"}`. To grant access, re-sign the administrator's host
+certificate with `-groups peer,registry-admin`.
 
 The private hostname uses `dev.johnrinehart.mycelium.serverTLS`.
 Install its Mycelium-CA certificate at `/var/lib/mycelium-tls/server.crt`.

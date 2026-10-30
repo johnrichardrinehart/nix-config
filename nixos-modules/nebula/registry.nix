@@ -40,7 +40,7 @@ let
       inherit (cfg.tls) extraCertificates;
     };
     networks = lib.mapAttrs (name: net: {
-      inherit (net) address consolePort;
+      inherit (net) address consolePort adminGroups;
       domain = zone name;
       inherit (net) aliases;
       site = site name;
@@ -119,6 +119,16 @@ in
               default = [ ];
               description = "Additional private DNS zones served by this registry.";
             };
+            adminGroups = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+              example = [ "registry-admin" ];
+              description = ''
+                Certificate groups whose connected holders may archive and
+                restore peers from the HTTPS view. Empty makes the view
+                read-only.
+              '';
+            };
           };
         }
       );
@@ -168,7 +178,7 @@ in
     eventRetentionDays = lib.mkOption {
       type = lib.types.ints.positive;
       default = 365;
-      description = "Days of events to keep; peers are kept forever.";
+      description = "Days of events to keep; peers, archived or not, are kept forever.";
     };
     upstreamResolvers = lib.mkOption {
       type = lib.types.listOf lib.types.str;

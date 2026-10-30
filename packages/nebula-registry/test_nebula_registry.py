@@ -8,6 +8,7 @@ import ssl
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -17,10 +18,12 @@ from dnslib import QTYPE, RCODE, RR, DNSRecord
 from nebula_registry import (
     HttpsServer,
     Observation,
+    PeerOnline,
     Registry,
     Snapshot,
     State,
     Zone,
+    annotate,
     answer,
     dns_handler,
     dns_label,
@@ -41,13 +44,17 @@ NETWORK = "mycelium"
 
 
 def observation(
-    fingerprint: str, name: str, address: str, underlay: str | None = None
+    fingerprint: str,
+    name: str,
+    address: str,
+    underlay: str | None = None,
+    groups: tuple[str, ...] = ("peer",),
 ) -> Observation:
     return Observation(
         fingerprint=fingerprint,
         name=name,
         vpn_addrs=(address,),
-        groups=("peer",),
+        groups=groups,
         issuer="ca",
         not_before=None,
         not_after=None,
@@ -161,12 +168,149 @@ class LivenessTests(unittest.TestCase):
         self.assertEqual(len(self.registry.peers(NETWORK)), 1)
 
 
-def peer(name: str, networks: list[str], last_seen: float, online: bool = True) -> dict:
+class ArchiveTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.db = sqlite3.connect(":memory:")
+        self.registry = Registry(self.db, offline_after=30)
+        self.old = observation("fp1", "old-laptop", "10.77.0.5/24", "1.2.3.4:5")
+        self.registry.record(NETWORK, [self.old], now=100)
+        self.registry.sweep(NETWORK, now=200)
+
+    def test_archive_keeps_the_row_and_drops_its_dns_name(self) -> None:
+        self.registry.archive(NETWORK, "fp1", "framework (fp9)", now=300)
+        (peer,) = self.registry.peers(NETWORK)
+        self.assertEqual(
+            (peer["archived_at"], peer["archived_by"]), (300, "framework (fp9)")
+        )
+        self.assertEqual(peer["first_seen"], 100)
+        self.assertEqual(dns_records(self.registry.peers(NETWORK)), {})
+        self.assertEqual(events(self.db)[-1], ("fp1", "archived"))
+
+    def test_restore_returns_the_peer_and_records_who(self) -> None:
+        self.registry.archive(NETWORK, "fp1", "framework (fp9)", now=300)
+        self.registry.restore(NETWORK, "fp1", "framework (fp9)", now=310)
+        (peer,) = self.registry.peers(NETWORK)
+        self.assertIsNone(peer["archived_at"])
+        self.assertEqual(dns_records([peer]), {"old-laptop": ["10.77.0.5"]})
+        self.assertEqual(
+            events(self.db)[-2:], [("fp1", "archived"), ("fp1", "restored")]
+        )
+
+    def test_online_peer_cannot_be_archived(self) -> None:
+        self.registry.record(NETWORK, [self.old], now=400)
+        with self.assertRaises(PeerOnline):
+            self.registry.archive(NETWORK, "fp1", "framework (fp9)", now=401)
+        self.assertIsNone(self.registry.peers(NETWORK)[0]["archived_at"])
+
+    def test_unknown_certificate_is_a_lookup_error(self) -> None:
+        with self.assertRaises(LookupError):
+            self.registry.archive(NETWORK, "nope", "framework (fp9)", now=300)
+        with self.assertRaises(LookupError):
+            self.registry.archive("other", "fp1", "framework (fp9)", now=300)
+
+    def test_reconnecting_archived_certificate_is_restored(self) -> None:
+        self.registry.archive(NETWORK, "fp1", "framework (fp9)", now=300)
+        self.registry.record(NETWORK, [self.old], now=400)
+        (peer,) = self.registry.peers(NETWORK)
+        self.assertEqual((peer["archived_at"], peer["online"]), (None, True))
+        detail = self.db.execute(
+            "SELECT detail FROM events WHERE kind = 'restored'"
+        ).fetchone()
+        self.assertEqual(detail, ("reconnected",))
+
+    def test_database_from_before_archiving_is_migrated(self) -> None:
+        db = sqlite3.connect(":memory:")
+        db.executescript(
+            """
+            CREATE TABLE peers (network TEXT NOT NULL, fingerprint TEXT NOT NULL,
+                name TEXT NOT NULL, vpn_addrs TEXT NOT NULL, groups TEXT NOT NULL,
+                issuer TEXT NOT NULL, not_before TEXT, not_after TEXT,
+                first_seen REAL NOT NULL, last_seen REAL NOT NULL, last_underlay TEXT,
+                relayed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (network, fingerprint));
+            INSERT INTO peers VALUES ('mycelium', 'fp1', 'old-laptop', '["10.77.0.5/24"]',
+                '["peer"]', 'ca', NULL, NULL, 100, 100, NULL, 0);
+            """
+        )
+        registry = Registry(db, offline_after=30)
+        registry.archive(NETWORK, "fp1", "framework (fp9)", now=300)
+        self.assertEqual(registry.peers(NETWORK)[0]["archived_at"], 300)
+
+
+def annotated(peers: list[dict]) -> dict[str, dict]:
+    return {p["fingerprint"]: p for p in annotate(peers)}
+
+
+class IdentityTests(unittest.TestCase):
+    def test_older_certificate_with_same_name_is_superseded(self) -> None:
+        found = annotated(
+            [
+                peer(
+                    "framework",
+                    ["10.77.0.2/24"],
+                    50,
+                    online=False,
+                    fingerprint="old",
+                    first_seen=10,
+                ),
+                peer(
+                    "framework", ["10.77.0.2/24"], 90, fingerprint="new", first_seen=60
+                ),
+            ]
+        )
+        self.assertEqual(found["old"]["superseded_by"], "new")
+        self.assertIsNone(found["new"]["superseded_by"])
+        self.assertEqual(found["old"]["duplicates"], [])
+        # A rotation reuses the address; that is not a collision.
+        self.assertEqual(found["new"]["shares_address"], [])
+
+    def test_same_name_online_twice_is_a_duplicate(self) -> None:
+        found = annotated(
+            [
+                peer("phone", ["10.77.0.7/24"], 90, fingerprint="a", first_seen=10),
+                peer("phone", ["10.77.0.8/24"], 90, fingerprint="b", first_seen=10),
+            ]
+        )
+        self.assertEqual(
+            (found["a"]["duplicates"], found["b"]["duplicates"]), (["b"], ["a"])
+        )
+        # First seen in the same poll: neither replaced the other.
+        self.assertEqual(
+            (found["a"]["superseded_by"], found["b"]["superseded_by"]), (None, None)
+        )
+
+    def test_address_held_by_another_name_until_archived(self) -> None:
+        laptop = peer("old-laptop", ["10.77.0.5/24"], 10, online=False, fingerprint="l")
+        tablet = peer("tablet", ["10.77.0.5/24"], 90, fingerprint="t")
+        found = annotated([laptop, tablet])
+        self.assertEqual(
+            found["t"]["shares_address"],
+            [{"address": "10.77.0.5", "name": "old-laptop"}],
+        )
+        found = annotated([{**laptop, "archived_at": 50}, tablet])
+        self.assertEqual(found["t"]["shares_address"], [])
+        self.assertEqual(found["l"]["shares_address"], [])
+
+
+def peer(
+    name: str,
+    networks: list[str],
+    last_seen: float,
+    online: bool = True,
+    *,
+    fingerprint: str | None = None,
+    first_seen: float | None = None,
+) -> dict:
     return {
+        "fingerprint": fingerprint or f"{name}-{networks[0]}",
         "name": name,
         "vpn_addrs": networks,
+        "groups": [],
+        "first_seen": last_seen if first_seen is None else first_seen,
         "last_seen": last_seen,
         "online": online,
+        "relayed": False,
+        "last_underlay": None,
+        "archived_at": None,
     }
 
 
@@ -329,15 +473,39 @@ class StatusRenderingTests(unittest.TestCase):
                 "last_underlay": None,
                 "relayed": False,
             },
+            {
+                **peer("retired", ["10.77.0.4/24"], 30, online=False),
+                "archived_at": 60,
+                "archived_by": "framework (caller)",
+            },
         ]
 
         status = render_status(peers[0], peers, now=100)
 
         self.assertEqual(status["online"], 1)
         self.assertEqual(status["total"], 2)
+        self.assertEqual(status["archived"], 1)
         self.assertEqual(status["relayed"], 1)
         self.assertIn("&lt;offline&gt;", status["rows"])
         self.assertNotIn("<offline>", status["rows"])
+        self.assertNotIn("data-action", status["rows"])
+
+    def test_managers_can_archive_offline_and_restore_archived_rows(self) -> None:
+        caller = peer("framework", ["10.77.0.2/24"], 90)
+        offline = peer("old-laptop", ["10.77.0.5/24"], 10, online=False)
+        archived = {
+            **peer("retired", ["10.77.0.4/24"], 10, online=False),
+            "archived_at": 60,
+        }
+        rows = render_status(caller, [caller, offline, archived], now=100, manage=True)[
+            "rows"
+        ].splitlines()
+        actions = {
+            row.split('<span class="name">')[1].split("<")[0]: row for row in rows
+        }
+        self.assertIn("disabled", actions["framework"])
+        self.assertIn('data-action="archive"', actions["old-laptop"])
+        self.assertIn('data-action="restore"', actions["retired"])
 
 
 class VisibilityTests(unittest.TestCase):
@@ -360,7 +528,7 @@ class VisibilityTests(unittest.TestCase):
         )
 
 
-class TlsTests(unittest.TestCase):
+class TlsFixture(unittest.TestCase):
     public_name = "lighthouse.mycelium.nebula.johnrinehart.dev"
     private_name = "lighthouse.mycelium.internal"
 
@@ -424,7 +592,12 @@ class TlsTests(unittest.TestCase):
         context.check_hostname = check_hostname
         return context
 
-    def start_server(self, state: State | None = None) -> tuple[str, int]:
+    def start_server(
+        self,
+        state: State | None = None,
+        registry: Registry | None = None,
+        admin_groups: frozenset[str] = frozenset(),
+    ) -> tuple[str, int]:
         if state is None:
             state = State()
             state.set(
@@ -438,8 +611,14 @@ class TlsTests(unittest.TestCase):
                     1,
                 ),
             )
+        if registry is None:
+            registry = Registry(
+                sqlite3.connect(":memory:", check_same_thread=False), offline_after=30
+            )
         context = tls_context(self.config)
-        server = HttpsServer(("127.0.0.1", 0), https_handler(NETWORK, state))
+        server = HttpsServer(
+            ("127.0.0.1", 0), https_handler(NETWORK, state, registry, admin_groups)
+        )
         self.addCleanup(server.server_close)
         server.socket = context.wrap_socket(
             server.socket, server_side=True, do_handshake_on_connect=False
@@ -470,6 +649,8 @@ class TlsTests(unittest.TestCase):
                 with response:
                     return identity, response.status, response.read()
 
+
+class TlsTests(TlsFixture):
     def test_public_and_private_names_validate_and_preserve_peer_authorization(
         self,
     ) -> None:
@@ -541,6 +722,85 @@ class TlsTests(unittest.TestCase):
                 }
                 with self.assertRaises(FileNotFoundError):
                     tls_context(config)
+
+
+class ArchiveHttpTests(TlsFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        self.registry = Registry(
+            sqlite3.connect(":memory:", check_same_thread=False), offline_after=30
+        )
+        self.state = State()
+        self.now = time.time()
+        admin = observation(
+            "admin", "framework", "127.0.0.1/8", groups=("peer", "registry-admin")
+        )
+        viewer = observation("viewer", "phone", "127.0.0.3/8")
+        old = observation("old", "old-laptop", "127.0.0.5/8")
+        self.registry.record(NETWORK, [admin, viewer, old], self.now - 100)
+        self.registry.record(NETWORK, [admin, viewer], self.now)
+        self.registry.sweep(NETWORK, self.now)
+        self.registry.publish(NETWORK, self.state, self.now)
+        self.address = self.start_server(
+            self.state, self.registry, frozenset({"registry-admin"})
+        )
+
+    def post(
+        self,
+        path: str,
+        fingerprint: str,
+        *,
+        source: str = "127.0.0.1",
+        origin: str | None = None,
+    ) -> int:
+        host, port = self.address
+        connection = http.client.HTTPSConnection(
+            host,
+            port,
+            timeout=3,
+            context=self.client(self.public_name, check_hostname=False),
+            source_address=(source, 0),
+        )
+        self.addCleanup(connection.close)
+        connection.request(
+            "POST",
+            path,
+            json.dumps({"fingerprint": fingerprint}),
+            {
+                "Content-Type": "application/json",
+                "Origin": origin or f"https://{host}:{port}",
+            },
+        )
+        response = connection.getresponse()
+        response.read()
+        return response.status
+
+    def archived_at(self, fingerprint: str) -> float | None:
+        (row,) = [
+            p for p in self.state.get(NETWORK).peers if p["fingerprint"] == fingerprint
+        ]
+        return row["archived_at"]
+
+    def test_admin_archive_and_restore_take_effect_immediately(self) -> None:
+        self.assertEqual(self.post("/api/archive", "old"), 200)
+        self.assertIsNotNone(self.archived_at("old"))
+        self.assertEqual(self.post("/api/restore", "old"), 200)
+        self.assertIsNone(self.archived_at("old"))
+
+    def test_online_certificate_cannot_be_archived(self) -> None:
+        self.assertEqual(self.post("/api/archive", "viewer"), 409)
+        self.assertEqual(self.post("/api/archive", "missing"), 404)
+
+    def test_only_connected_admins_on_the_same_origin_may_archive(self) -> None:
+        self.assertEqual(self.post("/api/archive", "old", source="127.0.0.3"), 403)
+        self.assertEqual(
+            self.post("/api/archive", "old", origin="https://attacker.example"), 403
+        )
+        # A stale row keeps its groups, but only a live tunnel proves the holder.
+        self.registry.sweep(NETWORK, self.now + 1000)
+        self.registry.publish(NETWORK, self.state, self.now + 1000)
+        self.assertEqual(self.post("/api/archive", "old"), 403)
+        self.assertIsNone(self.archived_at("old"))
 
 
 if __name__ == "__main__":

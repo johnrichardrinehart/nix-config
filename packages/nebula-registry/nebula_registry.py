@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS peers (
     last_seen REAL NOT NULL,
     last_underlay TEXT,
     relayed INTEGER NOT NULL DEFAULT 0,
+    archived_at REAL,
+    archived_by TEXT,
     PRIMARY KEY (network, fingerprint)
 );
 CREATE TABLE IF NOT EXISTS events (
@@ -62,6 +64,12 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_ts ON events (ts);
 """
+# Columns added after the first release; ALTER them into older databases.
+ADDED_PEER_COLUMNS = {"archived_at": "REAL", "archived_by": "TEXT"}
+
+
+class PeerOnline(Exception):
+    """An online peer cannot be archived: its next poll would restore it."""
 
 
 def log(message: str) -> None:
@@ -135,12 +143,22 @@ def addresses(vpn_addrs: list[str] | tuple[str, ...]) -> list[str]:
 
 
 class Registry:
-    """Permanent peer history. Only the poll thread touches the database."""
+    """Permanent peer history.
+
+    The poll thread records observations; HTTPS threads archive and restore.
+    Every database access and snapshot publication holds `lock`.
+    """
 
     def __init__(self, db: sqlite3.Connection, offline_after: float) -> None:
         self.db = db
         self.offline_after = offline_after
+        self.lock = threading.RLock()
         db.executescript(SCHEMA)
+        present = {row[1] for row in db.execute("PRAGMA table_info(peers)")}
+        with db:
+            for column, kind in ADDED_PEER_COLUMNS.items():
+                if column not in present:
+                    db.execute(f"ALTER TABLE peers ADD COLUMN {column} {kind}")
         # Liveness survives restarts: it is the latest online/offline event.
         self.online: dict[tuple[str, str], bool] = {
             (network, fingerprint): kind == "online"
@@ -170,10 +188,10 @@ class Registry:
         )
 
     def record(self, network: str, observations: list[Observation], now: float) -> None:
-        with self.db:
+        with self.lock, self.db:
             for obs in {o.fingerprint: o for o in observations}.values():
                 row = self.db.execute(
-                    "SELECT last_underlay FROM peers WHERE network = ? AND fingerprint = ?",
+                    "SELECT last_underlay, archived_at FROM peers WHERE network = ? AND fingerprint = ?",
                     (network, obs.fingerprint),
                 ).fetchone()
                 if row is None:
@@ -216,7 +234,12 @@ class Registry:
                             f"replaces {previous[0]}",
                         )
                 else:
-                    (last_underlay,) = row
+                    last_underlay, archived_at = row
+                    if archived_at is not None:
+                        self._set_archived(network, obs.fingerprint, None, None)
+                        self._event(
+                            now, network, obs.fingerprint, "restored", "reconnected"
+                        )
                     if obs.underlay and last_underlay and obs.underlay != last_underlay:
                         self._event(
                             now,
@@ -238,7 +261,7 @@ class Registry:
 
     def sweep(self, network: str, now: float) -> None:
         """Mark peers offline once they miss the configured number of polls."""
-        with self.db:
+        with self.lock, self.db:
             for fingerprint, last_seen in self.db.execute(
                 "SELECT fingerprint, last_seen FROM peers WHERE network = ?", (network,)
             ).fetchall():
@@ -248,21 +271,56 @@ class Registry:
                     self.online[key] = False
 
     def prune(self, now: float, retention_days: int) -> None:
-        with self.db:
+        with self.lock, self.db:
             self.db.execute(
                 "DELETE FROM events WHERE ts < ?",
                 (now - retention_days * SECONDS_PER_DAY,),
             )
 
+    def _set_archived(
+        self, network: str, fingerprint: str, at: float | None, by: str | None
+    ) -> None:
+        self.db.execute(
+            "UPDATE peers SET archived_at = ?, archived_by = ? WHERE network = ? AND fingerprint = ?",
+            (at, by, network, fingerprint),
+        )
+
+    def _archived_at(self, network: str, fingerprint: str) -> float | None:
+        row = self.db.execute(
+            "SELECT archived_at FROM peers WHERE network = ? AND fingerprint = ?",
+            (network, fingerprint),
+        ).fetchone()
+        if row is None:
+            raise LookupError(fingerprint)
+        return row[0]
+
+    def archive(self, network: str, fingerprint: str, by: str, now: float) -> None:
+        """Hide a certificate from the peer view and DNS; its history stays."""
+        with self.lock, self.db:
+            archived_at = self._archived_at(network, fingerprint)
+            if self.online.get((network, fingerprint)):
+                raise PeerOnline(fingerprint)
+            if archived_at is None:
+                self._set_archived(network, fingerprint, now, by)
+                self._event(now, network, fingerprint, "archived", by)
+
+    def restore(self, network: str, fingerprint: str, by: str, now: float) -> None:
+        with self.lock, self.db:
+            if self._archived_at(network, fingerprint) is not None:
+                self._set_archived(network, fingerprint, None, None)
+                self._event(now, network, fingerprint, "restored", by)
+
     def peers(self, network: str) -> list[dict[str, Any]]:
-        rows = self.db.execute(
-            """
-            SELECT fingerprint, name, vpn_addrs, groups, issuer, not_before, not_after,
-                first_seen, last_seen, last_underlay, relayed
-            FROM peers WHERE network = ? ORDER BY name, last_seen
-            """,
-            (network,),
-        ).fetchall()
+        with self.lock:
+            rows = self.db.execute(
+                """
+                SELECT fingerprint, name, vpn_addrs, groups, issuer, not_before, not_after,
+                    first_seen, last_seen, last_underlay, relayed, archived_at, archived_by
+                FROM peers WHERE network = ? ORDER BY name, last_seen
+                """,
+                (network,),
+            ).fetchall()
+            online = dict(self.online)
         return [
             {
                 "fingerprint": fingerprint,
@@ -276,7 +334,9 @@ class Registry:
                 "last_seen": last_seen,
                 "last_underlay": last_underlay,
                 "relayed": bool(relayed),
-                "online": self.online.get((network, fingerprint), False),
+                "online": online.get((network, fingerprint), False),
+                "archived_at": archived_at,
+                "archived_by": archived_by,
             }
             for (
                 fingerprint,
@@ -290,16 +350,27 @@ class Registry:
                 last_seen,
                 last_underlay,
                 relayed,
+                archived_at,
+                archived_by,
             ) in rows
         ]
 
+    def publish(self, network: str, state: State, now: float) -> None:
+        """Swap in a fresh snapshot; holding the lock keeps snapshots in write order."""
+        with self.lock:
+            peers = self.peers(network)
+            state.set(network, Snapshot(peers, dns_records(peers), int(now)))
+
 
 def dns_records(peers: list[dict[str, Any]]) -> dict[str, list[str]]:
-    """Map DNS labels to addresses; the most recently seen certificate wins."""
+    """Map DNS labels to addresses; the most recently seen certificate wins.
+
+    Archived certificates no longer answer.
+    """
     records: dict[str, list[str]] = {}
     for peer in sorted(peers, key=lambda p: p["last_seen"]):
         label = dns_label(peer["name"])
-        if label:
+        if label and not peer.get("archived_at"):
             records[label] = addresses(peer["vpn_addrs"])
     return records
 
@@ -456,6 +527,76 @@ def visible_peers(
     ]
 
 
+def annotate(peers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Copy each peer with the identity collisions among `peers`.
+
+    - `superseded_by`: the newest certificate (by first sighting) carrying the
+      same name, when this one was first seen earlier: a rotation or reissue.
+    - `duplicates`: other certificates with the same name online right now:
+      one identity in use on several machines, or a rotation whose old
+      certificate is still deployed somewhere.
+    - `shares_address`: unarchived certificates with a different name that
+      hold one of this certificate's overlay addresses.
+    """
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    holders: dict[str, list[dict[str, Any]]] = {}
+    for peer in peers:
+        by_name.setdefault(peer["name"], []).append(peer)
+        if not peer.get("archived_at"):
+            for address in addresses(peer["vpn_addrs"]):
+                holders.setdefault(address, []).append(peer)
+    annotated = []
+    for peer in peers:
+        same_name = by_name[peer["name"]]
+        newest = max(same_name, key=lambda p: p["first_seen"])
+        duplicates = (
+            [
+                p["fingerprint"]
+                for p in same_name
+                if p["online"] and p["fingerprint"] != peer["fingerprint"]
+            ]
+            if peer["online"]
+            else []
+        )
+        shares = (
+            []
+            if peer.get("archived_at")
+            else sorted(
+                {
+                    (address, other["name"])
+                    for address in addresses(peer["vpn_addrs"])
+                    for other in holders.get(address, ())
+                    if other["name"] != peer["name"]
+                }
+            )
+        )
+        annotated.append(
+            {
+                **peer,
+                "superseded_by": newest["fingerprint"]
+                if newest["first_seen"] > peer["first_seen"]
+                else None,
+                "duplicates": duplicates,
+                "shares_address": [{"address": a, "name": n} for a, n in shares],
+            }
+        )
+    return annotated
+
+
+def can_manage(caller: dict[str, Any], admin_groups: frozenset[str]) -> bool:
+    """Only a connected certificate's groups count, never a stale row's."""
+    return bool(caller["online"] and admin_groups.intersection(caller["groups"]))
+
+
+def same_origin(origin: str | None, host: str | None) -> bool:
+    """Reject cross-site form posts: a browser always sends Origin on POST.
+
+    HTTPS makes the Host trustworthy here: a rebinding name would fail the
+    certificate check before any request is sent.
+    """
+    return bool(origin and host and origin.lower() == f"https://{host.lower()}")
+
+
 def _utc(ts: float) -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(ts))
 
@@ -520,14 +661,15 @@ PAGE = """<!doctype html>
     --relay: #e3b341; --relay-bg: #3a2d0c; --warn: #e3b341; --bad: #f85149; --hover: #1c232c;
   }
 }
-.toolbar { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
-.theme { display: inline-flex; gap: .15rem; padding: .2rem; background: var(--card); border: 1px solid var(--line);
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+.segmented { display: inline-flex; gap: .15rem; padding: .2rem; background: var(--card); border: 1px solid var(--line);
   border-radius: 999px; }
-.theme button { font: inherit; font-size: .8rem; color: var(--muted); background: transparent; border: 0;
+.segmented button { font: inherit; font-size: .8rem; color: var(--muted); background: transparent; border: 0;
   border-radius: 999px; padding: .3rem .75rem; cursor: pointer; }
-.theme button:hover { color: var(--text); }
-.theme button[aria-pressed=true] { color: var(--text); background: var(--off-bg); font-weight: 600; }
-.theme button:focus-visible, th:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.segmented button:hover { color: var(--text); }
+.segmented button[aria-pressed=true] { color: var(--text); background: var(--off-bg); font-weight: 600; }
+.segmented button:focus-visible, th:focus-visible, .action:focus-visible { outline: 2px solid var(--accent);
+  outline-offset: 2px; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -555,22 +697,36 @@ th:hover { color: var(--text); }
 th::after { content: "\\2195"; opacity: .25; margin-left: .35em; }
 th[aria-sort=ascending]::after { content: "\\2191"; opacity: 1; color: var(--accent); }
 th[aria-sort=descending]::after { content: "\\2193"; opacity: 1; color: var(--accent); }
+th.c-manage { cursor: default; }
+th.c-manage::after { content: none; }
 td { border-bottom: 1px solid var(--line); }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--hover); }
-tr.offline td { color: var(--muted); }
+tr.offline td, tr.archived td { color: var(--muted); }
+#peers:not(.show-archived) tbody tr.archived, #peers.show-archived tbody tr:not(.archived) { display: none; }
 .mono { font-family: var(--mono); font-size: .88rem; }
 .name { font-weight: 600; }
 .you { margin-left: .4rem; font-size: .7rem; font-weight: 600; color: var(--accent);
   border: 1px solid currentColor; border-radius: 999px; padding: 0 .45rem; vertical-align: 1px; }
 .tag { display: inline-block; margin-left: .35rem; font-size: .72rem; color: var(--muted);
   background: var(--off-bg); border-radius: 6px; padding: 0 .4rem; }
+.fp { display: block; font-family: var(--mono); font-size: .75rem; font-weight: 400; color: var(--muted); }
+.flags { display: block; }
+.flag { display: inline-block; margin: .25rem .35rem 0 0; font-size: .72rem; font-weight: 600; color: var(--warn);
+  background: var(--relay-bg); border-radius: 6px; padding: 0 .4rem; }
+.flag.bad { color: var(--bad); background: transparent; border: 1px solid currentColor; }
+.since { display: block; font-size: .75rem; }
+.action { font: inherit; font-size: .8rem; color: var(--text); background: var(--card); border: 1px solid var(--line);
+  border-radius: 8px; padding: .25rem .7rem; cursor: pointer; }
+.action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.action:disabled { opacity: .45; cursor: not-allowed; }
 .pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; font-weight: 600;
   border-radius: 999px; padding: .15rem .6rem; }
 .pill.online { color: var(--ok); background: var(--ok-bg); }
 .pill.offline { color: var(--off); background: var(--off-bg); }
 .pill.direct { color: var(--accent); background: transparent; border: 1px solid var(--line); }
 .pill.relayed { color: var(--relay); background: var(--relay-bg); }
+.pill.archived { color: var(--off); background: transparent; border: 1px dashed var(--off); }
 .dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
 .online .dot { animation: pulse 2.4s infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,157,85,.45); } 70% { box-shadow: 0 0 0 7px rgba(31,157,85,0); }
@@ -580,6 +736,7 @@ small { color: var(--muted); }
 .bad { color: var(--bad); font-weight: 600; }
 footer { margin-top: 1rem; color: var(--muted); font-size: .82rem; text-align: right; }
 footer a { color: var(--accent); }
+#action-state:not(:empty)::after { content: " · "; color: var(--muted); }
 .sort-mobile { display: none; }
 .sort-mobile select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line);
   border-radius: 10px; padding: .45rem .7rem; }
@@ -605,7 +762,8 @@ footer a { color: var(--accent); }
   td::before { content: attr(data-label); display: block; font-size: .68rem; font-weight: 600;
     text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .1rem; }
   td.c-name { grid-column: 1 / -1; font-size: 1.05rem; }
-  td.c-name::before { content: none; }
+  td.c-name::before, td.c-manage::before { content: none; }
+  td.c-manage { grid-column: 1 / -1; }
   td.c-first, td.c-underlay { display: block; }
   td.c-underlay { grid-column: 1 / -1; }
 }
@@ -613,7 +771,11 @@ footer a { color: var(--accent); }
 </style></head>
 <body><main>
 <div class="toolbar">
-  <div class="theme" role="group" aria-label="Color theme">
+  <div class="segmented" role="group" aria-label="Peers shown">
+    <button type="button" data-view="active">Active</button>
+    <button type="button" data-view="archived">Archived <span id="archived-count">@ARCHIVED@</span></button>
+  </div>
+  <div class="segmented" role="group" aria-label="Color theme">
     <button type="button" data-theme-choice="system">System</button>
     <button type="button" data-theme-choice="light">Light</button>
     <button type="button" data-theme-choice="dark">Dark</button>
@@ -645,12 +807,12 @@ footer a { color: var(--accent); }
   <th data-type="text" class="c-name">Name</th><th data-type="num" class="c-ip">Overlay IP</th>
   <th data-type="num" class="c-state">State</th><th data-type="num" class="c-last">Last seen</th>
   <th data-type="num" class="c-first">First seen</th><th data-type="text" class="c-underlay">Underlay</th>
-  <th data-type="text" class="c-path">Path</th><th data-type="num" class="c-cert">Cert expires</th>
+  <th data-type="text" class="c-path">Path</th><th data-type="num" class="c-cert">Cert expires</th>@MANAGE_HEADER@
 </tr></thead>
 <tbody>
 @ROWS@
 </tbody></table></div>
-<footer><span id="update-state">Rendered @RENDERED@</span> · updates every second · <a href="/api/peers">JSON</a></footer>
+<footer><span id="action-state" class="bad" role="status"></span><span id="update-state">Rendered @RENDERED@</span> · updates every second · <a href="/api/peers">JSON</a></footer>
 </main>
 <script>
 (() => {
@@ -676,26 +838,43 @@ footer a { color: var(--accent); }
     const [index, direction] = select.value.split(":");
     sortBy(Number(index), direction);
   });
-  headers.forEach((th, index) => th.addEventListener("click", () => {
-    const next = th.getAttribute("aria-sort") === "ascending" ? "descending" : "ascending";
-    sortBy(index, next);
-  }));
+  headers.forEach((th, index) => {
+    if (!th.dataset.type) return;
+    th.addEventListener("click", () => {
+      const next = th.getAttribute("aria-sort") === "ascending" ? "descending" : "ascending";
+      sortBy(index, next);
+    });
+  });
   const saved = JSON.parse(sessionStorage.getItem("nebula-sort") || "null");
   if (saved) sortBy(...saved);
 
+  const viewButtons = [...document.querySelectorAll("[data-view]")];
+  const applyView = (view) => {
+    table.classList.toggle("show-archived", view === "archived");
+    viewButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === view)));
+    sessionStorage.setItem("nebula-view", view);
+  };
+  viewButtons.forEach((b) => b.addEventListener("click", () => applyView(b.dataset.view)));
+  applyView(sessionStorage.getItem("nebula-view") || "active");
+
   const updateState = document.getElementById("update-state");
+  const actionState = document.getElementById("action-state");
+  const load = async () => {
+    const response = await fetch("/api/status", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const status = await response.json();
+    table.tBodies[0].innerHTML = status.rows;
+    document.getElementById("online-count").textContent = String(status.online);
+    document.getElementById("peer-count").textContent = String(status.total);
+    document.getElementById("relayed-count").textContent = String(status.relayed);
+    document.getElementById("archived-count").textContent = String(status.archived);
+    updateState.textContent = `Rendered ${status.rendered}`;
+    const sorted = headers.findIndex((header) => header.getAttribute("aria-sort") !== "none");
+    if (sorted >= 0) sortBy(sorted, headers[sorted].getAttribute("aria-sort"));
+  };
   const refresh = async () => {
     try {
-      const response = await fetch("/api/status", { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const status = await response.json();
-      table.tBodies[0].innerHTML = status.rows;
-      document.getElementById("online-count").textContent = String(status.online);
-      document.getElementById("peer-count").textContent = String(status.total);
-      document.getElementById("relayed-count").textContent = String(status.relayed);
-      updateState.textContent = `Rendered ${status.rendered}`;
-      const sorted = headers.findIndex((header) => header.getAttribute("aria-sort") !== "none");
-      if (sorted >= 0) sortBy(sorted, headers[sorted].getAttribute("aria-sort"));
+      await load();
     } catch {
       updateState.textContent = "Live update failed; retrying";
     } finally {
@@ -703,6 +882,26 @@ footer a { color: var(--accent); }
     }
   };
   setTimeout(refresh, 1000);
+
+  table.tBodies[0].addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const { action, fingerprint } = button.dataset;
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fingerprint }),
+      });
+      if (!response.ok) throw new Error((await response.text()).trim() || `HTTP ${response.status}`);
+      actionState.textContent = "";
+      await load();
+    } catch (error) {
+      actionState.textContent = `Could not ${action}: ${error.message}`;
+      button.disabled = false;
+    }
+  });
 
   const themeButtons = [...document.querySelectorAll("[data-theme-choice]")];
   const applyTheme = (choice) => {
@@ -727,45 +926,98 @@ class StatusUpdate(TypedDict):
     online: int
     total: int
     relayed: int
+    archived: int
     rendered: str
     rows: str
+
+
+COLUMNS = [
+    ("name", "Name"),
+    ("ip", "Overlay IP"),
+    ("state", "State"),
+    ("last", "Last seen"),
+    ("first", "First seen"),
+    ("underlay", "Underlay"),
+    ("path", "Path"),
+    ("cert", "Cert expires"),
+]
+MANAGE_HEADER = '<th class="c-manage">Manage</th>'
+
+
+def _short(fingerprint: str) -> str:
+    return fingerprint[:12]
+
+
+def _flags(peer: dict[str, Any]) -> str:
+    """Badges for the collisions `annotate` found."""
+    e = html.escape
+    flags = []
+    if peer.get("duplicates"):
+        others = ", ".join(_short(fp) for fp in peer["duplicates"])
+        flags.append(
+            f'<span class="flag bad" title="Another certificate named {e(peer["name"])} is online at the same time">'
+            f"duplicate · also online: {e(others)}</span>"
+        )
+    if peer.get("superseded_by"):
+        flags.append(
+            f'<span class="flag" title="A newer certificate {e(peer["superseded_by"])} carries this name">'
+            f"superseded by {e(_short(peer['superseded_by']))}</span>"
+        )
+    for share in peer.get("shares_address") or []:
+        flags.append(
+            f'<span class="flag bad" title="Another unarchived certificate holds this overlay address">'
+            f"{e(share['address'])} also held by {e(share['name'])}</span>"
+        )
+    return f'<span class="flags">{"".join(flags)}</span>' if flags else ""
 
 
 def render_status(
     caller: dict[str, Any],
     peers: list[dict[str, Any]],
     now: float | None = None,
+    manage: bool = False,
 ) -> StatusUpdate:
+    """Rows for every visible peer; the page hides archived or active ones."""
     now = time.time() if now is None else now
     e = html.escape
     rows = []
     ordered = sorted(peers, key=lambda p: (not p["online"], p["name"]))
     for peer in ordered:
-        state = "online" if peer["online"] else "offline"
+        fingerprint = peer["fingerprint"]
+        archived_at = peer.get("archived_at")
+        state = "archived" if archived_at else "online" if peer["online"] else "offline"
         path = "relayed" if peer["relayed"] else "direct"
         overlay = addresses(peer["vpn_addrs"])
         overlay_key = int(ipaddress.ip_address(overlay[0])) if overlay else 0
         you = (
             '<span class="you">you</span>'
-            if peer["fingerprint"] == caller.get("fingerprint")
+            if fingerprint == caller.get("fingerprint")
             else ""
         )
         tags = "".join(
             f'<span class="tag">{e(g)}</span>' for g in peer.get("groups") or []
         )
+        if archived_at:
+            by = peer.get("archived_by") or "unknown"
+            state_cell = (
+                f'<span class="pill archived" title="Archived {_utc(archived_at)} by {e(by)}">archived</span>'
+                f'<small class="since">{time.strftime("%Y-%m-%d", time.gmtime(archived_at))} · {e(by)}</small>'
+            )
+        else:
+            state_cell = (
+                f'<span class="pill {state}"><span class="dot"></span>{state}</span>'
+            )
         expiry_key, expiry_label, expiry_class = _expiry(peer.get("not_after"), now)
         cells = [
             (
                 e(peer["name"]),
-                f'<span class="name">{e(peer["name"])}</span>{you}{tags}',
+                f'<span class="name">{e(peer["name"])}</span>{you}{tags}'
+                f'<span class="fp" title="{e(fingerprint)}">{e(_short(fingerprint))}</span>'
+                + _flags(peer),
                 "",
             ),
             (str(overlay_key), e(", ".join(overlay)), "mono"),
-            (
-                "1" if peer["online"] else "0",
-                f'<span class="pill {state}"><span class="dot"></span>{state}</span>',
-                "",
-            ),
+            ("-1" if archived_at else "1" if peer["online"] else "0", state_cell, ""),
             (
                 str(peer["last_seen"]),
                 f'<span title="{_utc(peer["last_seen"])}">{_ago(now - peer["last_seen"])}</span>',
@@ -780,30 +1032,25 @@ def render_status(
             (path, f'<span class="pill {path}">{path}</span>', ""),
             (str(expiry_key), expiry_label, expiry_class),
         ]
-        columns = [
-            ("name", "Name"),
-            ("ip", "Overlay IP"),
-            ("state", "State"),
-            ("last", "Last seen"),
-            ("first", "First seen"),
-            ("underlay", "Underlay"),
-            ("path", "Path"),
-            ("cert", "Cert expires"),
-        ]
-        rows.append(
-            f'<tr class="{state}">'
-            + "".join(
-                f'<td data-sort="{key}" data-label="{label}" class="c-{column} {css}">{content}</td>'
-                for (column, label), (key, content, css) in zip(
-                    columns, cells, strict=True
-                )
-            )
-            + "</tr>"
+        row = "".join(
+            f'<td data-sort="{key}" data-label="{label}" class="c-{column} {css}">{content}</td>'
+            for (column, label), (key, content, css) in zip(COLUMNS, cells, strict=True)
         )
+        if manage:
+            if archived_at:
+                button = f'<button type="button" class="action" data-action="restore" data-fingerprint="{e(fingerprint)}">Restore</button>'
+            elif peer["online"]:
+                button = '<button type="button" class="action" disabled title="Online certificates cannot be archived">Archive</button>'
+            else:
+                button = f'<button type="button" class="action" data-action="archive" data-fingerprint="{e(fingerprint)}">Archive</button>'
+            row += f'<td class="c-manage">{button}</td>'
+        rows.append(f'<tr class="{state}">{row}</tr>')
+    active = [p for p in peers if not p.get("archived_at")]
     return {
-        "online": sum(p["online"] for p in peers),
-        "total": len(peers),
-        "relayed": sum(p["relayed"] and p["online"] for p in peers),
+        "online": sum(p["online"] for p in active),
+        "total": len(active),
+        "relayed": sum(p["relayed"] and p["online"] for p in active),
+        "archived": len(peers) - len(active),
         "rendered": _utc(now),
         "rows": "\n".join(rows),
     }
@@ -814,8 +1061,9 @@ def render_html(
     caller: dict[str, Any],
     peers: list[dict[str, Any]],
     now: float | None = None,
+    manage: bool = False,
 ) -> str:
-    status = render_status(caller, peers, now)
+    status = render_status(caller, peers, now, manage)
     replacements = {
         "@NETWORK@": html.escape(network),
         "@CALLER@": html.escape(caller["name"]),
@@ -823,6 +1071,8 @@ def render_html(
         "@ONLINE@": str(status["online"]),
         "@TOTAL@": str(status["total"]),
         "@RELAYED@": str(status["relayed"]),
+        "@ARCHIVED@": str(status["archived"]),
+        "@MANAGE_HEADER@": MANAGE_HEADER if manage else "",
         "@RENDERED@": str(status["rendered"]),
         "@ROWS@": str(status["rows"]),
     }
@@ -945,7 +1195,14 @@ def tls_context(tls_config: dict[str, Any]) -> ssl.SSLContext:
     return default
 
 
-def https_handler(network: str, state: State) -> type[BaseHTTPRequestHandler]:
+MAX_ACTION_BODY = 4096
+
+
+def https_handler(
+    network: str, state: State, registry: Registry, admin_groups: frozenset[str]
+) -> type[BaseHTTPRequestHandler]:
+    """Read-only peer view for every caller; archive/restore for `admin_groups`."""
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "nebula-registry"
         timeout = 10
@@ -966,13 +1223,21 @@ def https_handler(network: str, state: State) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(payload)
 
-        def do_GET(self) -> None:  # noqa: N802
+        def _caller(self) -> tuple[Snapshot, dict[str, Any]] | None:
             snapshot = state.get(network)
             caller = find_caller(snapshot.peers, self.client_address[0])
             if caller is None:
                 self._send(403, "text/plain; charset=utf-8", "unknown overlay peer\n")
+                return None
+            return snapshot, caller
+
+        def do_GET(self) -> None:  # noqa: N802
+            found = self._caller()
+            if found is None:
                 return
-            peers = visible_peers(snapshot.peers, caller)
+            snapshot, caller = found
+            peers = annotate(visible_peers(snapshot.peers, caller))
+            manage = can_manage(caller, admin_groups)
             path = self.path.split("?", 1)[0]
             if path == "/api/peers":
                 body = json.dumps(
@@ -984,15 +1249,84 @@ def https_handler(network: str, state: State) -> type[BaseHTTPRequestHandler]:
                 self._send(
                     200,
                     "application/json",
-                    json.dumps(render_status(caller, peers), separators=(",", ":"))
+                    json.dumps(
+                        render_status(caller, peers, manage=manage),
+                        separators=(",", ":"),
+                    )
                     + "\n",
                 )
             elif path == "/":
                 self._send(
-                    200, "text/html; charset=utf-8", render_html(network, caller, peers)
+                    200,
+                    "text/html; charset=utf-8",
+                    render_html(network, caller, peers, manage=manage),
                 )
             else:
                 self._send(404, "text/plain; charset=utf-8", "not found\n")
+
+        def do_POST(self) -> None:  # noqa: N802
+            text = "text/plain; charset=utf-8"
+            path = self.path.split("?", 1)[0]
+            if path not in ("/api/archive", "/api/restore"):
+                self._send(404, text, "not found\n")
+                return
+            found = self._caller()
+            if found is None:
+                return
+            snapshot, caller = found
+            if not can_manage(caller, admin_groups):
+                self._send(403, text, "certificate is not a registry administrator\n")
+                return
+            if not same_origin(self.headers.get("Origin"), self.headers.get("Host")):
+                self._send(403, text, "cross-origin request refused\n")
+                return
+            if self.headers.get_content_type() != "application/json":
+                self._send(415, text, "expected application/json\n")
+                return
+            try:
+                length = int(self.headers.get("Content-Length", ""))
+            except ValueError:
+                self._send(411, text, "Content-Length required\n")
+                return
+            if not 0 < length <= MAX_ACTION_BODY:
+                self._send(413, text, "request body too large or empty\n")
+                return
+            try:
+                fingerprint = json.loads(self.rfile.read(length))["fingerprint"]
+            except (ValueError, TypeError, KeyError):
+                self._send(400, text, 'expected {"fingerprint": "..."}\n')
+                return
+            visible = {p["fingerprint"] for p in visible_peers(snapshot.peers, caller)}
+            if not isinstance(fingerprint, str) or fingerprint not in visible:
+                self._send(404, text, "unknown certificate\n")
+                return
+            by = f"{caller['name']} ({_short(caller['fingerprint'])})"
+            now = time.time()
+            try:
+                if path == "/api/archive":
+                    registry.archive(network, fingerprint, by, now)
+                else:
+                    registry.restore(network, fingerprint, by, now)
+            except PeerOnline:
+                self._send(
+                    409,
+                    text,
+                    "certificate is online; archive it after it disconnects\n",
+                )
+                return
+            except LookupError:
+                self._send(404, text, "unknown certificate\n")
+                return
+            registry.publish(network, state, now)
+            log(f"{network}: {by} {path.rsplit('/', 1)[1]}d {fingerprint}")
+            self._send(
+                200,
+                "application/json",
+                json.dumps(
+                    {"fingerprint": fingerprint, "archived": path == "/api/archive"}
+                )
+                + "\n",
+            )
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
             pass
@@ -1068,7 +1402,8 @@ def main() -> None:
 
     state_dir = Path(config["stateDir"])
     interval = config["pollInterval"]
-    db = sqlite3.connect(state_dir / "registry.db")
+    # HTTPS threads write archive state too; Registry.lock serializes access.
+    db = sqlite3.connect(state_dir / "registry.db", check_same_thread=False)
     db.execute("PRAGMA journal_mode=WAL")
     registry = Registry(db, offline_after=interval * config["offlineAfterPolls"])
     state = State()
@@ -1108,7 +1443,10 @@ def main() -> None:
         )
         if tls:
             https = HttpsServer(
-                (net["address"], tls_config["port"]), https_handler(network, state)
+                (net["address"], tls_config["port"]),
+                https_handler(
+                    network, state, registry, frozenset(net.get("adminGroups", ()))
+                ),
             )
             https.socket = tls.wrap_socket(
                 https.socket, server_side=True, do_handshake_on_connect=False
@@ -1142,8 +1480,7 @@ def main() -> None:
                     failing.discard(network)
                 registry.record(network, observations, now)
             registry.sweep(network, now)
-            peers = registry.peers(network)
-            state.set(network, Snapshot(peers, dns_records(peers), int(now)))
+            registry.publish(network, state, now)
         if now >= next_prune:
             registry.prune(now, config["eventRetentionDays"])
             next_prune = now + 3600

@@ -134,6 +134,11 @@ in
         default = 2222;
         description = "Localhost port for the Mycelium lighthouse debug console.";
       };
+      adminGroups = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ "registry-admin" ];
+        description = "Certificate groups that may archive and restore peers in the registry view.";
+      };
       upstreamResolvers = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
@@ -273,7 +278,7 @@ in
           inherit (cfg.registry) acme upstreamResolvers;
           networks.${network} = {
             address = lighthouse;
-            inherit (cfg.registry) consolePort;
+            inherit (cfg.registry) consolePort adminGroups;
             aliases = [ "mycelium.internal" ];
           };
         };
