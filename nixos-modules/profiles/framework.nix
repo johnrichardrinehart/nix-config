@@ -104,7 +104,7 @@ in
       settings.default_session = {
         command = lib.mkForce (
           "${lib.getExe pkgs.dev.johnrinehart.tuigreet} --time --remember --user-menu --asterisks --cmd ${lib.getExe' config.programs.niri.package "niri-session"}"
-          + lib.optionalString faceCfg.enable " --biometric-cmd '${lib.getExe config.services.pam-biometrics.package} scan'"
+          + lib.optionalString faceCfg.enable " --biometric-cmd '${lib.getExe config.services.pam-biometrics.package} face scan'"
         );
         user = lib.mkForce "greeter";
       };

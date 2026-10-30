@@ -154,9 +154,9 @@ let
     ];
     text = ''
       refresh() { pkill -USR2 -u "$UID" -x hyprlock || true; }
-      pam-biometrics scan >/dev/null || true
+      pam-biometrics face scan >/dev/null || true
       refresh
-      pam-biometrics wait >/dev/null
+      pam-biometrics face wait >/dev/null
       refresh
     '';
   };
