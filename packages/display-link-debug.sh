@@ -99,10 +99,11 @@ snapshot() {
       ddcutil --bus "${file##*-}" getvcp D6 --brief || true
     done
   } >"$destination/ddc-monitor-power.txt" 2>&1
-  journalctl -b -k -o short-monotonic --no-pager >"$destination/kernel-journal.txt" 2>&1 || true
+  journalctl -b -k -o short-monotonic --no-pager 2>&1 |
+    zstd -q >"$destination/kernel-journal.txt.zst" || true
   journalctl -b -u systemd-suspend.service -u systemd-hibernate.service \
-    -u external-display-recovery.service -o short-monotonic --no-pager \
-    >"$destination/sleep-recovery-journal.txt" 2>&1 || true
+    -u external-display-recovery.service -o short-monotonic --no-pager 2>&1 |
+    zstd -q >"$destination/sleep-recovery-journal.txt.zst" || true
 
   install -d "$destination/drm" "$destination/thunderbolt" "$destination/modules"
   for file in "$SYSFS_ROOT"/class/drm/card*-*/{status,enabled,modes,dpms}; do

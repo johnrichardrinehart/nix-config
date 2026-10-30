@@ -131,7 +131,8 @@ run restore-usb-ports
 snapshot=$(run snapshot 'label with spaces')
 [[ $snapshot == "$logs/"*'-label_with_spaces' ]]
 [[ -s $snapshot/summary.txt ]]
-[[ -f $snapshot/kernel-journal.txt ]]
+zstd -q -t "$snapshot/kernel-journal.txt.zst"
+zstd -q -t "$snapshot/sleep-recovery-journal.txt.zst"
 assert_contains "$(<"$snapshot/summary.txt")" 'test-kernel-arguments'
 
 run dynamic-debug on
