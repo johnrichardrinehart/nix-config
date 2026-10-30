@@ -503,7 +503,7 @@ class StatusRenderingTests(unittest.TestCase):
         actions = {
             row.split('<span class="name">')[1].split("<")[0]: row for row in rows
         }
-        self.assertIn("disabled", actions["framework"])
+        self.assertNotIn("data-action", actions["framework"])
         self.assertIn('data-action="archive"', actions["old-laptop"])
         self.assertIn('data-action="restore"', actions["retired"])
 

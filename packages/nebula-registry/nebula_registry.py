@@ -661,126 +661,144 @@ PAGE = """<!doctype html>
     --relay: #e3b341; --relay-bg: #3a2d0c; --warn: #e3b341; --bad: #f85149; --hover: #1c232c;
   }
 }
-.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
-.segmented { display: inline-flex; gap: .15rem; padding: .2rem; background: var(--card); border: 1px solid var(--line);
-  border-radius: 999px; }
-.segmented button { font: inherit; font-size: .8rem; color: var(--muted); background: transparent; border: 0;
-  border-radius: 999px; padding: .3rem .75rem; cursor: pointer; }
-.segmented button:hover { color: var(--text); }
-.segmented button[aria-pressed=true] { color: var(--text); background: var(--off-bg); font-weight: 600; }
-.segmented button:focus-visible, th:focus-visible, .action:focus-visible { outline: 2px solid var(--accent);
-  outline-offset: 2px; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 1360px; margin: 0 auto; padding: 2.5rem 1.5rem 3rem; }
-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem;
+main { max-width: 1320px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem 2rem;
   margin-bottom: 1.5rem; }
-h1 { margin: 0; font-size: 1.9rem; letter-spacing: -0.02em; }
+h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; letter-spacing: -0.02em; }
 h1 span { color: var(--muted); font-weight: 500; }
 .viewer { margin: .35rem 0 0; color: var(--muted); }
 .viewer strong { color: var(--text); }
-.stats { display: flex; gap: .6rem; }
-.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: .55rem .9rem;
-  min-width: 6.5rem; }
-.stat b { display: block; font-size: 1.35rem; line-height: 1.2; }
-.stat small { color: var(--muted); }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+.stats { display: flex; gap: .5rem; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: .45rem .85rem;
+  min-width: 5.5rem; }
+.stat b { display: block; font-size: 1.3rem; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.stat small { color: var(--muted); font-size: .78rem; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem;
+  margin-bottom: .75rem; }
+.segmented { display: inline-flex; gap: .15rem; padding: .2rem; background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; }
+.segmented button { display: inline-flex; align-items: center; gap: .4rem; font-size: .82rem; color: var(--muted);
+  background: transparent; border: 0; border-radius: 999px; padding: .3rem .8rem; cursor: pointer; }
+.segmented button:hover { color: var(--text); }
+.segmented button[aria-pressed=true] { color: var(--text); background: var(--off-bg); font-weight: 600; }
+.segmented button:focus-visible { outline-offset: -2px; }
+.count { font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted);
+  background: var(--off-bg); border-radius: 999px; padding: 0 .45rem; }
+.segmented button[aria-pressed=true] .count { background: var(--card); }
+.sort-mobile { display: none; }
+.sort-mobile select { font: inherit; font-size: .85rem; color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: .35rem .6rem; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto;
   box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04); }
 table { width: 100%; border-collapse: collapse; }
-th, td { padding: .75rem .85rem; text-align: left; white-space: nowrap; }
-td.c-name, td.c-underlay { white-space: normal; }
-.tags { display: inline; }
-th { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-  font-weight: 600; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; }
+th, td { padding: .7rem .75rem; text-align: left; vertical-align: middle; white-space: nowrap; }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600;
+  border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; }
 th:hover { color: var(--text); }
-th::after { content: "\\2195"; opacity: .25; margin-left: .35em; }
+th[data-type]::after { content: "\\2195"; opacity: .25; margin-left: .35em; }
 th[aria-sort=ascending]::after { content: "\\2191"; opacity: 1; color: var(--accent); }
 th[aria-sort=descending]::after { content: "\\2193"; opacity: 1; color: var(--accent); }
-th.c-manage { cursor: default; }
-th.c-manage::after { content: none; }
+th.c-actions { cursor: default; }
 td { border-bottom: 1px solid var(--line); }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--hover); }
-tr.offline td, tr.archived td { color: var(--muted); }
+tr.offline td:not(.c-name):not(.c-actions), tr.archived td:not(.c-name):not(.c-actions) { color: var(--muted); }
+tr.offline .name, tr.archived .name { color: var(--muted); }
 #peers:not(.show-archived) tbody tr.archived, #peers.show-archived tbody tr:not(.archived) { display: none; }
-.mono { font-family: var(--mono); font-size: .88rem; }
+.empty { margin: 0; padding: 2.5rem 1rem; text-align: center; color: var(--muted); }
+.card.is-empty thead { display: none; }
+
+.mono { font-family: var(--mono); font-size: .86rem; }
+td.c-name { min-width: 12rem; max-width: 20rem; white-space: normal; }
+.who { display: flex; align-items: center; gap: .4rem; }
 .name { font-weight: 600; }
-.you { margin-left: .4rem; font-size: .7rem; font-weight: 600; color: var(--accent);
-  border: 1px solid currentColor; border-radius: 999px; padding: 0 .45rem; vertical-align: 1px; }
-.tag { display: inline-block; margin-left: .35rem; font-size: .72rem; color: var(--muted);
-  background: var(--off-bg); border-radius: 6px; padding: 0 .4rem; }
-.fp { display: block; font-family: var(--mono); font-size: .75rem; font-weight: 400; color: var(--muted); }
-.flags { display: block; }
-.flag { display: inline-block; margin: .25rem .35rem 0 0; font-size: .72rem; font-weight: 600; color: var(--warn);
-  background: var(--relay-bg); border-radius: 6px; padding: 0 .4rem; }
-.flag.bad { color: var(--bad); background: transparent; border: 1px solid currentColor; }
-.since { display: block; font-size: .75rem; }
-.action { font: inherit; font-size: .8rem; color: var(--text); background: var(--card); border: 1px solid var(--line);
-  border-radius: 8px; padding: .25rem .7rem; cursor: pointer; }
-.action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
-.action:disabled { opacity: .45; cursor: not-allowed; }
-.pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; font-weight: 600;
-  border-radius: 999px; padding: .15rem .6rem; }
+.you { font-size: .68rem; font-weight: 600; color: var(--accent); border: 1px solid currentColor;
+  border-radius: 999px; padding: 0 .4rem; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .35rem; margin-top: .1rem; }
+.fp { font-family: var(--mono); font-size: .74rem; color: var(--muted); }
+.tag { font-size: .7rem; color: var(--muted); background: var(--off-bg); border-radius: 5px; padding: 0 .35rem; }
+.flags { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
+.flag { font-size: .72rem; font-weight: 600; line-height: 1.4; border: 1px solid currentColor; border-radius: 6px;
+  padding: .05rem .4rem; }
+.flag.old { color: var(--muted); }
+.flag.addr { color: var(--warn); }
+.flag.dup { color: var(--bad); }
+
+.status { display: inline-flex; align-items: center; gap: .3rem; }
+.pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; font-weight: 600;
+  border-radius: 999px; padding: .1rem .55rem; }
 .pill.online { color: var(--ok); background: var(--ok-bg); }
 .pill.offline { color: var(--off); background: var(--off-bg); }
-.pill.direct { color: var(--accent); background: transparent; border: 1px solid var(--line); }
 .pill.relayed { color: var(--relay); background: var(--relay-bg); }
-.pill.archived { color: var(--off); background: transparent; border: 1px dashed var(--off); }
-.dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.pill.archived { color: var(--off); border: 1px dashed var(--off); }
+.sub { display: block; margin-top: .15rem; font-size: .74rem; color: var(--muted); }
+.dot { width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; }
 .online .dot { animation: pulse 2.4s infinite; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,157,85,.45); } 70% { box-shadow: 0 0 0 7px rgba(31,157,85,0); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,157,85,.45); } 70% { box-shadow: 0 0 0 6px rgba(31,157,85,0); }
   100% { box-shadow: 0 0 0 0 rgba(31,157,85,0); } }
 small { color: var(--muted); }
 .warn { color: var(--warn); font-weight: 600; }
 .bad { color: var(--bad); font-weight: 600; }
-footer { margin-top: 1rem; color: var(--muted); font-size: .82rem; text-align: right; }
+
+td.c-actions { width: 1%; text-align: right; }
+.action { font-size: .8rem; font-weight: 600; color: var(--muted); background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; padding: .25rem .7rem; cursor: pointer; }
+.action:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.action.restore { color: var(--accent); }
+.action.restore:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.action:disabled { opacity: .6; cursor: progress; }
+
+footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .25rem .75rem; margin-top: .9rem;
+  color: var(--muted); font-size: .8rem; }
 footer a { color: var(--accent); }
-#action-state:not(:empty)::after { content: " · "; color: var(--muted); }
-.sort-mobile { display: none; }
-.sort-mobile select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; padding: .45rem .7rem; }
-/* Medium screens: drop the least important columns instead of scrolling. */
-@media (max-width: 1200px) { .c-first { display: none; } }
-@media (max-width: 1040px) { .c-underlay { display: none; } }
-/* Phones: one card per peer, labeled fields, sorting from a menu. */
-@media (max-width: 880px) {
-  main { padding: 1.25rem 1rem 2rem; }
-  h1 { font-size: 1.5rem; }
-  header { align-items: stretch; }
+footer > * + *::before { content: "·"; display: inline-block; margin-right: .75rem; color: var(--muted); }
+.toast { position: fixed; left: 1rem; right: 1rem; bottom: 1.5rem; width: fit-content; margin: 0 auto; display: flex;
+  align-items: center; gap: 1rem; background: var(--text); color: var(--bg); border-radius: 10px;
+  padding: .6rem .9rem; font-size: .88rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.toast[hidden] { display: none; }
+.toast.error { background: var(--bad); color: #fff; }
+.toast button { color: inherit; background: transparent; border: 0; font-weight: 700; text-decoration: underline;
+  cursor: pointer; padding: 0; }
+
+/* Narrower screens: drop the least important columns; the card scrolls rather than clipping. */
+@media (max-width: 1240px) { .c-first { display: none; } }
+@media (max-width: 1120px) { .c-underlay { display: none; } }
+/* Small screens: one card per peer, labeled fields, sorting from a menu. */
+@media (max-width: 960px) {
+  main { padding: 1.25rem 1rem 5rem; }
+  h1 { font-size: 1.45rem; }
   .stats { width: 100%; }
   .stat { flex: 1; min-width: 0; }
-  .sort-mobile { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-    color: var(--muted); margin: 0 0 .75rem; }
+  .sort-mobile { display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .85rem; }
   .card { background: transparent; border: 0; box-shadow: none; border-radius: 0; overflow: visible; }
   table, tbody { display: block; }
   thead { display: none; }
   tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem 1rem; background: var(--card);
     border: 1px solid var(--line); border-radius: 14px; padding: .9rem 1rem; margin-bottom: .75rem; }
+  #peers:not(.show-archived) tbody tr.archived, #peers.show-archived tbody tr:not(.archived) { display: none; }
   tbody tr:hover { background: var(--card); }
   td { display: block; padding: 0; border: 0; white-space: normal; min-width: 0; overflow-wrap: anywhere; }
-  td::before { content: attr(data-label); display: block; font-size: .68rem; font-weight: 600;
+  td::before { content: attr(data-label); display: block; font-size: .66rem; font-weight: 600;
     text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .1rem; }
-  td.c-name { grid-column: 1 / -1; font-size: 1.05rem; }
-  td.c-name::before, td.c-manage::before { content: none; }
-  td.c-manage { grid-column: 1 / -1; }
+  td.c-name { grid-column: 1; grid-row: 1; min-width: 0; font-size: 1.02rem; }
+  td.c-actions { grid-column: 2; grid-row: 1; width: auto; }
+  td.c-name::before, td.c-actions::before { content: none; }
   td.c-first, td.c-underlay { display: block; }
   td.c-underlay { grid-column: 1 / -1; }
+  .empty { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .online .dot { animation: none; } }
 </style></head>
 <body><main>
-<div class="toolbar">
-  <div class="segmented" role="group" aria-label="Peers shown">
-    <button type="button" data-view="active">Active</button>
-    <button type="button" data-view="archived">Archived <span id="archived-count">@ARCHIVED@</span></button>
-  </div>
-  <div class="segmented" role="group" aria-label="Color theme">
-    <button type="button" data-theme-choice="system">System</button>
-    <button type="button" data-theme-choice="light">Light</button>
-    <button type="button" data-theme-choice="dark">Dark</button>
-  </div>
-</div>
 <header>
   <div>
     <h1><span>Nebula /</span> @NETWORK@</h1>
@@ -792,89 +810,161 @@ footer a { color: var(--accent); }
     <div class="stat"><b id="relayed-count">@RELAYED@</b><small>relayed</small></div>
   </div>
 </header>
-<label class="sort-mobile">Sort by
-  <select id="sort-select">
-    <option value="2:descending">State (online first)</option>
-    <option value="0:ascending">Name</option>
-    <option value="3:descending">Last seen (newest)</option>
-    <option value="4:ascending">First seen (oldest)</option>
-    <option value="1:ascending">Overlay IP</option>
-    <option value="7:ascending">Cert expires (soonest)</option>
-  </select>
-</label>
+<div class="toolbar">
+  <div class="segmented" role="group" aria-label="Peers shown">
+    <button type="button" data-view="active">Active <span class="count" id="active-count">@TOTAL@</span></button>
+    <button type="button" data-view="archived">Archived <span class="count" id="archived-count">@ARCHIVED@</span></button>
+  </div>
+  <label class="sort-mobile">Sort
+    <select id="sort-select">
+      <option value="2:descending">State</option>
+      <option value="0:ascending">Name</option>
+      <option value="3:descending">Last seen</option>
+      <option value="4:ascending">First seen</option>
+      <option value="1:ascending">Overlay IP</option>
+      <option value="6:ascending">Cert expiry</option>
+    </select>
+  </label>
+  <div class="segmented" role="group" aria-label="Color theme">
+    <button type="button" data-theme-choice="system">System</button>
+    <button type="button" data-theme-choice="light">Light</button>
+    <button type="button" data-theme-choice="dark">Dark</button>
+  </div>
+</div>
 <div class="card"><table id="peers">
 <thead><tr>
   <th data-type="text" class="c-name">Name</th><th data-type="num" class="c-ip">Overlay IP</th>
-  <th data-type="num" class="c-state">State</th><th data-type="num" class="c-last">Last seen</th>
+  <th data-type="num" class="c-state">Status</th><th data-type="num" class="c-last">Last seen</th>
   <th data-type="num" class="c-first">First seen</th><th data-type="text" class="c-underlay">Underlay</th>
-  <th data-type="text" class="c-path">Path</th><th data-type="num" class="c-cert">Cert expires</th>@MANAGE_HEADER@
+  <th data-type="num" class="c-cert">Cert expires</th>@ACTIONS_HEADER@
 </tr></thead>
 <tbody>
 @ROWS@
-</tbody></table></div>
-<footer><span id="action-state" class="bad" role="status"></span><span id="update-state">Rendered @RENDERED@</span> · updates every second · <a href="/api/peers">JSON</a></footer>
+</tbody></table>
+<p class="empty" id="empty" hidden></p></div>
+<footer><span id="update-state">Rendered @RENDERED@</span><span>updates every second</span><a href="/api/peers">JSON</a></footer>
+<div class="toast" id="toast" role="status" hidden><span></span><button type="button">Undo</button></div>
 </main>
 <script>
 (() => {
   const table = document.getElementById("peers");
+  const tbody = table.tBodies[0];
   const headers = [...table.tHead.rows[0].cells];
-  const sortBy = (index, direction) => {
-    const type = headers[index].dataset.type;
-    const rows = [...table.tBodies[0].rows];
-    const key = (row) => row.cells[index].dataset.sort ?? row.cells[index].textContent;
-    rows.sort((a, b) => {
-      const [x, y] = [key(a), key(b)];
-      const order = type === "num" ? Number(x) - Number(y) : x.localeCompare(y, undefined, { numeric: true });
-      return direction === "ascending" ? order : -order;
-    });
-    table.tBodies[0].append(...rows);
-    headers.forEach((h, i) => h.setAttribute("aria-sort", i === index ? direction : "none"));
-    sessionStorage.setItem("nebula-sort", JSON.stringify([index, direction]));
-    const option = select.querySelector(`option[value="${index}:${direction}"]`);
-    if (option) select.value = option.value;
-  };
   const select = document.getElementById("sort-select");
+  const empty = document.getElementById("empty");
+  const updateState = document.getElementById("update-state");
+  let sort = JSON.parse(sessionStorage.getItem("nebula-sort") || "null");
+  let view = sessionStorage.getItem("nebula-view") === "archived" ? "archived" : "active";
+  let serverOrder = [...tbody.rows].map((row) => row.dataset.key);
+
+  // Reorder only when the order changes: moving rows under the pointer can swallow a click.
+  const arrange = () => {
+    const rows = [...tbody.rows];
+    let wanted;
+    if (sort) {
+      const [index, direction] = sort;
+      const type = headers[index].dataset.type;
+      const key = (row) => row.cells[index].dataset.sort ?? row.cells[index].textContent;
+      wanted = rows.slice().sort((a, b) => {
+        const [x, y] = [key(a), key(b)];
+        const order = type === "num" ? Number(x) - Number(y) : x.localeCompare(y, undefined, { numeric: true });
+        return direction === "ascending" ? order : -order;
+      });
+    } else {
+      const position = new Map(serverOrder.map((key, index) => [key, index]));
+      wanted = rows.slice().sort((a, b) => position.get(a.dataset.key) - position.get(b.dataset.key));
+    }
+    if (wanted.some((row, index) => row !== rows[index])) tbody.append(...wanted);
+  };
+  const showEmpty = () => {
+    const shown = [...tbody.rows].some((row) => row.classList.contains("archived") === (view === "archived"));
+    empty.hidden = shown;
+    empty.parentElement.classList.toggle("is-empty", !shown);
+    empty.textContent = view === "archived"
+      ? "Nothing is archived. Archive offline peers from the Active view to hide them here."
+      : "No active peers.";
+  };
+  const applySort = (next) => {
+    sort = next;
+    headers.forEach((h, i) => h.setAttribute("aria-sort", sort && i === sort[0] ? sort[1] : "none"));
+    if (sort) {
+      sessionStorage.setItem("nebula-sort", JSON.stringify(sort));
+      const option = select.querySelector(`option[value="${sort[0]}:${sort[1]}"]`);
+      if (option) select.value = option.value;
+    }
+    arrange();
+  };
   select.addEventListener("change", () => {
     const [index, direction] = select.value.split(":");
-    sortBy(Number(index), direction);
+    applySort([Number(index), direction]);
   });
   headers.forEach((th, index) => {
     if (!th.dataset.type) return;
-    th.addEventListener("click", () => {
-      const next = th.getAttribute("aria-sort") === "ascending" ? "descending" : "ascending";
-      sortBy(index, next);
+    th.tabIndex = 0;
+    const toggle = () => applySort([index, sort && sort[0] === index && sort[1] === "ascending" ? "descending" : "ascending"]);
+    th.addEventListener("click", toggle);
+    th.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
     });
   });
-  const saved = JSON.parse(sessionStorage.getItem("nebula-sort") || "null");
-  if (saved) sortBy(...saved);
+  applySort(sort);
 
   const viewButtons = [...document.querySelectorAll("[data-view]")];
-  const applyView = (view) => {
+  const applyView = (next) => {
+    view = next;
     table.classList.toggle("show-archived", view === "archived");
     viewButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === view)));
     sessionStorage.setItem("nebula-view", view);
+    showEmpty();
   };
   viewButtons.forEach((b) => b.addEventListener("click", () => applyView(b.dataset.view)));
-  applyView(sessionStorage.getItem("nebula-view") || "active");
+  applyView(view);
 
-  const updateState = document.getElementById("update-state");
-  const actionState = document.getElementById("action-state");
+  // Patch rows in place, cell by cell, so buttons survive the once-a-second refresh.
+  const template = document.createElement("template");
+  const patch = (html) => {
+    template.innerHTML = html;
+    const incoming = [...template.content.querySelectorAll("tr")];
+    serverOrder = incoming.map((row) => row.dataset.key);
+    const existing = new Map([...tbody.rows].map((row) => [row.dataset.key, row]));
+    for (const next of incoming) {
+      const row = existing.get(next.dataset.key);
+      existing.delete(next.dataset.key);
+      if (!row) { tbody.append(next); continue; }
+      if (row.className !== next.className) row.className = next.className;
+      if (row.cells.length !== next.cells.length) { row.replaceWith(next); continue; }
+      [...next.cells].forEach((cell, index) => {
+        const current = row.cells[index];
+        if (current.dataset.busy) return;
+        if (current.outerHTML !== cell.outerHTML) current.replaceWith(cell);
+      });
+    }
+    existing.forEach((row) => row.remove());
+    arrange();
+    showEmpty();
+  };
+
+  // Responses can arrive out of order; never let an older one undo a newer one.
+  let requested = 0;
+  let applied = 0;
   const load = async () => {
+    const id = ++requested;
     const response = await fetch("/api/status", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const status = await response.json();
-    table.tBodies[0].innerHTML = status.rows;
+    if (id < applied) return;
+    applied = id;
+    patch(status.rows);
     document.getElementById("online-count").textContent = String(status.online);
     document.getElementById("peer-count").textContent = String(status.total);
+    document.getElementById("active-count").textContent = String(status.total);
     document.getElementById("relayed-count").textContent = String(status.relayed);
     document.getElementById("archived-count").textContent = String(status.archived);
     updateState.textContent = `Rendered ${status.rendered}`;
-    const sorted = headers.findIndex((header) => header.getAttribute("aria-sort") !== "none");
-    if (sorted >= 0) sortBy(sorted, headers[sorted].getAttribute("aria-sort"));
   };
   const refresh = async () => {
     try {
-      await load();
+      if (!document.hidden) await load();
     } catch {
       updateState.textContent = "Live update failed; retrying";
     } finally {
@@ -883,11 +973,34 @@ footer a { color: var(--accent); }
   };
   setTimeout(refresh, 1000);
 
-  table.tBodies[0].addEventListener("click", async (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) return;
-    const { action, fingerprint } = button.dataset;
-    button.disabled = true;
+  const toast = document.getElementById("toast");
+  const toastText = toast.querySelector("span");
+  const undoButton = toast.querySelector("button");
+  let toastTimer;
+  let undo = null;
+  const notify = (message, { error = false, onUndo = null } = {}) => {
+    toastText.textContent = message;
+    toast.classList.toggle("error", error);
+    undo = onUndo;
+    undoButton.hidden = !onUndo;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, error ? 8000 : 6000);
+  };
+  undoButton.addEventListener("click", () => {
+    toast.hidden = true;
+    if (undo) undo();
+  });
+
+  const opposite = { archive: "restore", restore: "archive" };
+  const past = { archive: "Archived", restore: "Restored" };
+  const act = async (action, fingerprint, name, cell = null) => {
+    const button = cell && cell.querySelector("button");
+    if (cell) {
+      cell.dataset.busy = "1";
+      button.disabled = true;
+      button.textContent = action === "archive" ? "Archiving…" : "Restoring…";
+    }
     try {
       const response = await fetch(`/api/${action}`, {
         method: "POST",
@@ -895,12 +1008,19 @@ footer a { color: var(--accent); }
         body: JSON.stringify({ fingerprint }),
       });
       if (!response.ok) throw new Error((await response.text()).trim() || `HTTP ${response.status}`);
-      actionState.textContent = "";
-      await load();
+      notify(`${past[action]} ${name}`, { onUndo: () => act(opposite[action], fingerprint, name) });
     } catch (error) {
-      actionState.textContent = `Could not ${action}: ${error.message}`;
-      button.disabled = false;
+      notify(`Could not ${action} ${name}: ${error.message}`, { error: true });
+    } finally {
+      // The busy cell no longer matches the server's, so this load rebuilds it.
+      if (cell) delete cell.dataset.busy;
+      await load().catch(() => {});
     }
+  };
+  tbody.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button || button.disabled) return;
+    act(button.dataset.action, button.dataset.fingerprint, button.dataset.name, button.closest("td"));
   });
 
   const themeButtons = [...document.querySelectorAll("[data-theme-choice]")];
@@ -934,14 +1054,13 @@ class StatusUpdate(TypedDict):
 COLUMNS = [
     ("name", "Name"),
     ("ip", "Overlay IP"),
-    ("state", "State"),
+    ("state", "Status"),
     ("last", "Last seen"),
     ("first", "First seen"),
     ("underlay", "Underlay"),
-    ("path", "Path"),
     ("cert", "Cert expires"),
 ]
-MANAGE_HEADER = '<th class="c-manage">Manage</th>'
+ACTIONS_HEADER = '<th class="c-actions"><span class="sr-only">Actions</span></th>'
 
 
 def _short(fingerprint: str) -> str:
@@ -955,20 +1074,20 @@ def _flags(peer: dict[str, Any]) -> str:
     if peer.get("duplicates"):
         others = ", ".join(_short(fp) for fp in peer["duplicates"])
         flags.append(
-            f'<span class="flag bad" title="Another certificate named {e(peer["name"])} is online at the same time">'
-            f"duplicate · also online: {e(others)}</span>"
+            f'<span class="flag dup" title="Another certificate named {e(peer["name"])} is online at the same time">'
+            f"duplicate · {e(others)} online too</span>"
         )
     if peer.get("superseded_by"):
         flags.append(
-            f'<span class="flag" title="A newer certificate {e(peer["superseded_by"])} carries this name">'
+            f'<span class="flag old" title="A newer certificate {e(peer["superseded_by"])} carries this name">'
             f"superseded by {e(_short(peer['superseded_by']))}</span>"
         )
     for share in peer.get("shares_address") or []:
         flags.append(
-            f'<span class="flag bad" title="Another unarchived certificate holds this overlay address">'
-            f"{e(share['address'])} also held by {e(share['name'])}</span>"
+            f'<span class="flag addr" title="Another unarchived certificate holds this overlay address">'
+            f"shares {e(share['address'])} with {e(share['name'])}</span>"
         )
-    return f'<span class="flags">{"".join(flags)}</span>' if flags else ""
+    return f'<div class="flags">{"".join(flags)}</div>' if flags else ""
 
 
 def render_status(
@@ -986,7 +1105,6 @@ def render_status(
         fingerprint = peer["fingerprint"]
         archived_at = peer.get("archived_at")
         state = "archived" if archived_at else "online" if peer["online"] else "offline"
-        path = "relayed" if peer["relayed"] else "direct"
         overlay = addresses(peer["vpn_addrs"])
         overlay_key = int(ipaddress.ip_address(overlay[0])) if overlay else 0
         you = (
@@ -1001,18 +1119,24 @@ def render_status(
             by = peer.get("archived_by") or "unknown"
             state_cell = (
                 f'<span class="pill archived" title="Archived {_utc(archived_at)} by {e(by)}">archived</span>'
-                f'<small class="since">{time.strftime("%Y-%m-%d", time.gmtime(archived_at))} · {e(by)}</small>'
+                f'<span class="sub">{time.strftime("%Y-%m-%d", time.gmtime(archived_at))} · {e(by.split(" (")[0])}</span>'
             )
         else:
+            relayed = (
+                '<span class="pill relayed" title="Traffic reaches this peer through a relay">relayed</span>'
+                if peer["online"] and peer["relayed"]
+                else ""
+            )
             state_cell = (
-                f'<span class="pill {state}"><span class="dot"></span>{state}</span>'
+                f'<span class="status"><span class="pill {state}"><span class="dot"></span>{state}</span>'
+                f"{relayed}</span>"
             )
         expiry_key, expiry_label, expiry_class = _expiry(peer.get("not_after"), now)
         cells = [
             (
                 e(peer["name"]),
-                f'<span class="name">{e(peer["name"])}</span>{you}{tags}'
-                f'<span class="fp" title="{e(fingerprint)}">{e(_short(fingerprint))}</span>'
+                f'<div class="who"><span class="name">{e(peer["name"])}</span>{you}</div>'
+                f'<div class="meta"><span class="fp" title="{e(fingerprint)}">{e(_short(fingerprint))}</span>{tags}</div>'
                 + _flags(peer),
                 "",
             ),
@@ -1029,7 +1153,6 @@ def render_status(
                 "",
             ),
             (e(peer["last_underlay"] or ""), e(peer["last_underlay"] or "—"), "mono"),
-            (path, f'<span class="pill {path}">{path}</span>', ""),
             (str(expiry_key), expiry_label, expiry_class),
         ]
         row = "".join(
@@ -1037,14 +1160,16 @@ def render_status(
             for (column, label), (key, content, css) in zip(COLUMNS, cells, strict=True)
         )
         if manage:
-            if archived_at:
-                button = f'<button type="button" class="action" data-action="restore" data-fingerprint="{e(fingerprint)}">Restore</button>'
-            elif peer["online"]:
-                button = '<button type="button" class="action" disabled title="Online certificates cannot be archived">Archive</button>'
-            else:
-                button = f'<button type="button" class="action" data-action="archive" data-fingerprint="{e(fingerprint)}">Archive</button>'
-            row += f'<td class="c-manage">{button}</td>'
-        rows.append(f'<tr class="{state}">{row}</tr>')
+            # Online certificates cannot be archived: their next poll would restore them.
+            action = "restore" if archived_at else None if peer["online"] else "archive"
+            button = (
+                f'<button type="button" class="action {action}" data-action="{action}" '
+                f'data-fingerprint="{e(fingerprint)}" data-name="{e(peer["name"])}">{action.capitalize()}</button>'
+                if action
+                else ""
+            )
+            row += f'<td class="c-actions">{button}</td>'
+        rows.append(f'<tr class="{state}" data-key="{e(fingerprint)}">{row}</tr>')
     active = [p for p in peers if not p.get("archived_at")]
     return {
         "online": sum(p["online"] for p in active),
@@ -1072,7 +1197,7 @@ def render_html(
         "@TOTAL@": str(status["total"]),
         "@RELAYED@": str(status["relayed"]),
         "@ARCHIVED@": str(status["archived"]),
-        "@MANAGE_HEADER@": MANAGE_HEADER if manage else "",
+        "@ACTIONS_HEADER@": ACTIONS_HEADER if manage else "",
         "@RENDERED@": str(status["rendered"]),
         "@ROWS@": str(status["rows"]),
     }
