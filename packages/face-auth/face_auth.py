@@ -8,10 +8,14 @@ scan during PAM authentication.
 
 A scan has one of these results:
 
-  match     A face is within the tolerance of the enrolled model.
-  mismatch  Faces are in at least MIN_FACE_FRAMES frames. None is within the
-            tolerance.
-  absent    The camera saw too few faces, saw only dark frames, or failed.
+  match      A face is within the match tolerance of the enrolled model.
+  uncertain  The closest face is between the match and reject tolerances.
+  mismatch   Faces are in at least MIN_FACE_FRAMES frames. All are beyond
+             the reject tolerance.
+  absent     The camera saw too few faces, saw only dark frames, or failed.
+
+"uncertain" and "absent" give no decision. A doubtful face can neither
+replace the fingerprint nor reject the attempt.
 
 The pam-biometrics command decides the biometric factor for pam_biometrics.so.
 A fingerprint or a face can satisfy it. A password is always required.
@@ -38,6 +42,9 @@ DEFAULT_SOCKET = "/run/face-auth/socket"
 MIN_FACE_FRAMES = 3
 MIN_ENROLL_SAMPLES = 3
 MAX_ENROLL_SAMPLES = 10
+# enroll --add keeps at most this many samples and drops the oldest first.
+# Matching uses the closest sample, so more conditions lower the distance.
+MAX_MODEL_SAMPLES = 30
 # pam_fprintd also allows three tries.
 MAX_FINGER_TRIES = 3
 
@@ -50,6 +57,7 @@ STATUS_TEXT = {
     "scanning": "Face: scanning…",
     "match": "Face: recognized",
     "mismatch": "Face: not recognized",
+    "uncertain": "Face: not sure",
     "absent": "Face: no face found",
     "no-model": "Face: not enrolled",
 }
@@ -112,7 +120,8 @@ class Engine:
         self.camera = Camera(args)
         self.scan_seconds = args.scan_seconds
         self.enroll_seconds = args.enroll_seconds
-        self.tolerance = args.tolerance
+        self.match_tolerance = args.match_tolerance
+        self.reject_tolerance = args.reject_tolerance
         self.dark_threshold = args.dark_threshold
 
     def encodings(self, frame):
@@ -143,9 +152,14 @@ class Engine:
                     )
                 )
                 best = distance if best is None else min(best, distance)
-                if distance <= self.tolerance:
+                if distance <= self.match_tolerance:
                     return {"state": "match", "best": best, "faces": face_frames}
-        state = "mismatch" if face_frames >= MIN_FACE_FRAMES else "absent"
+        if best is not None and best <= self.reject_tolerance:
+            state = "uncertain"
+        elif face_frames >= MIN_FACE_FRAMES:
+            state = "mismatch"
+        else:
+            state = "absent"
         return {"state": state, "best": best, "faces": face_frames}
 
     def enroll(self):
@@ -274,9 +288,12 @@ class Service:
         with self.camera_lock:
             return self.engine.scan(model)
 
-    def enroll(self, user):
+    def enroll(self, user, add):
         with self.camera_lock:
             encodings = self.engine.enroll()
+        if add:
+            existing = self.load_model(user) or []
+            encodings = (existing + encodings)[-MAX_MODEL_SAMPLES:]
         path = self.model_path(user)
         temporary = f"{path}.tmp"
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -316,7 +333,7 @@ class Service:
                 lambda u: {"verdict": self.take_verdict(u, request.get("expected"))},
             ),
             "verify": (False, self.verify),
-            "enroll": (False, self.enroll),
+            "enroll": (False, lambda u: self.enroll(u, add=request.get("add") is True)),
             "delete": (False, self.delete),
             "list": (False, self.list),
         }
@@ -426,10 +443,12 @@ def run_client(args):
     return status
 
 
-# fprintd result names. A scan without a usable face asks for another scan.
+# fprintd result names. A scan without a usable or a clear face asks for
+# another scan.
 VERIFY_RESULTS = {
     "match": "verify-match",
     "mismatch": "verify-no-match",
+    "uncertain": "verify-retry-scan",
     "absent": "verify-retry-scan",
 }
 
@@ -451,7 +470,7 @@ def verify(args, user):
 
 def enroll(args, user):
     print("Enrolling face. Look at the camera.", flush=True)
-    reply = request(args, "enroll", user, 60)
+    reply = request(args, "enroll", user, 60, add=args.add)
     if "error" in reply:
         print(f"Enroll result: enroll-failed ({reply['error']})")
         return 1
@@ -528,7 +547,7 @@ def pam_biometrics(args):
 
     def consume(state):
         # A scan result counts for one attempt only.
-        if state in ("match", "mismatch", "absent"):
+        if state in ("match", "mismatch", "uncertain", "absent"):
             with contextlib.suppress(OSError, ValueError):
                 request(args, "verdict", user, 2, expected=state)
 
@@ -574,9 +593,12 @@ def main():
     daemon.add_argument("--height", type=int, default=360)
     daemon.add_argument("--scan-seconds", type=float, default=4)
     daemon.add_argument("--enroll-seconds", type=float, default=6)
-    # 0.6 is the face_recognition default. A lower tolerance rejects more
-    # strangers, but it also rejects the owner in poor light more often.
-    daemon.add_argument("--tolerance", type=float, default=0.6)
+    # The face_recognition default is 0.6. A face at or below the match
+    # tolerance replaces the fingerprint. Faces only beyond the reject
+    # tolerance reject the attempt. Anything between gives no decision, so a
+    # strict match tolerance cannot lock the owner out in poor light.
+    daemon.add_argument("--match-tolerance", type=float, default=0.45)
+    daemon.add_argument("--reject-tolerance", type=float, default=0.6)
     daemon.add_argument("--dark-threshold", type=float, default=10)
     daemon.add_argument("--result-ttl", type=float, default=120)
     daemon.add_argument("--greeter-user")
@@ -590,6 +612,11 @@ def main():
         "enroll", help="enroll a face for USER (default: you)"
     )
     enroll_command.add_argument("user", nargs="?")
+    enroll_command.add_argument(
+        "--add",
+        action="store_true",
+        help=f"keep the enrolled samples and add new ones (at most {MAX_MODEL_SAMPLES})",
+    )
     verify_command = commands.add_parser(
         "verify", help="scan now and compare with the face of USER (default: you)"
     )
