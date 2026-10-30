@@ -1,16 +1,44 @@
-Skip files macOS refuses to hard-link during store optimisation.
+From a6078bb9ba73295c30abbf243ba5895b760043fc Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Tue, 20 Oct 2026 12:28:08 -0400
+Subject: [PATCH] libstore: skip files macOS refuses to hard-link when
+ optimising
 
-macOS returns EPERM when hard-linking PkgInfo and _CodeSignature/* below
-any *.app directory. Nix only skips *.app/Contents/, so iOS-style bundles
-abort `nix store optimise` and, with auto-optimise-store, the build.
+macOS returns EPERM when hard-linking `PkgInfo` or anything in
+`_CodeSignature/` below a `*.app` directory, even for root.
+`optimisePath_` already skips `*.app/Contents/` for this reason, but
+iOS-style bundles keep those files at the bundle root, so
+`nix store optimise` aborted on the first such file and, with
+`auto-optimise-store`, so did any build producing one.
 
-Backport to 2.34.9 of
-https://github.com/johnrichardrinehart/nix/commit/eaaee8553f2e9b46a92b328937f1539778561a7e
-(branch darwin-optimise-skip-unlinkable-files, open pull request
-https://github.com/NixOS/nix/pull/16654).
+On macOS, treat EPERM from creating the `.links` entry as "leave this
+file alone", as ENOSPC already is. Replacing such a file with a link to
+an existing `.links` entry is permitted, so only this call needs it.
 
+Assisted-by: oh-my-pi (Claude Opus 5.5)
+---
+ doc/manual/rl-next/darwin-optimise-app-bundles.md |  8 ++++++++
+ src/libstore/optimise-store.cc                    | 12 ++++++++++++
+ tests/functional/optimise-store.sh                | 12 ++++++++++++
+ 3 files changed, 32 insertions(+)
+ create mode 100644 doc/manual/rl-next/darwin-optimise-app-bundles.md
+
+diff --git a/doc/manual/rl-next/darwin-optimise-app-bundles.md b/doc/manual/rl-next/darwin-optimise-app-bundles.md
+new file mode 100644
+index 000000000..60dce2715
+--- /dev/null
++++ b/doc/manual/rl-next/darwin-optimise-app-bundles.md
+@@ -0,0 +1,8 @@
++---
++synopsis: "Store optimisation on macOS skips app bundle files the OS refuses to hard-link"
++prs: [16654]
++---
++
++macOS refuses to hard-link `PkgInfo` and `_CodeSignature/*` anywhere below a `*.app` directory, even for root.
++Nix already skipped everything below `*.app/Contents/`, but iOS-style bundles keep these files at the bundle root, so [`nix store optimise`](@docroot@/command-ref/new-cli/nix3-store-optimise.md) aborted with `Operation not permitted`, and with [`auto-optimise-store`](@docroot@/command-ref/conf-file.md#conf-auto-optimise-store) so did any build producing such a bundle.
++Files that cannot be hard-linked are now left as they are.
 diff --git a/src/libstore/optimise-store.cc b/src/libstore/optimise-store.cc
-index 7d37dbf..8409a96 100644
+index 7d37dbf9d..8409a9677 100644
 --- a/src/libstore/optimise-store.cc
 +++ b/src/libstore/optimise-store.cc
 @@ -207,6 +207,18 @@ void LocalStore::optimisePath_(
@@ -33,10 +61,10 @@ index 7d37dbf..8409a96 100644
                  throw SystemError(e.code(), "creating hard link from %1% to %2%", PathFmt(linkPath), PathFmt(path));
          }
 diff --git a/tests/functional/optimise-store.sh b/tests/functional/optimise-store.sh
-index 332a308..ac815f0 100755
+index 332a308c2..4be7ef808 100755
 --- a/tests/functional/optimise-store.sh
 +++ b/tests/functional/optimise-store.sh
-@@ -44,6 +44,19 @@ if [ "$inode1" != "$inode3" ]; then
+@@ -44,6 +44,18 @@ if [ "$inode1" != "$inode3" ]; then
      exit 1
  fi
  
@@ -49,10 +77,12 @@ index 332a308..ac815f0 100755
 +
 +nlink="$(stat --format=%h "$outPath5"/plain)"
 +if [ "$nlink" -lt 2 ]; then
-+    echo "file next to an app bundle was not linked"
-+    exit 1
++    fail "file next to an app bundle was not linked"
 +fi
 +
  nix-store --gc
  
  if [ -n "$(ls "$NIX_STORE_DIR"/.links)" ]; then
+-- 
+2.56.0
+

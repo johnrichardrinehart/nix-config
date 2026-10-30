@@ -1,4 +1,4 @@
-From 904545568f9142e9cff35196cb768d4258a2e1a3 Mon Sep 17 00:00:00 2001
+From 4ed66768cd527d52fdbc9c4c3e1c48c697ae39a5 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Wed, 2 Sep 2026 10:51:23 -0400
 Subject: [PATCH 1/3] font: select medium regular faces
@@ -12,7 +12,7 @@ Subject: [PATCH 1/3] font: select medium regular faces
  5 files changed, 68 insertions(+), 11 deletions(-)
 
 diff --git a/dist/monstar.5 b/dist/monstar.5
-index c0d2261..5f1734b 100644
+index efa79c4..4b04879 100644
 --- a/dist/monstar.5
 +++ b/dist/monstar.5
 @@ -162,6 +162,16 @@ Define a virtual family in the user's Fontconfig configuration to provide
@@ -33,7 +33,7 @@ index c0d2261..5f1734b 100644
  Set the font size.
  Bare values and
 diff --git a/src/App.zig b/src/App.zig
-index 27e55bc..6e02070 100644
+index e00f94f..cf2c34e 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -501,6 +501,10 @@ fn tmpDirPath(environ: std.process.Environ) []const u8 {
@@ -56,7 +56,7 @@ index 27e55bc..6e02070 100644
          alloc,
          config.font_family,
          font_size_px,
-         config.adjust_cell_height,
+         config.metric_adjustments,
 +        fontOptions(config),
      );
      errdefer font.deinit(alloc);
@@ -70,12 +70,12 @@ index 27e55bc..6e02070 100644
          self.alloc,
          self.config.font_family,
          size_px,
-         self.config.adjust_cell_height,
+         self.config.metric_adjustments,
 +        fontOptions(self.config),
      );
      self.font.deinit(self.alloc);
      self.font = new_font;
-@@ -2634,11 +2640,12 @@ fn spawnEnvp(
+@@ -2663,11 +2669,12 @@ fn spawnEnvp(
  
  fn applyConfig(self: *App, new_config: Config) !void {
      const desired_font_size = Config.fontSizePixels(self.runtime_font_size orelse new_config.font_size, self.window.scale120);
@@ -84,12 +84,12 @@ index 27e55bc..6e02070 100644
          self.alloc,
          new_config.font_family,
          desired_font_size,
-         new_config.adjust_cell_height,
+         new_config.metric_adjustments,
 +        fontOptions(new_config),
      );
  
      self.applyColorDefaultsForConfig(new_config);
-@@ -2733,11 +2740,12 @@ fn effectiveFontSize(self: *const App) Config.FontSize {
+@@ -2762,11 +2769,12 @@ fn effectiveFontSize(self: *const App) Config.FontSize {
  fn setRuntimeFontSize(self: *App, configured_size: ?Config.FontSize) void {
      const next_size = configured_size orelse self.config.font_size;
      const size_px = Config.fontSizePixels(next_size, self.window.scale120);
@@ -98,17 +98,17 @@ index 27e55bc..6e02070 100644
          self.alloc,
          self.config.font_family,
          size_px,
-         self.config.adjust_cell_height,
+         self.config.metric_adjustments,
 +        fontOptions(self.config),
      ) catch |err| {
          log.warn("font size change failed: {}", .{err});
          return;
 diff --git a/src/Config.zig b/src/Config.zig
-index 1b32bf9..6dbfee6 100644
+index 1f4ebc2..db22e3f 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
-@@ -90,9 +90,14 @@ pub const MetricModifier = union(enum) {
-     }
+@@ -104,9 +104,14 @@ pub const MetricAdjustments = struct {
+     cursor_thickness: ?MetricModifier = null,
  };
  
 +pub const FontWeight = enum {
@@ -122,7 +122,7 @@ index 1b32bf9..6dbfee6 100644
  /// Bare and `pt` values are typographic points; `px` values are logical
  /// pixels. Both apply the output's fractional scale during rasterization.
  font_size: FontSize = .{ .points = 12 },
-@@ -257,6 +262,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+@@ -269,6 +274,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
          self.app_id = try arena.dupeZ(u8, value);
      } else if (std.mem.eql(u8, key, "font-family")) {
          self.font_family = try arena.dupeZ(u8, value);
@@ -131,7 +131,7 @@ index 1b32bf9..6dbfee6 100644
      } else if (std.mem.eql(u8, key, "font-size")) {
          self.font_size = try parseFontSize(value);
      } else if (std.mem.eql(u8, key, "adjust-cell-height")) {
-@@ -651,6 +658,7 @@ test "defaults" {
+@@ -673,6 +680,7 @@ test "defaults" {
      const config: Config = .{};
      try std.testing.expectEqualStrings(default_app_id, config.app_id);
      try std.testing.expectEqualStrings("monospace", config.font_family);
@@ -139,7 +139,7 @@ index 1b32bf9..6dbfee6 100644
      try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
-@@ -705,6 +713,7 @@ test "parse config" {
+@@ -727,6 +735,7 @@ test "parse config" {
          \\# a comment
          \\app-id = com.example.scratchpad
          \\font-family = Fira Code
@@ -147,7 +147,7 @@ index 1b32bf9..6dbfee6 100644
          \\font-size = 14.5
          \\window-padding-x = 4
          \\window-padding-y = 6, 10
-@@ -740,6 +749,7 @@ test "parse config" {
+@@ -762,6 +771,7 @@ test "parse config" {
  
      try std.testing.expectEqualStrings("com.example.scratchpad", config.app_id);
      try std.testing.expectEqualStrings("Fira Code", config.font_family);
@@ -156,7 +156,7 @@ index 1b32bf9..6dbfee6 100644
      try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
      try std.testing.expectEqual(WindowPadding{ .first = 4, .second = 4 }, config.window_padding_x);
 diff --git a/src/Font.zig b/src/Font.zig
-index efb6f1d..4e0a1c2 100644
+index b141b3d..b90e486 100644
 --- a/src/Font.zig
 +++ b/src/Font.zig
 @@ -86,9 +86,12 @@ pub const FaceStyle = enum(u2) {
@@ -198,14 +198,14 @@ index efb6f1d..4e0a1c2 100644
 @@ -111,12 +126,14 @@ pub const Discovery = struct {
      family: [:0]u8,
      size_px: f64,
-     adjust_cell_height: ?Config.MetricModifier,
+     adjustments: Config.MetricAdjustments,
 +    options: Options,
      sort_sets: [style_count]*c.FcFontSet,
  
      fn init(
          family: [:0]const u8,
          size_px: f64,
-         adjust_cell_height: ?Config.MetricModifier,
+         adjustments: Config.MetricAdjustments,
 +        options: Options,
      ) Error!*Discovery {
          if (c.FcInit() != c.FcTrue) return error.FontLoadFailed;
@@ -222,12 +222,12 @@ index efb6f1d..4e0a1c2 100644
 @@ -142,6 +159,7 @@ pub const Discovery = struct {
              .family = family_copy,
              .size_px = size_px,
-             .adjust_cell_height = adjust_cell_height,
+             .adjustments = adjustments,
 +            .options = options,
              .sort_sets = sort_sets,
          };
          return self;
-@@ -741,13 +759,13 @@ fn bitmapRow(bitmap: c.FT_Bitmap, height: u31, y: usize) usize {
+@@ -754,13 +772,13 @@ fn bitmapRow(bitmap: c.FT_Bitmap, height: u31, y: usize) usize {
      return if (bitmap.pitch < 0) height - 1 - y else y;
  }
  
@@ -243,30 +243,30 @@ index efb6f1d..4e0a1c2 100644
      if (style.slant()) |slant| _ = c.FcPatternAddInteger(pattern, c.FC_SLANT, slant);
      if (c.FcConfigSubstitute(null, pattern, c.FcMatchPattern) != c.FcTrue)
          return error.FontLoadFailed;
-@@ -803,10 +821,20 @@ pub fn init(
+@@ -816,10 +834,20 @@ pub fn init(
      family: [:0]const u8,
      size_px: f64,
-     adjust_cell_height: ?Config.MetricModifier,
+     adjustments: Config.MetricAdjustments,
 +) Error!Font {
-+    return initOptions(alloc, family, size_px, adjust_cell_height, .{});
++    return initOptions(alloc, family, size_px, adjustments, .{});
 +}
 +
 +pub fn initOptions(
 +    alloc: std.mem.Allocator,
 +    family: [:0]const u8,
 +    size_px: f64,
-+    adjust_cell_height: ?Config.MetricModifier,
++    adjustments: Config.MetricAdjustments,
 +    options: Options,
  ) Error!Font {
      std.debug.assert(size_px > 0);
  
--    const discovery_data = try Discovery.init(family, size_px, adjust_cell_height);
-+    const discovery_data = try Discovery.init(family, size_px, adjust_cell_height, options);
+-    const discovery_data = try Discovery.init(family, size_px, adjustments);
++    const discovery_data = try Discovery.init(family, size_px, adjustments, options);
      defer discovery_data.unref();
      return initWithDiscovery(alloc, discovery_data);
  }
 diff --git a/src/bench.zig b/src/bench.zig
-index 3093a40..1dacc2b 100644
+index e7dff31..fc3d2f2 100644
 --- a/src/bench.zig
 +++ b/src/bench.zig
 @@ -23,11 +23,12 @@ pub fn run(init: std.process.Init) !void {
@@ -278,7 +278,7 @@ index 3093a40..1dacc2b 100644
          alloc,
          config.font_family,
          font_size_px,
-         config.adjust_cell_height,
+         config.metric_adjustments,
 +        .{ .weight = config.font_weight },
      );
      defer font.deinit(alloc);
