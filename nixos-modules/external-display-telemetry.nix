@@ -64,7 +64,8 @@ in
     '';
 
     systemd.tmpfiles.rules = [
-      "d /var/log/display-link-debug 0700 root root -"
+      # Remove snapshot files 30 days after their last modification.
+      "d /var/log/display-link-debug 0700 root root m:30d"
     ];
 
     systemd.services.external-display-verbose-debug = lib.mkIf cfg.verboseKernelLogging {
