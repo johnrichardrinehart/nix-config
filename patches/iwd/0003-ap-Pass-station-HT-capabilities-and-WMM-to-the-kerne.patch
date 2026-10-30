@@ -1,0 +1,140 @@
+From 7fbea3c9e52ce5c6a8b27a87e46431a27b676577 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 12:44:15 -0400
+Subject: [PATCH 3/6] ap: Pass station HT capabilities and WMM to the kernel
+
+The AP parses a station's HT Capabilities element but never hands it
+to the kernel, so NEW_STATION creates every station as a legacy
+station.  mac80211 then limits transmissions to it to legacy rates
+(e.g. 6 Mbit/s observed with an HT40 AP and an HT/HE client), even
+though the client transmits to the AP at HT rates.
+
+Record the station's HT Capabilities and whether it sent a WMM
+Information element, and include NL80211_ATTR_HT_CAPABILITY and the
+WME station flag in NEW_STATION.  As in hostapd, only treat the
+station as HT when it is also a QoS station.  cfg80211 only accepts
+these on NEW_STATION, so reassociation keeps the original values.
+
+Also stop carrying ht_support and ht_greenfield over from a previous
+association when a station reassociates without HT.
+---
+ src/ap.c | 52 ++++++++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 48 insertions(+), 4 deletions(-)
+
+diff --git a/src/ap.c b/src/ap.c
+index 39e8d0f5..7491424f 100644
+--- a/src/ap.c
++++ b/src/ap.c
+@@ -145,8 +145,10 @@ struct sta_state {
+ 	bool ip_alloc_sent;
+ 	uint64_t rekey_time;
+ 
++	uint8_t ht_capabilities[26];
+ 	bool ht_support : 1;
+ 	bool ht_greenfield : 1;
++	bool wmm : 1;
+ };
+ 
+ struct ap_wsc_pbc_probe_record {
+@@ -1029,6 +1031,15 @@ static size_t ap_write_wmm_ies(struct ap_state *ap, uint8_t *out_buf)
+ 	return 26;
+ }
+ 
++/* WMM Specification 2.2.1 WMM Information Element, as sent by stations */
++static bool ap_is_wmm_information_ie(const uint8_t *data, size_t len)
++{
++	return len == 7 && !memcmp(data, microsoft_oui, 3) &&
++		data[3] == 2 &&	/* WMM OUI Type */
++		data[4] == 0 &&	/* WMM Information subtype */
++		data[5] == 1;	/* WMM Version */
++}
++
+ static size_t ap_write_extra_ies(struct ap_state *ap,
+ 					enum mpdu_management_subtype type,
+ 					const struct mmpdu_header *client_frame,
+@@ -1669,10 +1680,17 @@ static struct l_genl_msg *ap_build_cmd_new_station(struct sta_state *sta)
+ 	uint32_t ifindex = netdev_get_ifindex(sta->ap->netdev);
+ 	struct nl80211_sta_flag_update flags = {
+ 		.mask = (1 << NL80211_STA_FLAG_AUTHORIZED) |
+-			(1 << NL80211_STA_FLAG_MFP),
++			(1 << NL80211_STA_FLAG_MFP) |
++			(1 << NL80211_STA_FLAG_WME),
+ 		.set = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
+ 			(1 << NL80211_STA_FLAG_ASSOCIATED),
+ 	};
++	/*
++	 * We only advertise WMM when HT is enabled, and an HT station must
++	 * be a QoS station, so only treat it as either when both sides
++	 * agree on WMM.
++	 */
++	bool qos = sta->ap->supports_ht && sta->wmm;
+ 
+ 	/*
+ 	 * Without this feature nl80211 rejects NEW_STATION if the mask contains
+@@ -1683,12 +1701,25 @@ static struct l_genl_msg *ap_build_cmd_new_station(struct sta_state *sta)
+ 		flags.mask |= (1 << NL80211_STA_FLAG_ASSOCIATED) |
+ 				(1 << NL80211_STA_FLAG_AUTHENTICATED);
+ 
++	if (qos)
++		flags.set |= 1 << NL80211_STA_FLAG_WME;
++
+ 	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_STATION, 300);
+ 
+ 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+ 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+ 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
+ 
++	/*
++	 * Without the station's HT Capabilities the kernel treats it as a
++	 * legacy station and limits transmissions to it to legacy rates.
++	 * cfg80211 only accepts the capabilities on NEW_STATION.
++	 */
++	if (qos && sta->ht_support)
++		l_genl_msg_append_attr(msg, NL80211_ATTR_HT_CAPABILITY,
++					sizeof(sta->ht_capabilities),
++					sta->ht_capabilities);
++
+ 	return msg;
+ }
+ 
+@@ -2107,6 +2138,8 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+ 	ssize_t wsc_data_len;
+ 	bool fils_ip_req = false;
+ 	struct ie_fils_ip_addr_request_info fils_ip_req_info;
++	const uint8_t *ht_capa = NULL;
++	bool wmm = false;
+ 
+ 	if (sta->assoc_resp_cmd_id)
+ 		return;
+@@ -2170,10 +2203,14 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+ 				goto bad_frame;
+ 			}
+ 
+-			if (test_bit(ie_tlv_iter_get_data(&iter), 4))
+-				sta->ht_greenfield = true;
++			ht_capa = ie_tlv_iter_get_data(&iter);
++			break;
++		case IE_TYPE_VENDOR_SPECIFIC:
++			if (ap_is_wmm_information_ie(
++					ie_tlv_iter_get_data(&iter),
++					ie_tlv_iter_get_length(&iter)))
++				wmm = true;
+ 
+-			sta->ht_support = true;
+ 			break;
+ 		}
+ 
+@@ -2291,6 +2328,13 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+ 
+ 	sta->capability = *capability;
+ 	sta->listen_interval = listen_interval;
++	sta->wmm = wmm;
++	sta->ht_support = ht_capa != NULL;
++	sta->ht_greenfield = ht_capa && test_bit(ht_capa, 4);
++
++	if (ht_capa)
++		memcpy(sta->ht_capabilities, ht_capa,
++					sizeof(sta->ht_capabilities));
+ 
+ 	if (sta->rates)
+ 		l_uintset_free(sta->rates);

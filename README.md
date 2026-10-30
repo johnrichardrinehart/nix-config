@@ -133,6 +133,58 @@ closes first, and the guest's hard mount would wait on that connection forever.
 The table becomes `~/guest-vm-fs-mappings.json`, which the launcher reads at
 every start.
 
+secretspec can read one KeePassXC database
+(`dev.johnrinehart.mbp-host.secretspec`; on NixOS, `dev.johnrinehart.secretspec`).
+Set `database` to the `.kdbx` file and `manifest` to a shared project
+manifest, both relative to the home directory.
+The module writes `~/.config/secretspec/config.toml` with a default `keepass` provider and one provider for each entry of `aliases`.
+`~/secretspec.toml` links to the manifest, so edits change it without a rebuild.
+The master password is in the keyring of each machine, one item for all projects (`keyringItem`).
+On the Mac, the directory of the database is a `source = "host"` share, so the guest reads the same database while the Mac keeps it.
+On NixOS, `manifestLinks` puts a relative `secretspec.toml` link into other directories, for example `~/code`, where secretspec finds a manifest first.
+
+`shared-sync` (`packages/shared-sync`) keeps `~/shared` in step with one encrypted directory in a Proton Drive
+(`dev.johnrinehart.mbp-host.sharedSync`; on NixOS, `dev.johnrinehart.sharedSync`).
+It does these steps:
+
+1. It reads `PROTON_USERNAME`, `PROTON_PASSWORD`, `PROTON_TOTP_SECRET` and
+   `DIR_SHARED_RCLONE_PASSWORD` through the `shared-sync` scope of `~/secretspec.toml`.
+2. It defines two rclone remotes from these values: `proton` (Proton Drive) and
+   `shared` (an rclone crypt remote over `proton:shared-rclone-crypt`).
+3. It runs `rclone bisync ~/shared shared:` 3 s after local changes stop, and 30 s
+   after each run. A change reaches Proton Drive in about 10 s, and another machine in about 45 s.
+
+Proton Drive holds only rclone crypt ciphertext (XSalsa20-Poly1305 for data, AES-256-EME for names).
+`shared-sync ARGS...` runs `rclone ARGS...` with the same remotes, for example `shared-sync lsf shared:`.
+On the Mac a launchd agent runs it with `fswatch`; the log is `/tmp/shared-sync.log`.
+If no sync completed in the last 10 minutes, `provision-mac` shows a manual step.
+On NixOS a systemd user unit runs it with inotify.
+The unit starts with the desktop session, because secretspec needs the unlocked gnome-keyring.
+`links` makes files in the home directory, for example `AGENTS.md`, links to the same names in `~/shared`.
+
+Conflicts and deletions:
+
+- A sync moves the local files that it deletes or overwrites to
+  `~/.local/state/shared-sync/replaced` and keeps them there for 30 days. Remote files
+  that it deletes go to the Proton Drive trash.
+- When two machines change one file, the later upload usually wins. The other
+  version stays in `replaced` on the machine that made it. When one sync sees both
+  changes, the older copy stays beside the file as `<name>.conflict1`.
+- A sync that stops part way continues at the next start: the daemon removes the
+  stale bisync lock, and `--recover` continues from the listings of the last
+  complete run.
+- The first sync on a machine, or a sync whose listings are lost, is a `--resync`. It
+  copies the missing and newer files in both directions and deletes nothing.
+
+Keep the KeePassXC database out of `~/shared`, because the credentials that sync `~/shared` are in it.
+
+Git on the Mac uses the personal key for all of github.com (`github.personalSshKey`).
+`dev.johnrinehart.mbp-host.github.ownerIdentities` (Home Manager) adds other GitHub accounts, each with its own key.
+For the repositories of the listed owners, Git takes the identity, signing settings and SSH command of that account, selected by remote URL.
+Their SSH remotes are rewritten to the alias `github-<name>`, which uses the key of that account.
+
+The prompt shows the active AWS profile and its region at the right, red when the profile name contains `prod`, when an AWS config exists.
+
 The apps are installed from the vendors' own signed release files, pinned by
 hash in `darwin-configurations/mbp-host/apps.nix`, rather than from nixpkgs'
 repackaged bundles, which lose the vendor's code signature (and with it
@@ -384,8 +436,40 @@ Pro's speakers differ), and the RTL8159 PHY firmware, which linux-firmware
 does not ship; without it the card links at up to 5 Gbit/s, near what the
 AMD board's 10 Gbit/s USB ports carry anyway.
 
-The work layer (Git identities, AWS, secretspec, repod fetching, the Mac's
-SSH key) is added downstream, as for the `mbp-apple-silicon` guest.
+The work layer (Git identities, AWS, the secretspec database, repod fetching,
+the Mac's SSH key) is added downstream, as for the `mbp-apple-silicon` guest.
+
+`dev.johnrinehart.wifiAccessPoint` (`nixos-modules/wifi-access-point.nix`)
+makes the laptop a hub: an iwd access point whose clients reach all networks
+that the laptop reaches (the wired uplink, the tailnet and its subnet routes,
+Nebula, and interfaces that come later).
+The access point is off until you start it, as root:
+
+```bash
+iwctl device <interface> set-property Mode ap
+iwctl ap <interface> start-profile <ssid>
+iwctl ap <interface> stop                         # and back:
+iwctl device <interface> set-property Mode station
+```
+
+- iwd 3.12 sends to access point clients at legacy 802.11g rates and its DHCP
+  server advertises no router. `patches/iwd/` (all iwd hosts) corrects both, adds
+  802.11ac at 80 MHz and adds `[General].Hidden`. iwd thus builds locally. Its
+  unit tests run against the build kernel, so patch 0007 skips the EAP-SIM/AKA
+  HMAC cases when AF_ALG has no HMAC, as the other tests do. The series goes
+  upstream; remove it when a released iwd has it.
+- impala opens in the current mode of the device, so it does not stop a running
+  access point. Ctrl+q shares the running access point as a Wi-Fi QR code, and
+  Tab shows the passphrase (`patches/impala/`).
+- iwd's DHCP server gives the access point `address` (default
+  `192.168.200.1/24`) and leases the rest of the /24 with the laptop as router
+  and DNS server. systemd-resolved answers on that address, so clients get the
+  split DNS of the laptop.
+- The laptop masquerades clients on every egress interface except the access
+  point, and forwards nothing back onto it. An ip rule at priority 5200 keeps
+  the subnet in the main table ahead of Tailscale's table 52.
+- The passphrase is `wifi-ap-passphrase` in `sopsFile`. sops-nix writes the
+  profile to `/var/lib/iwd/ap/<ssid>.ap`, root-only.
 
 ### Installing to disk
 
@@ -448,6 +532,9 @@ Do these steps by hand after `install-to-disk`:
 3. Turn on Secure Boot in the BIOS. Make sure that `sbctl status` shows
    "Secure Boot: Enabled".
 4. Copy the keys in `/var/lib/sbctl` to the key store of the organisation.
+   `nix run .#framework-13-pro-secure-boot-keys -- john@<laptop>`, from a
+   checkout whose `secretspec.toml` declares the `FRAMEWORK_13_PRO_SECURE_BOOT_*`
+   keys, copies them into KeePassXC and compares the stored values.
 5. Add a recovery key to LUKS with
    `sudo systemd-cryptenroll --recovery-key /dev/nvme0n1p2`. Keep the key
    where the organisation tells you to keep it.
@@ -635,9 +722,12 @@ The host appears in the registry, DNS, and dashboard as soon as it connects.
 `framie`'s signed certificate and private key. Both files use the Framework
 SSH host key as their only age recipient. The former administrator age
 identity cannot decrypt either file. sops-nix installs only the Framework
-node files under `/run/secrets` for Nebula. Never copy the CA signing key to
-the lighthouse or mount it in the Nebula service. The lighthouse's own
-certificate and key live in `/var/lib/nebula/` on the lighthouse only.
+node files under `/run/secrets` for Nebula: `dev.johnrinehart.mycelium.sopsFile`
+names a sops file with the keys `nebula-ca`, `nebula-cert` and `nebula-key`, and
+the module installs them as `0440 root:nebula-mycelium` and uses them. Never copy
+the CA signing key to the lighthouse or mount it in the Nebula service. The
+lighthouse's own certificate and key live in `/var/lib/nebula/` on the
+lighthouse only.
 
 Old Git revisions remain encrypted to their original recipient. Rekeying
 the current file does not revoke access to those revisions.

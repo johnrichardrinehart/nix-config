@@ -1,0 +1,269 @@
+From 4167734ccdee5d36539e5a43712ee98a631f7ddf Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 17:09:04 -0400
+Subject: [PATCH] Share the running access point as a Wi-Fi QR code
+
+ctrl+q (access_point.share) on the Access Point block shows the same
+QR popup as known-network sharing, for the SSID iwd reports running:
+WIFI:T:WPA;S:<ssid>;P:<passphrase>;[H:true;]; which Android's Wi-Fi
+setup scans. The passphrase comes from the new-AP popup when it started
+that SSID, otherwise from the iwd profile /var/lib/iwd/ap/<ssid>.ap
+(root only), whose [General].Hidden=true adds H:true.
+
+The share key is matched ahead of the plain `q` quit key.
+---
+ Readme.md                 |  1 +
+ src/config.rs             |  9 +++++++
+ src/handler.rs            | 25 +++++++++++++++++
+ src/mode/ap.rs            | 32 ++++++++++++++++++++++
+ src/mode/station/share.rs | 57 ++++++++++++++++++++++++++++++---------
+ 5 files changed, 112 insertions(+), 12 deletions(-)
+
+diff --git a/Readme.md b/Readme.md
+index 3e6ca5d..51e227a 100644
+--- a/Readme.md
++++ b/Readme.md
+@@ -97,6 +97,7 @@ toggle_power = "o"
+ [access_point]
+ start = 'n'
+ stop = 'x'
++share = 'q' # pressed with ctrl: Wi-Fi QR code of the running access point
+ 
+ [station]
+ toggle_scanning = "s"
+diff --git a/src/config.rs b/src/config.rs
+index efd46b3..fd49cfe 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -140,6 +140,10 @@ pub struct AccessPoint {
+ 
+     #[serde(default = "default_ap_stop")]
+     pub stop: char,
++
++    /// Pressed with ctrl: plain `q` quits.
++    #[serde(default = "default_ap_share")]
++    pub share: char,
+ }
+ 
+ impl Default for AccessPoint {
+@@ -147,6 +151,7 @@ impl Default for AccessPoint {
+         Self {
+             start: 'n',
+             stop: 'x',
++            share: 'q',
+         }
+     }
+ }
+@@ -159,6 +164,10 @@ fn default_ap_stop() -> char {
+     'x'
+ }
+ 
++fn default_ap_share() -> char {
++    'q'
++}
++
+ // Theme
+ #[derive(Deserialize, Debug)]
+ pub struct Theme {
+diff --git a/src/handler.rs b/src/handler.rs
+index 9eb0873..5a5e2c6 100644
+--- a/src/handler.rs
++++ b/src/handler.rs
+@@ -647,8 +647,33 @@ pub async fn handle_key_events(
+                             app.focused_block = FocusedBlock::Device;
+                         }
+                     }
++                    FocusedBlock::ShareNetwork => {
++                        if key_event.code == KeyCode::Esc {
++                            ap.share = None;
++                            app.focused_block = FocusedBlock::AccessPoint;
++                        }
++                    }
+                     _ => {
+                         match key_event.code {
++                            // Share; ahead of the plain `q` quit
++                            KeyCode::Char(c)
++                                if c == config.ap.share
++                                    && key_event.modifiers == KeyModifiers::CONTROL =>
++                            {
++                                if app.focused_block == FocusedBlock::AccessPoint {
++                                    match ap.share() {
++                                        Ok(share) => {
++                                            ap.share = Some(share);
++                                            app.focused_block = FocusedBlock::ShareNetwork;
++                                        }
++                                        Err(e) => Notification::send(
++                                            e.to_string(),
++                                            notification::NotificationLevel::Error,
++                                            &sender,
++                                        )?,
++                                    }
++                                }
++                            }
+                             KeyCode::Char('q') => {
+                                 app.quit();
+                             }
+diff --git a/src/mode/ap.rs b/src/mode/ap.rs
+index 870fe8f..36f506a 100644
+--- a/src/mode/ap.rs
++++ b/src/mode/ap.rs
+@@ -19,6 +19,7 @@ use crate::{
+     config::Config,
+     device::Device,
+     event::Event,
++    mode::station::share::Share,
+     notification::{Notification, NotificationLevel},
+ };
+ use tui_input::Input;
+@@ -43,6 +44,7 @@ pub struct AccessPoint {
+     pub psk: Input,
+     pub focused_section: APFocusedSection,
+     pub connected_devices: Vec<String>,
++    pub share: Option<Share>,
+ }
+ 
+ impl AccessPoint {
+@@ -93,9 +95,31 @@ impl AccessPoint {
+             psk,
+             focused_section,
+             connected_devices,
++            share: None,
+         })
+     }
+ 
++    /// QR code for the running access point. A passphrase typed into the
++    /// new-AP popup for this SSID is used as is; otherwise the AP was started
++    /// from its iwd profile, which only root can read.
++    pub fn share(&self) -> Result<Share> {
++        let ssid = self
++            .name
++            .clone()
++            .filter(|_| self.has_started)
++            .context("The access point is not started")?;
++
++        if !self.psk.value().is_empty() && self.ssid.value() == ssid {
++            return Share::from_credentials(ssid, self.psk.value().to_string(), false);
++        }
++
++        if unsafe { libc::geteuid() } != 0 {
++            anyhow::bail!("impala must be run as root to share an access point profile");
++        }
++
++        Share::from_ap_profile(ssid)
++    }
++
+     pub fn render_input(&self, frame: &mut Frame, config: Arc<Config>) {
+         let popup_layout = Layout::default()
+             .direction(Direction::Vertical)
+@@ -602,16 +626,24 @@ impl AccessPoint {
+                 Span::from(config.ap.stop.to_string()).bold(),
+                 Span::from(" Stop AP"),
+                 Span::from(" | "),
++                Span::from(format!("ctrl+{}", config.ap.share)).bold(),
++                Span::from(" Share"),
++                Span::from(" | "),
+                 Span::from("ctrl+r").bold(),
+                 Span::from(" Switch Mode"),
+                 Span::from(" | "),
+                 tab,
+                 Span::from(" Nav"),
+             ]),
++            FocusedBlock::ShareNetwork => Line::from(vec![esc, Span::from(" Close")]),
+             _ => Line::from(""),
+         };
+ 
+         let help_message = help_message.centered().blue();
+         frame.render_widget(help_message, help_block);
++
++        if let Some(share) = &self.share {
++            share.render(frame, config.clone());
++        }
+     }
+ }
+diff --git a/src/mode/station/share.rs b/src/mode/station/share.rs
+index 0a75e01..d006729 100644
+--- a/src/mode/station/share.rs
++++ b/src/mode/station/share.rs
+@@ -1,4 +1,4 @@
+-use anyhow::Result;
++use anyhow::{Context, Result};
+ use qrcode::QrCode;
+ use std::{cmp, fs, sync::Arc};
+ use tui_qrcode::{Colors, QrCodeWidget};
+@@ -30,6 +30,15 @@ fn get_escaped_wifi_value(value: &str) -> String {
+         .replace(':', r"\:")
+ }
+ 
++// QrCode is not Debug; also keeps the passphrase out of debug output.
++impl std::fmt::Debug for Share {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("Share")
++            .field("network_name", &self.network_name)
++            .finish_non_exhaustive()
++    }
++}
++
+ impl Share {
+     pub fn new(network_name: String) -> Result<Self> {
+         let encoded_network_name = iwd_network_name(&network_name);
+@@ -40,22 +49,46 @@ impl Share {
+             .find(|&line| line.starts_with("Passphrase="))
+             && let Some((_, passphrase)) = line.split_once('=')
+         {
+-            let message = format!(
+-                "WIFI:T:WPA;S:{};P:{};;",
+-                get_escaped_wifi_value(&network_name),
+-                get_escaped_wifi_value(passphrase),
+-            );
+-            let qr_code = QrCode::new(message)?;
+-            Ok(Self {
+-                qr_code,
+-                network_name,
+-                passphrase: passphrase.to_string(),
+-            })
++            Self::from_credentials(network_name, passphrase.to_string(), false)
+         } else {
+             unreachable!()
+         }
+     }
+ 
++    /// Reads the iwd access point profile (iwd.ap(5)) named `ssid`. iwd keeps
++    /// profiles under their raw SSID, root-only.
++    pub fn from_ap_profile(ssid: String) -> Result<Self> {
++        let content = fs::read_to_string(format!("/var/lib/iwd/ap/{}.ap", ssid))?;
++        let value = |key: &str| {
++            content
++                .lines()
++                .find_map(|line| line.trim().strip_prefix(key)?.trim().strip_prefix('='))
++                .map(str::trim)
++        };
++
++        let passphrase = value("Passphrase")
++            .context("The access point profile has no Passphrase to share")?
++            .to_string();
++        let hidden = value("Hidden") == Some("true");
++
++        Self::from_credentials(ssid, passphrase, hidden)
++    }
++
++    pub fn from_credentials(network_name: String, passphrase: String, hidden: bool) -> Result<Self> {
++        let message = format!(
++            "WIFI:T:WPA;S:{};P:{};{};",
++            get_escaped_wifi_value(&network_name),
++            get_escaped_wifi_value(&passphrase),
++            if hidden { "H:true;" } else { "" },
++        );
++        let qr_code = QrCode::new(message)?;
++        Ok(Self {
++            qr_code,
++            network_name,
++            passphrase,
++        })
++    }
++
+     pub fn render(&self, frame: &mut Frame, config: Arc<Config>) {
+         let widget = QrCodeWidget::new(self.qr_code.clone()).colors(Colors::Inverted);
+         let sim_area = Rect::new(0, 0, 50, 50);
+-- 
+2.56.0
+

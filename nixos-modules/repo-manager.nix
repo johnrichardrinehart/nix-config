@@ -314,6 +314,10 @@ in
       systemd.user.services.repod = lib.mkIf cfg.daemon.enable {
         Unit = {
           Description = "repo-manager RPC daemon";
+          # repod reads its config only at startup, and the unit itself does
+          # not change when the config does, so home-manager would leave the
+          # old daemon running.
+          X-Restart-Triggers = [ "${configFile}" ];
         };
 
         Service = {

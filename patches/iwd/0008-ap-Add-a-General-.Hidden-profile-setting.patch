@@ -1,0 +1,119 @@
+From 3742ef2089f1f74371469aba58906ffe4d139463 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 21:35:07 -0400
+Subject: [PATCH] ap: Add a [General].Hidden profile setting
+
+With Hidden=true the AP starts with NL80211_HIDDEN_SSID_ZERO_CONTENTS:
+its beacons carry an SSID element of the right length filled with
+zeros, and it answers only probe requests that carry its SSID, ignoring
+wildcard, SSID-list and P2P wildcard probes. Probe responses keep the
+full SSID.
+
+Zero contents rather than a zero-length element: with the MT7925
+firmware a zero-length SSID element leaves the AP invisible to clients
+that look for a hidden network's beacon before probing for it.
+---
+ src/ap.c       | 33 +++++++++++++++++++++++++++------
+ src/iwd.ap.rst |  7 +++++++
+ 2 files changed, 34 insertions(+), 6 deletions(-)
+
+diff --git a/src/ap.c b/src/ap.c
+index 8c399232..b630bfb2 100644
+--- a/src/ap.c
++++ b/src/ap.c
+@@ -120,6 +120,7 @@ struct ap_state {
+ 	bool scanning : 1;
+ 	bool supports_ht : 1;
+ 	bool supports_vht : 1;
++	bool hidden : 1;
+ };
+ 
+ struct sta_state {
+@@ -1217,9 +1218,14 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
+ 
+ 	ie_tlv_builder_init(&builder, out_buf + 36, out_len - 36);
+ 
+-	/* SSID IE */
++	/* SSID IE, zero-filled in beacons of a hidden AP */
+ 	ie_tlv_builder_next(&builder, IE_TYPE_SSID);
+-	ie_tlv_builder_set_data(&builder, ap->ssid, strlen(ap->ssid));
++	if (ap->hidden && stype == MPDU_MANAGEMENT_SUBTYPE_BEACON) {
++		static const char zeros[SSID_MAX_SIZE];
++
++		ie_tlv_builder_set_data(&builder, zeros, strlen(ap->ssid));
++	} else
++		ie_tlv_builder_set_data(&builder, ap->ssid, strlen(ap->ssid));
+ 
+ 	/* Supported Rates IE */
+ 	ie_tlv_builder_next(&builder, IE_TYPE_SUPPORTED_RATES);
+@@ -2607,15 +2613,17 @@ static void ap_probe_req_cb(const struct mmpdu_header *hdr, const void *body,
+ 			!util_is_broadcast_address(hdr->address_3))
+ 		return;
+ 
++	/* A hidden AP answers only probes that name its SSID */
+ 	if (!ssid || ssid_len == 0) /* Wildcard SSID */
+-		match = true;
++		match = !ap->hidden;
+ 	else if (ssid && ssid_len == strlen(ap->ssid) && /* One SSID */
+ 			!memcmp(ssid, ap->ssid, ssid_len))
+ 		match = true;
+-	else if (ssid && ssid_len == 7 && !memcmp(ssid, "DIRECT-", 7) &&
++	else if (!ap->hidden && ssid && ssid_len == 7 &&
++			!memcmp(ssid, "DIRECT-", 7) &&
+ 			!memcmp(ssid, ap->ssid, 7)) /* P2P wildcard */
+ 		match = true;
+-	else if (ssid_list) { /* SSID List */
++	else if (ssid_list && !ap->hidden) { /* SSID List */
+ 		ie_tlv_iter_init(&iter, ssid_list, ssid_list_len);
+ 
+ 		while (ie_tlv_iter_next(&iter)) {
+@@ -2915,7 +2923,8 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
+ 	uint32_t dtim_period = 3;
+ 	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
+ 	struct wiphy *wiphy = netdev_get_wiphy(ap->netdev);
+-	uint32_t hidden_ssid = NL80211_HIDDEN_SSID_NOT_IN_USE;
++	uint32_t hidden_ssid = ap->hidden ? NL80211_HIDDEN_SSID_ZERO_CONTENTS :
++						NL80211_HIDDEN_SSID_NOT_IN_USE;
+ 	unsigned int nl_ciphers_cnt = __builtin_popcount(ap->ciphers);
+ 	uint32_t nl_ciphers[nl_ciphers_cnt];
+ 	uint32_t group_nl_cipher =
+@@ -3865,6 +3874,18 @@ static int ap_load_config(struct ap_state *ap, const struct l_settings *config,
+ 	ap->supports_vht = ap->supports_ht && ap->band == BAND_FREQ_5_GHZ &&
+ 			wiphy_get_vht_capabilities(wiphy, ap->band, NULL);
+ 
++	if (l_settings_has_key(config, "General", "Hidden")) {
++		bool boolval;
++
++		if (!l_settings_get_bool(config, "General", "Hidden",
++						&boolval)) {
++			l_error("AP [General].Hidden not a valid boolean");
++			return -EINVAL;
++		}
++
++		ap->hidden = boolval;
++	}
++
+ 	if (!ap_validate_band_channel(ap)) {
+ 		l_error("AP Band and Channel combination invalid");
+ 		return -EINVAL;
+diff --git a/src/iwd.ap.rst b/src/iwd.ap.rst
+index 9ad002a2..cc0c451a 100644
+--- a/src/iwd.ap.rst
++++ b/src/iwd.ap.rst
+@@ -78,6 +78,13 @@ The group ``[General]`` contains general AP configuration.
+ 
+        Explicitly disable HT capabilities for this AP.
+ 
++   * - Hidden
++     - Boolean value
++
++       Hide the SSID: beacons carry a zero-filled SSID and the AP answers only
++       probe requests that name its SSID. Clients must be configured with the
++       network as hidden. Default: false.
++
+ Network Authentication Settings
+ -------------------------------
+ 
+-- 
+2.56.0
+

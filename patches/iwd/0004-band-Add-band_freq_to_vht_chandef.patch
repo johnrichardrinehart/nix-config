@@ -1,0 +1,96 @@
+From 2af79cd57e9706b54548b733c26c1427a945f3a4 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 12:54:55 -0400
+Subject: [PATCH 4/6] band: Add band_freq_to_vht_chandef
+
+Choose the 80MHz channel containing a frequency from operating
+classes 128 (5GHz) and 133 (6GHz), falling back to
+band_freq_to_ht_chandef on 2.4GHz, when the frequency is restricted
+from 80MHz operation, or when it lies outside every 80MHz channel.
+---
+ src/band.c | 58 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/band.h |  2 ++
+ 2 files changed, 60 insertions(+)
+
+diff --git a/src/band.c b/src/band.c
+index 09b2d932..ad509fe1 100644
+--- a/src/band.c
++++ b/src/band.c
+@@ -1284,6 +1284,64 @@ _Pragma("GCC diagnostic pop")
+ 	return 0;
+ }
+ 
++/*
++ * Choose the 80MHz channel containing @freq from the 80MHz operating classes
++ * (128 and 133).  Falls back to the widest HT channel definition on 2.4GHz,
++ * when the frequency is restricted from 80MHz operation, or when it isn't in
++ * any 80MHz channel.
++ */
++int band_freq_to_vht_chandef(uint32_t freq, const struct band_freq_attrs *attr,
++				struct band_chandef *chandef)
++{
++	enum band_freq band;
++	unsigned int channel;
++	unsigned int i;
++	unsigned int j;
++
++	if (attr->disabled || !attr->supported)
++		return -EINVAL;
++
++	channel = band_freq_to_channel(freq, &band);
++	if (!channel)
++		return -EINVAL;
++
++	if (band == BAND_FREQ_2_4_GHZ || attr->no_80mhz)
++		return band_freq_to_ht_chandef(freq, attr, chandef);
++
++	for (i = 0; i < L_ARRAY_SIZE(e4_operating_classes); i++) {
++		const struct operating_class_info *info =
++						&e4_operating_classes[i];
++
++		if (info->channel_spacing != 80 || info->flags & PLUS80)
++			continue;
++
++		/* Class 128 covers 5GHz (from 5000MHz), 133 covers 6GHz */
++		if ((info->starting_frequency == 5950) !=
++				(band == BAND_FREQ_6_GHZ))
++			continue;
++
++		for (j = 0; j < L_ARRAY_SIZE(info->center_frequencies) &&
++				info->center_frequencies[j]; j++) {
++			unsigned int center = info->center_frequencies[j];
++
++			/* Primary must be one of the four 20MHz channels */
++			if (channel + 6 < center || channel > center + 6 ||
++					(channel + 6 - center) % 4)
++				continue;
++
++			chandef->frequency = freq;
++			chandef->channel_width = BAND_CHANDEF_WIDTH_80;
++			chandef->center1_frequency = center * 5 +
++						info->starting_frequency;
++			chandef->center2_frequency = 0;
++
++			return 0;
++		}
++	}
++
++	return band_freq_to_ht_chandef(freq, attr, chandef);
++}
++
+ uint8_t band_freq_to_channel(uint32_t freq, enum band_freq *out_band)
+ {
+ 	unsigned int i;
+diff --git a/src/band.h b/src/band.h
+index b94c07d3..599668fe 100644
+--- a/src/band.h
++++ b/src/band.h
+@@ -104,6 +104,8 @@ int band_estimate_nonht_rate(const struct band *band,
+ 				int32_t rssi, uint64_t *out_data_rate);
+ int band_freq_to_ht_chandef(uint32_t freq, const struct band_freq_attrs *attr,
+ 				struct band_chandef *chandef);
++int band_freq_to_vht_chandef(uint32_t freq, const struct band_freq_attrs *attr,
++				struct band_chandef *chandef);
+ 
+ int oci_to_frequency(uint32_t operating_class, uint32_t channel);
+ 

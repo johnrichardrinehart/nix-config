@@ -1,0 +1,52 @@
+From a82e04f7180ad0bf5a014ae454793d4f275a8844 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 13:43:26 -0400
+Subject: [PATCH] unit: Skip EAP-SIM/AKA' tests without HMAC support
+
+The MAC test needs HMAC-SHA1 and the EAP-AKA' tests HMAC-SHA256 from
+the kernel, but unlike the other unit tests they run regardless, so
+they fail on kernels whose AF_ALG doesn't provide them instead of
+being skipped.  Add the same prechecks the HMAC tests use.
+---
+ unit/test-eap-sim.c | 21 ++++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/unit/test-eap-sim.c b/unit/test-eap-sim.c
+index 1c096ff7..b4d2989b 100644
+--- a/unit/test-eap-sim.c
++++ b/unit/test-eap-sim.c
+@@ -354,16 +354,31 @@ static void test_aka_prf_prime(const void *data)
+ 	assert(memcmp(emsk, vals->emsk, EAP_SIM_EMSK_LEN) == 0);
+ }
+ 
++static bool hmac_sha1_precheck(const void *data)
++{
++	return l_checksum_is_supported(L_CHECKSUM_SHA1, true);
++}
++
++static bool hmac_sha256_precheck(const void *data)
++{
++	return l_checksum_is_supported(L_CHECKSUM_SHA256, true);
++}
++
+ int main(int argc, char *argv[])
+ {
+ 	l_test_init(&argc, &argv);
+ 
+ 	l_test_add("EAP-SIM next attribute test", test_next_attribute, NULL);
+ 	l_test_add("EAP-SIM add attribute test", test_add_attribute, NULL);
+-	l_test_add("EAP-SIM calculate MAC test", test_calc_mac, NULL);
++	l_test_add_func_precheck("EAP-SIM calculate MAC test", test_calc_mac,
++					hmac_sha1_precheck, 0);
+ 	l_test_add("EAP-SIM PRNG test", test_prng, NULL);
+-	l_test_add("EAP-AKA' Test Case 1", test_aka_prf_prime, &test_case_1);
+-	l_test_add("EAP-AKA' Test Case 2", test_aka_prf_prime, &test_case_2);
++	l_test_add_data_func_precheck("EAP-AKA' Test Case 1", &test_case_1,
++					test_aka_prf_prime,
++					hmac_sha256_precheck, 0);
++	l_test_add_data_func_precheck("EAP-AKA' Test Case 2", &test_case_2,
++					test_aka_prf_prime,
++					hmac_sha256_precheck, 0);
+ 
+ 	return l_test_run();
+ }

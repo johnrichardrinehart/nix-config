@@ -18,6 +18,9 @@
   # Track the newest stable kernel nixpkgs packages instead of its LTS default.
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
+  # Uploads files as GitHub user-attachments for issue and PR text.
+  environment.systemPackages = [ pkgs.dev.johnrinehart.gh-upload-script ];
+
   # Outputs reachable from a live .drv stay in the store, so collecting garbage
   # or dropping old generations does not force the next rebuild to redo the
   # work behind the generations that were kept. Retention only; it holds no

@@ -1,0 +1,136 @@
+From 5dbf0b7994163cc0ce685db62d78916809a06605 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 13:06:16 -0400
+Subject: [PATCH] Keep the device's current mode on startup
+
+impala switched the device to `mode` (default "station") every time it
+started. Opening it while an access point was running therefore
+stopped the access point, and opening it in the other mode than the
+device was in sat through a mode change before the first frame.
+
+Make `mode` optional, in the config and on the command line. When it
+is unset, impala opens in whatever mode the device is already in, i.e.
+the one last selected. When it is set, impala only switches if the
+device is in the other mode, and re-reads the device afterwards so the
+UI reflects the new mode rather than the old one.
+---
+ Readme.md     |  2 +-
+ src/app.rs    | 16 ++++++++++++----
+ src/config.rs | 10 ++++------
+ src/main.rs   | 10 ++++++----
+ 4 files changed, 23 insertions(+), 15 deletions(-)
+
+diff --git a/Readme.md b/Readme.md
+index 80b171c..c793e2e 100644
+--- a/Readme.md
++++ b/Readme.md
+@@ -87,7 +87,7 @@ Keybindings and themes can be customized in the config file `$HOME/.config/impal
+ 
+ ascii = false # ascii display (false = do not show icons)
+ switch = "r"
+-mode = "station"
++# mode = "station"  # Switch to "station" or "ap" on startup; unset keeps the current mode
+ esc_quit = false  # Set to true to enable Esc key to quit the app
+ 
+ [device]
+diff --git a/src/app.rs b/src/app.rs
+index ff7bd47..ada85ab 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -45,7 +45,7 @@ impl App {
+     pub async fn new(
+         sender: UnboundedSender<Event>,
+         config: Arc<Config>,
+-        mode: Mode,
++        mode: Option<Mode>,
+     ) -> Result<Self> {
+         let session = {
+             match iwdrs::session::Session::new().await {
+@@ -67,8 +67,16 @@ Error: {}",
+             }
+         };
+ 
+-        let device = Device::new(session.clone()).await?;
+-        device.set_mode(mode).await?;
++        let mut device = Device::new(session.clone()).await?;
++
++        // Only switch when asked to, and only when it changes anything:
++        // switching tears down a running access point or station connection.
++        if let Some(mode) = mode
++            && mode != device.mode
++        {
++            device.set_mode(mode).await?;
++            device = Device::new(session.clone()).await?;
++        }
+ 
+         let agent = AuthAgent::new(sender);
+         let _ = session.register_agent(agent.clone()).await?;
+@@ -82,7 +90,7 @@ Error: {}",
+             FocusedBlock::Device
+         };
+ 
+-        let reset = Reset::new(mode);
++        let reset = Reset::new(device.mode);
+ 
+         Ok(Self {
+             running: true,
+diff --git a/src/config.rs b/src/config.rs
+index 6349251..efd46b3 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -9,8 +9,10 @@ pub struct Config {
+     #[serde(default = "default_switch_mode")]
+     pub switch: char,
+ 
+-    #[serde(default = "default_device_mode")]
+-    pub mode: String,
++    /// Mode to switch the device to on startup. When unset, impala keeps
++    /// the device in whatever mode it is already in.
++    #[serde(default)]
++    pub mode: Option<String>,
+ 
+     #[serde(default = "default_esc_quit")]
+     pub esc_quit: bool,
+@@ -35,10 +37,6 @@ fn default_switch_mode() -> char {
+     'r'
+ }
+ 
+-fn default_device_mode() -> String {
+-    "station".to_string()
+-}
+-
+ fn default_esc_quit() -> bool {
+     false
+ }
+diff --git a/src/main.rs b/src/main.rs
+index b58ae31..0c55b94 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -38,10 +38,12 @@ async fn main() -> Result<()> {
+     let mut tui = Tui::new(terminal, events);
+     tui.init()?;
+ 
+-    let mode = args.get_one::<String>("mode").cloned();
+-    let mode = mode.unwrap_or_else(|| config.mode.clone());
++    let mode = args
++        .get_one::<String>("mode")
++        .cloned()
++        .or_else(|| config.mode.clone());
+ 
+-    let mode = Mode::try_from(mode.as_str())?;
++    let mode = mode.map(|m| Mode::try_from(m.as_str())).transpose()?;
+ 
+     let mut app = match App::new(tui.events.sender.clone(), config.clone(), mode).await {
+         Ok(app) => app,
+@@ -94,7 +96,7 @@ async fn main() -> Result<()> {
+                     break;
+                 };
+ 
+-                match App::new(tui.events.sender.clone(), config.clone(), mode).await {
++                match App::new(tui.events.sender.clone(), config.clone(), Some(mode)).await {
+                     Ok(v) => app = v,
+                     Err(e) => {
+                         if e.to_string()
+-- 
+2.56.0
+

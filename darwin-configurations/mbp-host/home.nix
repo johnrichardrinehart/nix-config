@@ -14,6 +14,12 @@ let
   cfg = config.dev.johnrinehart.mbp-host;
   # One build for PATH and the activation step below.
   displayMode = pkgs.callPackage ../../packages/display-mode/package.nix { };
+
+  # Remote URL shapes of a GitHub owner's repositories, for `hasconfig`.
+  ownerPatterns = owner: [
+    "**/${owner}/**"
+    "*:${owner}/**"
+  ];
 in
 {
   options.dev.johnrinehart.mbp-host.github.personalSshKey = lib.mkOption {
@@ -23,6 +29,46 @@ in
       SSH key that authenticates as github.com/johnrichardrinehart. Pinned for
       all of github.com so that, with several GitHub keys in the agent, ssh
       does not authenticate as whichever account's key happens to come first.
+    '';
+  };
+
+  options.dev.johnrinehart.mbp-host.github.ownerIdentities = lib.mkOption {
+    type = lib.types.attrsOf (
+      lib.types.submodule {
+        options = {
+          owners = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            description = ''
+              GitHub owners (users or organizations) whose repositories use this
+              identity. The match is case-sensitive, and a miss is silent: the
+              commit is authored as the personal identity and only refused at
+              push. List every spelling the remotes carry.
+            '';
+          };
+          sshKey = lib.mkOption {
+            type = lib.types.str;
+            description = "SSH key that authenticates as the account that owns these repositories.";
+          };
+          git = lib.mkOption {
+            type = lib.types.attrsOf lib.types.anything;
+            default = { };
+            example = {
+              user.email = "me@example.com";
+              commit.gpgsign = true;
+            };
+            description = "Git config for these repositories (identity, signing).";
+          };
+        };
+      }
+    );
+    default = { };
+    description = ''
+      GitHub accounts besides the personal one, each with its own key. For
+      repositories of the listed owners, Git takes the identity and SSH
+      command from `git`, selected by remote URL in the global config (the Mac
+      has no repo-manager-written repository config), and their SSH remotes
+      are rewritten to the alias github-<name>, which pins `sshKey`.
+      Everything else on github.com keeps the personal key.
     '';
   };
 
@@ -183,12 +229,42 @@ in
             "https://github.com/"
             "git@github.com:"
             "ssh://git@github.com/"
-          ];
+          ]
+        ++ lib.concatLists (
+          lib.mapAttrsToList (
+            _: identity:
+            lib.concatMap (
+              owner:
+              map (pattern: {
+                condition = "hasconfig:remote.*.url:${pattern}";
+                contents = lib.recursiveUpdate identity.git {
+                  core.sshCommand = "ssh -i ${identity.sshKey} -o IdentitiesOnly=yes";
+                };
+              }) (ownerPatterns owner)
+            ) identity.owners
+          ) cfg.github.ownerIdentities
+        );
       # GitHub over SSH, never HTTPS, as on the NixOS machines (nixosModules
       # common.nix). An HTTPS push would authenticate with whatever
       # ~/.netrc or a credential helper holds, not the key picked by the
       # remote's owner.
-      settings.url."git@github.com:".insteadOf = "https://github.com";
+      settings.url = {
+        "git@github.com:".insteadOf = "https://github.com";
+      }
+      // lib.listToAttrs (
+        lib.concatLists (
+          lib.mapAttrsToList (
+            name: identity:
+            map (owner: {
+              name = "git@github-${name}:${owner}/";
+              value.insteadOf = [
+                "git@github.com:${owner}/"
+                "ssh://git@github.com/${owner}/"
+              ];
+            }) identity.owners
+          ) cfg.github.ownerIdentities
+        )
+      );
       # As on the NixOS machines: a plain `git push` of a branch without an
       # upstream pushes it to the same name on origin and tracks it.
       settings.push.autoSetupRemote = true;
@@ -197,12 +273,24 @@ in
     programs.ssh = {
       enable = true;
       enableDefaultConfig = false;
-      settings."github.com" = {
-        HostName = "github.com";
-        User = "git";
-        IdentityFile = cfg.github.personalSshKey;
-        IdentitiesOnly = true;
-      };
+      settings = {
+        "github.com" = {
+          HostName = "github.com";
+          User = "git";
+          IdentityFile = cfg.github.personalSshKey;
+          IdentitiesOnly = true;
+        };
+      }
+      # Only reached through the remote rewrites above.
+      // lib.mapAttrs' (
+        name: identity:
+        lib.nameValuePair "github-${name}" {
+          HostName = "github.com";
+          User = "git";
+          IdentityFile = identity.sshKey;
+          IdentitiesOnly = true;
+        }
+      ) cfg.github.ownerIdentities;
     };
 
     # Cmd+Shift+4 opens the screenshot editor directly (see shotedit.swift).

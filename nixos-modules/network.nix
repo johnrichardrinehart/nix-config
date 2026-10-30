@@ -96,13 +96,29 @@ in
       networking.networkmanager.enable = lib.mkForce false;
       networking.wireless.iwd = {
         enable = true;
-        # DefaultInterface makes iwd wait for the driver's interface. The first
-        # patch stops iwd's own P2P device from ending that wait at boot. The
-        # second makes scans for hidden networks dwell 15 TU per channel where
-        # the driver allows it (packages/iwlwifi does), so slow-answering
-        # hidden APs are found.
+        # DefaultInterface makes iwd wait for the driver's interface.
+        #
+        # patches/iwd/ is the access point series: iwd 3.12's AP sends to
+        # clients at legacy 802.11g rates and its DHCP server advertises no
+        # router unless one is configured. The series fixes both, adds VHT
+        # (80 MHz on 5 GHz) and a [General].Hidden profile setting (iwd.ap(5)),
+        # and skips the EAP-SIM/AKA unit tests on kernels whose AF_ALG has no
+        # HMAC, as the other HMAC tests do. It is on its way upstream.
+        #
+        # Of the last two patches, the first stops iwd's own P2P device from
+        # ending the DefaultInterface wait at boot. The second makes scans for
+        # hidden networks dwell 15 TU per channel where the driver allows it
+        # (packages/iwlwifi does), so slow-answering hidden APs are found.
         package = pkgs.iwd.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
+            ../patches/iwd/0001-ap-Default-the-DHCP-router-to-the-AP-address.patch
+            ../patches/iwd/0002-auto-t-Check-the-AP-advertises-itself-as-router.patch
+            ../patches/iwd/0003-ap-Pass-station-HT-capabilities-and-WMM-to-the-kerne.patch
+            ../patches/iwd/0004-band-Add-band_freq_to_vht_chandef.patch
+            ../patches/iwd/0005-wiphy-Add-wiphy_get_vht_capabilities.patch
+            ../patches/iwd/0006-ap-Support-VHT-and-80MHz-channels-on-5GHz.patch
+            ../patches/iwd/0007-unit-Skip-EAP-SIM-AKA-tests-without-HMAC-support.patch
+            ../patches/iwd/0008-ap-Add-a-General-.Hidden-profile-setting.patch
             ../patches/iwd-create-p2p-after-default-interface.patch
             ../patches/iwd-dwell-longer-on-scans-for-hidden-networks.patch
           ];

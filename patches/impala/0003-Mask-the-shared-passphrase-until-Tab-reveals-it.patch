@@ -1,0 +1,139 @@
+From eb002235c32922f70f5bdbd835f804548531e641 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 20:10:40 -0400
+Subject: [PATCH] Mask the shared passphrase until Tab reveals it
+
+The share popup (known networks and the access point) shows the passphrase as asterisks; Tab toggles it, as in the passphrase prompt.
+---
+ src/handler.rs            | 24 ++++++++++++++++++------
+ src/mode/ap.rs            |  8 +++++++-
+ src/mode/station.rs       |  7 +++++++
+ src/mode/station/share.rs | 13 ++++++++++---
+ 4 files changed, 42 insertions(+), 10 deletions(-)
+
+diff --git a/src/handler.rs b/src/handler.rs
+index 5a5e2c6..d0ab8bc 100644
+--- a/src/handler.rs
++++ b/src/handler.rs
+@@ -334,12 +334,18 @@ pub async fn handle_key_events(
+                             app.focused_block = FocusedBlock::Device;
+                         }
+                     }
+-                    FocusedBlock::ShareNetwork => {
+-                        if key_event.code == KeyCode::Esc {
++                    FocusedBlock::ShareNetwork => match key_event.code {
++                        KeyCode::Esc => {
+                             station.share = None;
+                             app.focused_block = FocusedBlock::KnownNetworks;
+                         }
+-                    }
++                        KeyCode::Tab => {
++                            if let Some(share) = &mut station.share {
++                                share.revealed = !share.revealed;
++                            }
++                        }
++                        _ => {}
++                    },
+                     FocusedBlock::ConnectHiddenNetwork => match key_event.code {
+                         KeyCode::Esc => {
+                             app.focused_block = FocusedBlock::NewNetworks;
+@@ -647,12 +653,18 @@ pub async fn handle_key_events(
+                             app.focused_block = FocusedBlock::Device;
+                         }
+                     }
+-                    FocusedBlock::ShareNetwork => {
+-                        if key_event.code == KeyCode::Esc {
++                    FocusedBlock::ShareNetwork => match key_event.code {
++                        KeyCode::Esc => {
+                             ap.share = None;
+                             app.focused_block = FocusedBlock::AccessPoint;
+                         }
+-                    }
++                        KeyCode::Tab => {
++                            if let Some(share) = &mut ap.share {
++                                share.revealed = !share.revealed;
++                            }
++                        }
++                        _ => {}
++                    },
+                     _ => {
+                         match key_event.code {
+                             // Share; ahead of the plain `q` quit
+diff --git a/src/mode/ap.rs b/src/mode/ap.rs
+index 36f506a..a7d9bdf 100644
+--- a/src/mode/ap.rs
++++ b/src/mode/ap.rs
+@@ -635,7 +635,13 @@ impl AccessPoint {
+                 tab,
+                 Span::from(" Nav"),
+             ]),
+-            FocusedBlock::ShareNetwork => Line::from(vec![esc, Span::from(" Close")]),
++            FocusedBlock::ShareNetwork => Line::from(vec![
++                tab,
++                Span::from(" Hide/Show password"),
++                Span::from(" | "),
++                esc,
++                Span::from(" Close"),
++            ]),
+             _ => Line::from(""),
+         };
+ 
+diff --git a/src/mode/station.rs b/src/mode/station.rs
+index 8081d65..800f30b 100644
+--- a/src/mode/station.rs
++++ b/src/mode/station.rs
+@@ -1003,6 +1003,13 @@ impl Station {
+                     Span::from(" Discard"),
+                 ])]
+             }
++            FocusedBlock::ShareNetwork => vec![Line::from(vec![
++                tab,
++                Span::from(" Hide/Show password"),
++                Span::from(" | "),
++                esc,
++                Span::from(" Close"),
++            ])],
+             _ => vec![Line::from(vec![esc, Span::from(" Discard")])],
+         };
+ 
+diff --git a/src/mode/station/share.rs b/src/mode/station/share.rs
+index d006729..0fec75f 100644
+--- a/src/mode/station/share.rs
++++ b/src/mode/station/share.rs
+@@ -18,6 +18,8 @@ pub struct Share {
+     pub qr_code: QrCode,
+     pub network_name: String,
+     pub passphrase: String,
++    /// The passphrase shows as asterisks until revealed (Tab).
++    pub revealed: bool,
+ }
+ 
+ // https://github.com/zxing/zxing/wiki/Barcode-Contents#wi-fi-network-config-android-ios-11
+@@ -86,6 +88,7 @@ impl Share {
+             qr_code,
+             network_name,
+             passphrase,
++            revealed: false,
+         })
+     }
+ 
+@@ -162,9 +165,13 @@ impl Share {
+             Line::from(""),
+             Line::from(vec![
+                 Span::from("Passphrase: "),
+-                Span::from(&self.passphrase)
+-                    .bold()
+-                    .bg(config.theme.background),
++                Span::from(if self.revealed {
++                    self.passphrase.clone()
++                } else {
++                    "*".repeat(self.passphrase.chars().count())
++                })
++                .bold()
++                .bg(config.theme.background),
+             ])
+             .centered(),
+         ]);
+-- 
+2.56.0
+

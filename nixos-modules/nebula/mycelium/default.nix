@@ -1,5 +1,6 @@
 {
   config,
+  options,
   lib,
   pkgs,
   ...
@@ -45,6 +46,15 @@ in
       ];
       default = "peer";
       description = "This host's role in the Mycelium VPN.";
+    };
+    sopsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        sops file with this host's `nebula-ca`, `nebula-cert` and `nebula-key`.
+        When set, sops-nix decrypts them at activation into /run/secrets as
+        0440 root:nebula-mycelium, and they become `ca`, `cert` and `key`.
+      '';
     };
     ca = lib.mkOption {
       type = lib.types.str;
@@ -154,6 +164,37 @@ in
         };
         security.pki.certificateFiles = lib.mkIf cfg.trustCA.enable [ cfg.trustCA.bundle ];
       }
+      # Hosts without sops-nix (the lighthouse) have no `sops` option to define.
+      (lib.optionalAttrs (options ? sops) {
+        sops.secrets = lib.mkIf (cfg.sopsFile != null) (
+          lib.genAttrs
+            [
+              "nebula-ca"
+              "nebula-cert"
+              "nebula-key"
+            ]
+            (key: {
+              inherit (cfg) sopsFile;
+              inherit key;
+              group = "nebula-${network}";
+              mode = "0440";
+              restartUnits = [ "nebula@${network}.service" ];
+            })
+        );
+      })
+      (lib.mkIf (cfg.sopsFile != null) {
+        assertions = [
+          {
+            assertion = options ? sops;
+            message = "dev.johnrinehart.mycelium.sopsFile needs sops-nix.";
+          }
+        ];
+        dev.johnrinehart.mycelium = {
+          ca = config.sops.secrets.nebula-ca.path;
+          cert = config.sops.secrets.nebula-cert.path;
+          key = config.sops.secrets.nebula-key.path;
+        };
+      })
       (lib.mkIf (cfg.role == "peer") {
         services.nebula.networks.${network} = {
           lighthouses = [ lighthouse ];

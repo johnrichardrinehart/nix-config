@@ -88,6 +88,8 @@
     ./packages.nix
     ./repo-manager.nix
     ./s3_mount.nix
+    ./secretspec.nix
+    ./shared-sync.nix
     ./sound.nix
     ./ssh.nix
     ./ssh-session-lock.nix
@@ -97,6 +99,7 @@
     ./tmux-socket.nix
     ./virtualisation.nix
     ./voice-dictation.nix
+    ./wifi-access-point.nix
     ./profiles/framework.nix
     ./profiles/laptop.nix
 

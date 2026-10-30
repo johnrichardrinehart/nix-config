@@ -52,6 +52,7 @@ in
     ./keyboard.nix
     ./manual-steps.nix
     ./secretspec.nix
+    ./shared-sync.nix
     ./signed-copies.nix
     ./tmp-cleaner.nix
     ./vm-shares.nix
@@ -246,6 +247,13 @@ in
   # /Library/Fonts/Nix Fonts. The oh-my-posh prompt's powerline and status
   # glyphs need a Nerd Font; the Terminal profile below selects FiraMono NFM.
   fonts.packages = [ pkgs.nerd-fonts.fira-mono ];
+
+  # Uploads files as GitHub user-attachments for issue and PR text
+  # (packages/gh-upload-script). The Mac's package set has no nix-config
+  # overlay, so it comes from the flake outputs.
+  environment.systemPackages = [
+    inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.gh-upload-script
+  ];
 
   system.defaults = {
     NSGlobalDomain = {

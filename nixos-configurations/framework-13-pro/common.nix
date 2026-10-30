@@ -107,5 +107,7 @@
 
   environment.systemPackages = [
     pkgs.amdgpu_top
+    # Uploads files as GitHub user-attachments for issue and PR text.
+    pkgs.dev.johnrinehart.gh-upload-script
   ];
 }

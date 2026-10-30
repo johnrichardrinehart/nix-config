@@ -2,7 +2,17 @@
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
   "blocks": [
     {
-      "segments": [],
+      "segments": [
+        {
+          "foreground": "#ffa500",
+          "foreground_templates": [
+            "{{ if contains \"prod\" .Profile }}#ff5555{{ end }}"
+          ],
+          "style": "plain",
+          "template": " aws:{{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }} ",
+          "type": "aws"
+        }
+      ],
       "type": "rprompt"
     },
     {

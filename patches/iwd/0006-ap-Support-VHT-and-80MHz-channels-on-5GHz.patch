@@ -1,0 +1,262 @@
+From dc7acc97285641265d10bc017bc21393777ce2a3 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Thu, 29 Oct 2026 12:54:55 -0400
+Subject: [PATCH 6/6] ap: Support VHT and 80MHz channels on 5GHz
+
+When HT is enabled on 5GHz and the hardware supports VHT, operate on
+the 80MHz channel containing the configured primary channel, as long
+as all four 20MHz channels allow initiating radiation, and fall back
+to HT40 otherwise.  Advertise VHT Capabilities and VHT Operation in
+Beacons, Probe Responses and (Re)Association Responses, and pass the
+station's VHT Capabilities to the kernel in NEW_STATION so it can
+transmit to the station at VHT rates.
+
+Also fix the HT Operation Secondary Channel Offset for 80MHz
+channels: the secondary channel is above the primary for the first
+and third 20MHz channels and below it otherwise, which comparing the
+primary against the channel center doesn't capture.
+
+Tested with an MT7925 AP on channel 36 and a Pixel phone: 866.7 Mbit/s
+VHT-MCS 9 80MHz 2SS to the station, up from 6 Mbit/s legacy before
+the HT and VHT changes.
+---
+ src/ap.c | 119 +++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 115 insertions(+), 4 deletions(-)
+
+diff --git a/src/ap.c b/src/ap.c
+index 7491424f..8c399232 100644
+--- a/src/ap.c
++++ b/src/ap.c
+@@ -119,6 +119,7 @@ struct ap_state {
+ 	bool free_pending : 1;
+ 	bool scanning : 1;
+ 	bool supports_ht : 1;
++	bool supports_vht : 1;
+ };
+ 
+ struct sta_state {
+@@ -146,8 +147,10 @@ struct sta_state {
+ 	uint64_t rekey_time;
+ 
+ 	uint8_t ht_capabilities[26];
++	uint8_t vht_capabilities[12];
+ 	bool ht_support : 1;
+ 	bool ht_greenfield : 1;
++	bool vht_support : 1;
+ 	bool wmm : 1;
+ };
+ 
+@@ -962,6 +965,10 @@ static size_t ap_get_extra_ies_len(struct ap_state *ap,
+ 	if (ap->supports_ht)
+ 		len += 50;
+ 
++	/* VHT Capabilities and VHT Operation IE lengths */
++	if (ap->supports_vht)
++		len += 21;
++
+ 	if (ap->ops->get_extra_ies_len)
+ 		len += ap->ops->get_extra_ies_len(type, client_frame,
+ 							client_frame_len,
+@@ -1079,17 +1086,29 @@ static size_t ap_build_ht_operation(struct ap_state *ap, uint8_t *buf)
+ 	const struct l_queue_entry *e;
+ 	unsigned int non_ht = false;
+ 	unsigned int non_greenfield = false;
++	bool secondary_above;
+ 
+ 	memset(buf, 0, 22);
+ 	*buf++ = ap->channel;
+ 
+ 	/*
+-	 * If 40MHz set 'Secondary Channel Offset' (bits 0-1) to above/below
+-	 * and set 'STA Channel Width' (bit 2) to indicate non-20Mhz.
++	 * If 40MHz or wider set 'Secondary Channel Offset' (bits 0-1) to
++	 * above/below and set 'STA Channel Width' (bit 2) to indicate
++	 * non-20Mhz.  An 80MHz channel's primary 40MHz is either its lower or
++	 * upper half, so the secondary 20MHz channel is above the primary for
++	 * the first and third 20MHz channels and below it otherwise.
+ 	 */
+ 	if (ap->chandef.channel_width == BAND_CHANDEF_WIDTH_20)
+ 		goto check_stas;
+-	else if (ap->chandef.frequency < ap->chandef.center1_frequency)
++	else if (ap->chandef.channel_width == BAND_CHANDEF_WIDTH_80)
++		secondary_above = ((ap->chandef.frequency -
++					ap->chandef.center1_frequency + 30) /
++					20) % 2 == 0;
++	else
++		secondary_above = ap->chandef.frequency <
++					ap->chandef.center1_frequency;
++
++	if (secondary_above)
+ 		*buf |= 1 & 0x3;
+ 	else
+ 		*buf |= 3 & 0x3;
+@@ -1122,6 +1141,43 @@ check_stas:
+ 	return 22;
+ }
+ 
++/*
++ * Write the VHT Capabilities (802.11-2020 9.4.2.157) and VHT Operation
++ * (9.4.2.158) elements.
++ */
++static size_t ap_write_vht_ies(struct ap_state *ap, uint8_t *out_buf)
++{
++	struct wiphy *wiphy = netdev_get_wiphy(ap->netdev);
++	const uint8_t *vht_capa;
++	size_t vht_capa_len;
++	uint8_t *p = out_buf;
++	bool vht80 = ap->chandef.channel_width == BAND_CHANDEF_WIDTH_80;
++
++	if (!ap->supports_vht)
++		return 0;
++
++	vht_capa = wiphy_get_vht_capabilities(wiphy, ap->band, &vht_capa_len);
++
++	*p++ = IE_TYPE_VHT_CAPABILITIES;
++	*p++ = vht_capa_len;
++	memcpy(p, vht_capa, vht_capa_len);
++	p += vht_capa_len;
++
++	*p++ = IE_TYPE_VHT_OPERATION;
++	*p++ = 5;
++	/* Channel Width: 0 for 20 or 40MHz, 1 for 80MHz */
++	*p++ = vht80 ? 1 : 0;
++	/* Channel Center Frequency Segment 0 and 1 */
++	*p++ = vht80 ? band_freq_to_channel(ap->chandef.center1_frequency,
++						NULL) : 0;
++	*p++ = 0;
++	/* Basic VHT-MCS and NSS Set: MCS 0-7 for one spatial stream */
++	l_put_le16(0xfffc, p);
++	p += 2;
++
++	return p - out_buf;
++}
++
+ /*
+  * Build a Beacon frame or a Probe Response frame's header and body until
+  * the TIM IE.  Except for the optional TIM IE which is inserted by the
+@@ -1310,6 +1366,7 @@ static size_t ap_build_beacon_pr_tail(struct ap_state *ap,
+ 		return 0;
+ 	len += 2 + out_buf[len + 1];
+ 
++	len += ap_write_vht_ies(ap, out_buf + len);
+ 	len += ap_write_extra_ies(ap, stype, req, req_len, out_buf + len);
+ 	return len;
+ }
+@@ -1720,6 +1777,12 @@ static struct l_genl_msg *ap_build_cmd_new_station(struct sta_state *sta)
+ 					sizeof(sta->ht_capabilities),
+ 					sta->ht_capabilities);
+ 
++	if (qos && sta->ht_support && sta->vht_support &&
++			sta->ap->supports_vht)
++		l_genl_msg_append_attr(msg, NL80211_ATTR_VHT_CAPABILITY,
++					sizeof(sta->vht_capabilities),
++					sta->vht_capabilities);
++
+ 	return msg;
+ }
+ 
+@@ -1990,6 +2053,7 @@ static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
+ 		ies_len += len;
+ 	}
+ 
++	ies_len += ap_write_vht_ies(ap, resp->ies + ies_len);
+ 	ies_len += ap_write_extra_ies(ap, stype, req, req_len,
+ 					resp->ies + ies_len);
+ 
+@@ -2139,6 +2203,7 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+ 	bool fils_ip_req = false;
+ 	struct ie_fils_ip_addr_request_info fils_ip_req_info;
+ 	const uint8_t *ht_capa = NULL;
++	const uint8_t *vht_capa = NULL;
+ 	bool wmm = false;
+ 
+ 	if (sta->assoc_resp_cmd_id)
+@@ -2205,6 +2270,14 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+ 
+ 			ht_capa = ie_tlv_iter_get_data(&iter);
+ 			break;
++		case IE_TYPE_VHT_CAPABILITIES:
++			if (ie_tlv_iter_get_length(&iter) != 12) {
++				err = MMPDU_REASON_CODE_INVALID_IE;
++				goto bad_frame;
++			}
++
++			vht_capa = ie_tlv_iter_get_data(&iter);
++			break;
+ 		case IE_TYPE_VENDOR_SPECIFIC:
+ 			if (ap_is_wmm_information_ie(
+ 					ie_tlv_iter_get_data(&iter),
+@@ -2336,6 +2409,12 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+ 		memcpy(sta->ht_capabilities, ht_capa,
+ 					sizeof(sta->ht_capabilities));
+ 
++	sta->vht_support = vht_capa != NULL;
++
++	if (vht_capa)
++		memcpy(sta->vht_capabilities, vht_capa,
++					sizeof(sta->vht_capabilities));
++
+ 	if (sta->rates)
+ 		l_uintset_free(sta->rates);
+ 
+@@ -3622,11 +3701,30 @@ static char **ap_ciphers_to_strv(uint16_t ciphers)
+ 	return list;
+ }
+ 
++/* Can the AP transmit on every 20MHz channel an 80MHz channel spans? */
++static bool ap_80mhz_usable(struct wiphy *wiphy,
++				const struct band_chandef *chandef)
++{
++	uint32_t freq;
++
++	for (freq = chandef->center1_frequency - 30;
++			freq <= chandef->center1_frequency + 30; freq += 20) {
++		const struct band_freq_attrs *attr =
++				wiphy_get_frequency_info(wiphy, freq);
++
++		if (!attr || attr->disabled || attr->no_ir || attr->no_80mhz)
++			return false;
++	}
++
++	return true;
++}
++
+ static bool ap_validate_band_channel(struct ap_state *ap)
+ {
+ 	struct wiphy *wiphy = netdev_get_wiphy(ap->netdev);
+ 	uint32_t freq;
+ 	const struct band_freq_attrs *attr;
++	int r = 0;
+ 
+ 	if (!(wiphy_get_supported_bands(wiphy) & ap->band)) {
+ 		l_error("AP hardware does not support band");
+@@ -3647,8 +3745,17 @@ static bool ap_validate_band_channel(struct ap_state *ap)
+ 		return false;
+ 	}
+ 
++	if (ap->supports_vht) {
++		r = band_freq_to_vht_chandef(freq, attr, &ap->chandef);
++
++		if (!r && ap->chandef.channel_width == BAND_CHANDEF_WIDTH_80 &&
++				!ap_80mhz_usable(wiphy, &ap->chandef))
++			r = band_freq_to_ht_chandef(freq, attr, &ap->chandef);
++	} else if (ap->supports_ht)
++		r = band_freq_to_ht_chandef(freq, attr, &ap->chandef);
++
+ 	if (ap->supports_ht) {
+-		if (band_freq_to_ht_chandef(freq, attr, &ap->chandef) < 0) {
++		if (r < 0) {
+ 			/*
+ 			 * This is unlikely ever to fail since there are no
+ 			 * 20Mhz restrictions, but just in case fall back to
+@@ -3754,6 +3861,10 @@ static int ap_load_config(struct ap_state *ap, const struct l_settings *config,
+ 		ap->supports_ht = wiphy_get_ht_capabilities(wiphy, ap->band,
+ 							NULL) != NULL;
+ 
++	/* VHT operation is only defined for 5GHz, and requires HT */
++	ap->supports_vht = ap->supports_ht && ap->band == BAND_FREQ_5_GHZ &&
++			wiphy_get_vht_capabilities(wiphy, ap->band, NULL);
++
+ 	if (!ap_validate_band_channel(ap)) {
+ 		l_error("AP Band and Channel combination invalid");
+ 		return -EINVAL;

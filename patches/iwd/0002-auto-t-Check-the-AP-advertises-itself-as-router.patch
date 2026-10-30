@@ -1,0 +1,38 @@
+From 368430e68e6974d93b1c5d8cb5bc5ac36c79c083 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Wed, 28 Oct 2026 17:52:04 -0400
+Subject: [PATCH 2/6] auto-t: Check the AP advertises itself as router
+
+The DHCP test starts its APs through AccessPoint.Start(), which sets
+no [IPv4].Gateway.  Check that the client still gets a default route
+through the AP.
+---
+ autotests/testAP/dhcp_test.py | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/autotests/testAP/dhcp_test.py b/autotests/testAP/dhcp_test.py
+index aa50fdb4..b57c9f02 100644
+--- a/autotests/testAP/dhcp_test.py
++++ b/autotests/testAP/dhcp_test.py
+@@ -1,7 +1,7 @@
+ #! /usr/bin/python3
+ 
+ import unittest
+-import sys, os
++import sys, os, socket
+ 
+ import iwd
+ from iwd import IWD
+@@ -40,6 +40,12 @@ class Test(unittest.TestCase):
+             testutil.test_ip_address_match(dev2.name, "192.168.80.18")
+             ip = "192.168.80.17"
+ 
++        # Started without a [IPv4].Gateway setting, the AP must still
++        # advertise itself as the router.  Flags: 1=RTF_UP, 2=RTF_GATEWAY
++        default_route = testutil.RouteInfo(gw=socket.inet_pton(socket.AF_INET, ip),
++                flags=3, ifname=dev2.name)
++        self.assertIn(default_route, set(testutil.get_routes4(dev2.name)))
++
+         dev2.disconnect()
+ 
+         condition = 'not obj.connected'

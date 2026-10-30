@@ -1,0 +1,42 @@
+From b87276ec9d5c86234077dfbdcbeae9aeab41e4fe Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Wed, 28 Oct 2026 17:51:27 -0400
+Subject: [PATCH 1/6] ap: Default the DHCP router to the AP address
+
+iwd.ap(5) documents that [IPv4].Gateway falls back to the local IP
+address, but nothing implements the fallback since ell's DHCP server
+stopped defaulting the gateway to its own address (ell commit 77cef25,
+"dhcp-server: Omit OPTION_ROUTER if not configured").  An AP started
+without a Gateway setting, which includes every AP started through
+the AccessPoint.Start() D-Bus method, hands out leases with no Router
+option, so clients get an address but no default route and cannot
+reach anything beyond the AP's subnet.
+
+Use the AP's own address when no gateway is configured, for both the
+DHCP server and the FILS IP Address Assignment response.
+---
+ src/ap.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/ap.c b/src/ap.c
+index 416e1104..39e8d0f5 100644
+--- a/src/ap.c
++++ b/src/ap.c
+@@ -3299,7 +3299,16 @@ static int ap_setup_netconfig4(struct ap_state *ap, const char **addr_str_list,
+ 		goto cleanup;
+ 	}
+ 
+-	if (gateway_str && !l_dhcp_server_set_gateway(dhcp, gateway_str)) {
++	/*
++	 * Without a configured gateway, advertise the AP itself as the
++	 * router as iwd.ap(5) documents.  The DHCP server omits the Router
++	 * option entirely when no gateway is set, leaving clients without a
++	 * default route.
++	 */
++	if (!gateway_str)
++		gateway_str = addr_str_buf;
++
++	if (!l_dhcp_server_set_gateway(dhcp, gateway_str)) {
+ 		l_error("l_dhcp_server_set_gateway failed");
+ 		goto cleanup;
+ 	}
