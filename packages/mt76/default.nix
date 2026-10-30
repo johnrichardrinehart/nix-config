@@ -36,6 +36,9 @@ stdenv.mkDerivation {
   # modules_install compresses the modules as the kernel does (xz).
   nativeBuildInputs = kernel.moduleBuildDependencies ++ [ xz ];
 
+  # Plain mkDerivation runs make serially; this passes -j/-l from NIX_BUILD_CORES.
+  enableParallelBuilding = true;
+
   makeFlags = kernelModuleMakeFlags ++ [
     "-C"
     "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
