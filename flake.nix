@@ -63,6 +63,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    pam-biometrics = {
+      url = "github:johnrichardrinehart/pam-biometrics";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     repo-manager = {
       url = "github:johnrichardrinehart/repo-manager";
       inputs.nixpkgs.follows = "nixpkgs";

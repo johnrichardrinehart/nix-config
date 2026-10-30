@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
@@ -140,28 +141,28 @@ let
     wait "$daemon_pid"
   '';
 
-  faceAuth = pkgs.dev.johnrinehart.face-auth;
+  biometrics = config.services.pam-biometrics;
 
   # Mod+Alt+F starts a face scan for any password prompt in the session: sudo,
   # polkit, and hyprlock. Niri runs it on the lock screen too. SIGUSR2 makes
   # hyprlock refresh the face status label.
-  face-auth-key = pkgs.writeShellApplication {
-    name = "face-auth-key";
+  face-scan-key = pkgs.writeShellApplication {
+    name = "face-scan-key";
     runtimeInputs = [
-      faceAuth
+      biometrics.package
       pkgs.procps
     ];
     text = ''
       refresh() { pkill -USR2 -u "$UID" -x hyprlock || true; }
-      face-auth scan >/dev/null || true
+      pam-biometrics scan >/dev/null || true
       refresh
-      face-auth wait >/dev/null
+      pam-biometrics wait >/dev/null
       refresh
     '';
   };
-  faceAuthKeybinding = ''
+  faceScanKeybinding = ''
     Mod+Alt+F allow-when-locked=true hotkey-overlay-title="Scan Face for Authentication" {
-        spawn "${lib.getExe face-auth-key}"
+        spawn "${lib.getExe face-scan-key}"
     }
   '';
 
@@ -173,28 +174,14 @@ let
   #
   # With the face check, the password comes first. tuigreet with --remember
   # starts PAM before any key press, so a biometric step before the password
-  # would start before the user could press Super+Alt+F. pam_biometrics then waits
-  # for a fingerprint or a face. The first match satisfies it. Without a match,
-  # a wrong finger or another face rejects the attempt. No finger and no face
-  # leave the decision to the password.
+  # would start before the user could press Super+Alt+F. pam_biometrics then
+  # applies /etc/pam-biometrics/policy.json: by default the first fingerprint
+  # or face match satisfies it, a wrong finger or another face rejects the
+  # attempt, and no finger and no face leave the decision to the password.
   fingerprintPamRule = ''
     # Fingerprint: success→continue, timeout/unavailable→continue, wrong→reject immediately
     auth [success=ok ignore=ignore authinfo_unavail=ignore default=die] ${pkgs.fprintd}/lib/security/pam_fprintd.so timeout=${toString cfg.fingerprint.timeoutSeconds}
   '';
-  biometricsPamRule = lib.concatStringsSep " " (
-    [
-      "auth [success=ok ignore=ignore default=die]"
-      "${faceAuth}/lib/security/pam_biometrics.so"
-      (lib.getExe faceAuth)
-      "pam-biometrics"
-      "--timeout"
-      (toString cfg.fingerprint.timeoutSeconds)
-    ]
-    ++ lib.optionals cfg.fingerprint.enable [
-      "--fingerprint-command"
-      (lib.getExe' pkgs.fprintd "fprintd-verify")
-    ]
-  );
   authPamConfig =
     if cfg.face.enable then
       ''
@@ -205,7 +192,7 @@ let
         # Password is always required (do NOT use try_first_pass - we need fresh password for keyring)
         auth requisite pam_unix.so nullok
         # Biometrics: fingerprint or face. Match→continue, none→continue, wrong→reject
-        ${biometricsPamRule}
+        ${biometrics.pamRule}
         ${commonPamConfig}
       ''
     else
@@ -236,6 +223,8 @@ let
   '';
 in
 {
+  imports = [ inputs.pam-biometrics.nixosModules.default ];
+
   options = {
     dev.johnrinehart.desktop.greetd_niri = {
       enable = lib.mkEnableOption "greetd + niri";
@@ -252,9 +241,9 @@ in
       };
       face = {
         enable = lib.mkEnableOption ''
-          a webcam face check for every password prompt. Super+Alt+F starts a
-          scan. A fingerprint or a face satisfies the biometric step. A
-          password is always required'';
+          a webcam face check for every password prompt through pam-biometrics.
+          Super+Alt+F starts a scan. A fingerprint or a face satisfies the
+          biometric step. A password is always required'';
         device = lib.mkOption {
           type = lib.types.str;
           example = "/dev/v4l/by-id/usb-Generic_Laptop_Camera_200901010001-video-index0";
@@ -461,8 +450,7 @@ in
       ]
       ++ [
         myMako
-      ]
-      ++ lib.optional cfg.face.enable faceAuth;
+      ];
 
     environment.etc."niri/config.kdl".source =
       let
@@ -494,7 +482,7 @@ in
             xcursor_theme = xcursorTheme;
             extra_niri_config = cfg.niri.extraConfig;
             extra_niri_keybindings = lib.concatMapStrings (bindings: "\n${indentKdlLines "    " bindings}") (
-              lib.optional cfg.face.enable faceAuthKeybinding
+              lib.optional cfg.face.enable faceScanKeybinding
               ++ lib.optional (cfg.niri.extraKeybindings != "") cfg.niri.extraKeybindings
             );
           };
@@ -564,40 +552,20 @@ in
           text = authPamConfig;
         });
 
-    # The daemon owns the camera and the face models. PAM, the greeter, and
-    # the lock-screen binding talk to it through /run/face-auth/socket.
-    systemd.services.face-auth = lib.mkIf cfg.face.enable {
-      description = "Webcam face check for PAM";
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        ExecStart = lib.escapeShellArgs (
-          [
-            (lib.getExe' faceAuth "face-authd")
-            "daemon"
-            "--device"
-            cfg.face.device
-            "--greeter-user"
-            config.services.greetd.settings.default_session.user
-            "--state-dir"
-            "/var/lib/face-auth"
-          ]
-          ++ lib.optionals (cfg.face.inputFormat != null) [
-            "--input-format"
-            cfg.face.inputFormat
-          ]
-        );
-        DynamicUser = true;
-        SupplementaryGroups = [ "video" ];
-        StateDirectory = "face-auth";
-        StateDirectoryMode = "0700";
-        RuntimeDirectory = "face-auth";
-        RuntimeDirectoryMode = "0755";
-        DevicePolicy = "closed";
-        DeviceAllow = [ "char-video4linux rw" ];
-        PrivateNetwork = true;
-        RestrictAddressFamilies = [ "AF_UNIX" ];
-        ProtectHome = true;
-        Restart = "on-failure";
+    services.pam-biometrics = lib.mkIf cfg.face.enable {
+      enable = true;
+      camera = {
+        inherit (cfg.face) device inputFormat;
+      };
+      greeterUser = config.services.greetd.settings.default_session.user;
+      policy.defaults = {
+        factors = lib.optional cfg.fingerprint.enable "fingerprint" ++ [ "face" ];
+        timeout_seconds = cfg.fingerprint.timeoutSeconds;
+        prompt =
+          if cfg.fingerprint.enable then
+            "Touch the fingerprint reader or press Super+Alt+F."
+          else
+            "Press Super+Alt+F to scan your face.";
       };
     };
 

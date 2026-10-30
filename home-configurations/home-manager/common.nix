@@ -257,7 +257,7 @@ in
 
           label {
               monitor =
-              text = cmd[update:0:1] ${lib.getExe pkgs.dev.johnrinehart.face-auth} status
+              text = cmd[update:0:1] ${lib.getExe osConfig.services.pam-biometrics.package} status
               font_size = 16
               font_family = $font
 
