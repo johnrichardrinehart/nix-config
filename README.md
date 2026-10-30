@@ -37,7 +37,8 @@ Git and SSH identity, Terminal.app's "Clear Dark" profile, the FiraMono Nerd
 Font, macOS defaults (Dock placement, input sources, scrolling, appearance),
 `keyboard-remap` (below), spicy config, the VM share table, `shotedit`
 (Cmd+Shift+4 straight into the screenshot editor), `display-seams` (below),
-Mighty Mitts (below), and the GUI app KeePassXC.
+Mighty Mitts (below), and the GUI apps KeePassXC and Glance (face unlock at the
+lock screen).
 
 `keyboard-remap` (`packages/keyboard-remap`, module
 `darwinModules.keyboard-remap`) remaps keys per keyboard and per app. It needs

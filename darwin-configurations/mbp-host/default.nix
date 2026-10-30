@@ -147,6 +147,23 @@ in
         '';
         settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
       };
+    "Glance: Camera and Accessibility" = {
+      check = ''
+        [[ $(/usr/bin/tccutil list -s Camera -b com.jonathan.glance) == granted ]] &&
+          [[ $(/usr/bin/tccutil list -s Accessibility -b com.jonathan.glance) == granted ]]
+      '';
+      instructions = ''
+        Open Glance and complete its onboarding: allow the camera, allow Glance
+        under Privacy & Security > Accessibility (it types the login password
+        at the lock screen), enroll your face and store the login password.
+        Store the password again in Glance after every password change:
+        each wrong try counts toward the lock screen's failed-attempt limit.
+      '';
+      action = ''
+        /usr/bin/open -a /Applications/Glance.app
+      '';
+      settingsPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+    };
     "SSH keys" = {
       check =
         lib.concatMapStrings (key: ''

@@ -29,6 +29,18 @@ let
         hash = "sha256-Ij1cca5sEdSBksaf1YL9XxAEfpHrzrwBTeM6QlOblRk=";
       };
     };
+    # Face unlock: when the Mac locks or wakes, it matches the camera image
+    # against the enrolled face and types the stored login password. The
+    # version is the bundle's CFBundleShortVersionString (1.2 for the v1.2.0
+    # release), which the install check compares.
+    Glance = {
+      version = "1.2";
+      bundle = "Glance.app";
+      src = fetchurl {
+        url = "https://github.com/jonnyoo/glance/releases/download/v1.2.0/Glance.dmg";
+        hash = "sha256-wQrXA+kwbz5BdMJpxsGEXYNpTzT+vvG4+TbMsLPwlts=";
+      };
+    };
   };
 
   # Apps installed by hand that update themselves with Electron's Squirrel.
