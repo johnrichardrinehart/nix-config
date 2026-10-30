@@ -405,21 +405,49 @@ in
         run /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
       '';
 
-      # Glance only scans faces wider than this fraction of the camera frame.
-      # The Recognition page goes down to 0.15 ("Far"); 0.1 lets the face be
-      # about 1.5 times farther from the camera. Moving the slider on that
-      # page writes over this value until the next activation. Glance reads
-      # the value only when it starts, so restart it after a change.
-      # The launchd agent above starts it again.
+      # Glance settings, looser than its defaults:
+      #   minimumFaceWidth      Glance only scans faces wider than this
+      #                         fraction of the camera frame. The Recognition
+      #                         page goes down to 0.15 ("Far"); 0.1 lets the
+      #                         face be about 1.5 times farther away.
+      #   matchThreshold        Similarity to an enrolled face for a match.
+      #                         0.45 is below the page's lowest, "Less strict"
+      #                         (0.58); Glance's default is 0.66.
+      #   faceDetectionSeconds  Length of one scan (default 5, range 3-10):
+      #                         more time to blink for Heavy liveness.
+      # Changing a setting on the Recognition page writes over these values
+      # until the next activation. Glance reads them only when it starts, so
+      # restart it after a change. The launchd agent above starts it again.
       # The new Glance session is locked: unlock it from the menu bar item
       # (Touch ID), or face unlock stays off.
-      glanceMinimumFaceWidth = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if [[ $(/usr/bin/defaults read com.jonathan.glance GlanceSettings.minimumFaceWidth 2>/dev/null) != 0.1 ]]; then
-          run /usr/bin/defaults write com.jonathan.glance GlanceSettings.minimumFaceWidth -float 0.1
-          if /usr/bin/pgrep -qx glance; then
-            run /usr/bin/pkill -x glance
-            warnEcho "Glance restarted for a new minimum face width; unlock its session from the menu bar item."
-          fi
+      glanceSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        glanceChanged=
+        ${lib.concatStrings (
+          lib.mapAttrsToList
+            (key: value: ''
+              if [[ $(/usr/bin/defaults read com.jonathan.glance GlanceSettings.${key} 2>/dev/null) != ${value.shown} ]]; then
+                run /usr/bin/defaults write com.jonathan.glance GlanceSettings.${key} ${value.typed}
+                glanceChanged=1
+              fi
+            '')
+            {
+              minimumFaceWidth = {
+                shown = "0.1";
+                typed = "-float 0.1";
+              };
+              matchThreshold = {
+                shown = "0.45";
+                typed = "-float 0.45";
+              };
+              faceDetectionSeconds = {
+                shown = "8";
+                typed = "-int 8";
+              };
+            }
+        )}
+        if [[ -n $glanceChanged ]] && /usr/bin/pgrep -qx glance; then
+          run /usr/bin/pkill -x glance
+          warnEcho "Glance restarted for new settings; unlock its session from the menu bar item."
         fi
       '';
 
