@@ -139,6 +139,7 @@ inputs: {
           model = johnPkgs.moonshine-models-onnx;
         };
         tmux.tmux = prev.tmux;
+        tuigreet.tuigreet = prev.tuigreet;
         util-linux.util-linux = prev.util-linux;
       };
       johnPkgs = lib.mapAttrs (

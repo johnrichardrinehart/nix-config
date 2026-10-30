@@ -1,0 +1,183 @@
+diff --git a/crates/tuigreet/src/greeter.rs b/crates/tuigreet/src/greeter.rs
+index f768fa4..b239029 100644
+--- a/crates/tuigreet/src/greeter.rs
++++ b/crates/tuigreet/src/greeter.rs
+@@ -145,6 +145,10 @@ pub struct Greeter {
+   // Whether to prefix the power commands with `setsid`.
+   pub power_setsid: bool,
+ 
++  // Command to run, with the username appended, when Alt+F is pressed during
++  // login. The Linux console sends Super as Alt.
++  pub biometric_command: Option<String>,
++
+   pub kb_command:    u8,
+   pub kb_sessions:   u8,
+   pub kb_power:      u8,
+@@ -216,6 +220,7 @@ impl Default for Greeter {
+       message:                    None,
+       powers:                     Menu::default(),
+       power_setsid:               false,
++      biometric_command:          None,
+       kb_command:                 2,
+       kb_sessions:                3,
+       kb_power:                   12,
+@@ -780,6 +785,13 @@ impl Greeter {
+       "power-no-setsid",
+       "do not prefix power commands with setsid",
+     );
++    opts.optopt(
++      "",
++      "biometric-cmd",
++      "command to run with the username appended when Alt+F is pressed during \
++       login",
++      "'CMD [ARGS]...'",
++    );
+ 
+     opts.optopt(
+       "",
+@@ -1070,6 +1082,7 @@ impl Greeter {
+     });
+ 
+     self.power_setsid = !self.config().opt_present("power-no-setsid");
++    self.biometric_command = self.config().opt_str("biometric-cmd");
+ 
+     self.kb_command = self
+       .config()
+diff --git a/crates/tuigreet/src/keyboard.rs b/crates/tuigreet/src/keyboard.rs
+index bc02fa4..9106d7f 100644
+--- a/crates/tuigreet/src/keyboard.rs
++++ b/crates/tuigreet/src/keyboard.rs
+@@ -43,6 +43,23 @@ pub async fn handle(
+ ) -> Result<(), Box<dyn Error>> {
+   let mut greeter = greeter.write().await;
+ 
++  // Alt+F (Super+Alt+F on the Linux console) starts the biometric command instead
++  // of typing the letter. It also works while PAM waits for a biometric
++  // factor, so check it before the busy state.
++  if let KeyEvent {
++    code: KeyCode::Char('f' | 'F'),
++    modifiers,
++    ..
++  } = input
++    && modifiers.contains(KeyModifiers::ALT)
++    && greeter.biometric_command.is_some()
++  {
++    if matches!(greeter.mode, Mode::Username | Mode::Password | Mode::Action) {
++      run_biometric_command(&greeter);
++    }
++    return Ok(());
++  }
++
+   if greeter.working {
+     return Ok(());
+   }
+@@ -415,6 +432,29 @@ pub async fn handle(
+   Ok(())
+ }
+ 
++// Run the biometric command for the user in the background. Its output would
++// corrupt the terminal UI, so discard it.
++fn run_biometric_command(greeter: &Greeter) {
++  let Some(command) = greeter.biometric_command.as_deref() else {
++    return;
++  };
++  let mut args = command.split(' ');
++  let mut command = std::process::Command::new(args.next().unwrap_or_default());
++  command
++    .args(args)
++    .arg(&greeter.username.value)
++    .stdin(std::process::Stdio::null())
++    .stdout(std::process::Stdio::null())
++    .stderr(std::process::Stdio::null());
++
++  match command.spawn() {
++    Ok(mut child) => {
++      std::thread::spawn(move || child.wait());
++    },
++    Err(err) => tracing::warn!("could not start the biometric command: {err}"),
++  }
++}
++
+ // Handle insertion of characters into the proper buffer, depending on the
+ // current mode and the position of the cursor.
+ async fn insert_key(greeter: &mut Greeter, c: char) {
+@@ -1053,4 +1093,79 @@ mod test {
+       assert_eq!(status.cursor_offset, 0);
+     }
+   }
++
++  #[tokio::test]
++  async fn alt_f_runs_biometric_command_instead_of_typing() {
++    let greeter = Arc::new(RwLock::new(Greeter::default()));
++
++    {
++      let mut greeter = greeter.write().await;
++      greeter.mode = Mode::Password;
++      greeter.buffer = "secret".to_string();
++    }
++
++    let _ = handle(
++      greeter.clone(),
++      KeyEvent::new(KeyCode::Char('f'), KeyModifiers::ALT),
++      Ipc::new(),
++    )
++    .await;
++
++    assert_eq!(greeter.read().await.buffer, "secretf");
++
++    {
++      let mut greeter = greeter.write().await;
++      greeter.buffer = "secret".to_string();
++      greeter.biometric_command = Some("true".to_string());
++    }
++
++    for modifiers in [KeyModifiers::ALT, KeyModifiers::ALT | KeyModifiers::SHIFT] {
++      let result = handle(
++        greeter.clone(),
++        KeyEvent::new(KeyCode::Char('f'), modifiers),
++        Ipc::new(),
++      )
++      .await;
++
++      assert!(matches!(result, Ok(())));
++      assert_eq!(greeter.read().await.buffer, "secret");
++    }
++  }
++
++  #[tokio::test]
++  async fn alt_f_runs_biometric_command_while_pam_waits() {
++    let marker = std::env::temp_dir().join(format!(
++      "tuigreet-biometric-{}",
++      std::process::id()
++    ));
++    let _ = std::fs::remove_file(&marker);
++
++    let greeter = Arc::new(RwLock::new(Greeter::default()));
++
++    {
++      let mut greeter = greeter.write().await;
++      greeter.mode = Mode::Action;
++      greeter.working = true;
++      greeter.username =
++        MaskedString::from(marker.to_string_lossy().into_owned(), None);
++      greeter.biometric_command = Some("touch".to_string());
++    }
++
++    let result = handle(
++      greeter.clone(),
++      KeyEvent::new(KeyCode::Char('f'), KeyModifiers::ALT),
++      Ipc::new(),
++    )
++    .await;
++    assert!(matches!(result, Ok(())));
++
++    for _ in 0..50 {
++      if marker.exists() {
++        break;
++      }
++      tokio::time::sleep(std::time::Duration::from_millis(20)).await;
++    }
++    assert!(marker.exists());
++    let _ = std::fs::remove_file(&marker);
++  }
+ }
