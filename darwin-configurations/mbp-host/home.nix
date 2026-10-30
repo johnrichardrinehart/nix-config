@@ -242,6 +242,27 @@ in
       };
     };
 
+    # Glance (apps.nix) unlocks the screen only while it runs, and Cmd+Q
+    # quits it. `open -W` waits for the running Glance, or starts one, so
+    # launchd starts Glance again after it quits without a second instance.
+    launchd.agents.glance = {
+      enable = true;
+      config = {
+        ProgramArguments = [
+          "/usr/bin/open"
+          "-W"
+          "-g"
+          "-a"
+          "/Applications/Glance.app"
+        ];
+        RunAtLoad = true;
+        KeepAlive = true;
+        ThrottleInterval = 10;
+        ProcessType = "Interactive";
+        StandardErrorPath = "/tmp/glance-agent.log";
+      };
+    };
+
     home.activation = {
       # System shortcuts (com.apple.symbolichotkeys) turned off, as
       # id = [ ascii keycode modifiers ]. -dict-add leaves every other hotkey
