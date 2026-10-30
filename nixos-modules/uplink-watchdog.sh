@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Demote IPv4 default routes whose uplink cannot reach the internet.
 #
 # Every UPLINK_INTERVAL seconds, ping UPLINK_TARGETS through each interface that
