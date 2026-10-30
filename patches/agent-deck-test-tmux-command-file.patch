@@ -1,0 +1,17 @@
+diff --git a/cmd/agent-deck/ask_cmd_test.go b/cmd/agent-deck/ask_cmd_test.go
+index bf987bd..77778e7 100644
+--- a/cmd/agent-deck/ask_cmd_test.go
++++ b/cmd/agent-deck/ask_cmd_test.go
+@@ -453,7 +453,11 @@ func paneLeakCheck(t *testing.T, c *askCLI, sid string, sentinel []byte) {
+ 	}
+ 	script := "env -i " + strings.Join(line, " ") + " " + shellQuote(c.bin) + " -p " + c.profile +
+ 		" ask secret conductor/LEAK_PANE --reason pane --session " + sid + "; echo ask-exit=$?; sleep 60"
+-	if out, err := tmuxCmd("new-session", "-d", "-s", "askleak", "-x", "200", "-y", "50", "sh", "-c", script).CombinedOutput(); err != nil {
++	scriptPath := filepath.Join(t.TempDir(), "pane.sh")
++	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	if out, err := tmuxCmd("new-session", "-d", "-s", "askleak", "-x", "200", "-y", "50", "sh", scriptPath).CombinedOutput(); err != nil {
+ 		t.Fatalf("tmux new-session for the pane check: %v %s", err, out)
+ 	}
+ 	defer func() { _ = tmuxCmd("kill-session", "-t", "askleak").Run() }()

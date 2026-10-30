@@ -7,14 +7,14 @@
 }:
 
 let
-  version = "1.31.0";
+  version = "1.31.1";
 
   src = fetchFromGitHub {
     owner = "microsoft";
     repo = "onnxruntime";
     tag = "v${version}";
     fetchSubmodules = true;
-    hash = "sha256-CHqV5dN9+4nZAQzpKMWFVMKaAnSw5miHZaMU7OMBuUI=";
+    hash = "sha256-wATnI1v3De6+41fGYWS2458TCUWhBECNw2kBnfajKEo=";
   };
 
   # Dependencies that differ from nixpkgs' onnxruntime; see
