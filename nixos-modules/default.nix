@@ -82,6 +82,7 @@
     ./network.nix
     ./monstar.nix
     ./nebula
+    ./neocache.nix
     ./nix.nix
     ./obsidian.nix
     ./oh-my-posh.nix

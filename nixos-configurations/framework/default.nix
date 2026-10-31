@@ -5,6 +5,7 @@
     ./framework.nix
     ./git-send-email.nix
     ./nebula.nix
+    ./neocache.nix
     ./share-webdav.nix
     ./tailscale-nix-builders.nix
   ];

@@ -48,6 +48,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Private repository: fetched over SSH with the evaluating user's key.
+    # Its own nixpkgs keeps the client identical to the one neocache CI
+    # publishes, so the client substitutes instead of compiling.
+    neocache.url = "git+ssh://git@git.sr.ht/~fuzzybear3965/neocache";
+
     nix-darwin = {
       url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
