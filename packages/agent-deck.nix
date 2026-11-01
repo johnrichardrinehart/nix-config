@@ -4,37 +4,23 @@
   buildGo126Module,
   coreutils,
   fetchFromGitHub,
-  fetchurl,
   git,
-  go_1_26,
   ncurses,
   openssh,
   tmux,
 }:
-let
-  # go.mod requires go >= 1.26.9; nixpkgs ships 1.26.8.
-  go = go_1_26.overrideAttrs (
-    finalAttrs: _old: {
-      version = "1.26.10";
-      src = fetchurl {
-        url = "https://go.dev/dl/go${finalAttrs.version}.src.tar.gz";
-        hash = "sha256-/WPog7ovK/ypPBZGsx6+9j4rHk0rMXyXidl2po2B828=";
-      };
-    }
-  );
-in
-(buildGo126Module.override { inherit go; }) rec {
+buildGo126Module rec {
   pname = "agent-deck";
-  version = "1.16.34";
+  version = "1.16.35";
 
   src = fetchFromGitHub {
     owner = "asheshgoplani";
     repo = "agent-deck";
     rev = "v${version}";
-    hash = "sha256-fehA9JNE/viQ4hAZ0djyignluQWRoYunKnQOWRLv+YA=";
+    hash = "sha256-5S0btEtXJloGtzNNXFaNDT603k8I1POxJISEZulNEwg=";
   };
 
-  vendorHash = "sha256-MPtWVgxZ6JKrLOtujlueHAisyRXf7w6lBW+CPRLg3kE=";
+  vendorHash = "sha256-8WZRtRXlsg/HuONcNnPjI8WjBkNlFeKgEBahAYyNsNI=";
   patches = [
     # Keep the full leak test when the inherited Nix build environment is too
     # large for tmux's command buffer.
@@ -66,8 +52,9 @@ in
     # remote-execution, interactive TUI timing, fake-codex and fake-claude pane
     # process, full-suite tmux reconciliation races, PATH-restricted model
     # probes, and `#!/bin/bash` stub-script checks. The heartbeat behavior is
-    # exercised separately as a focused package check.
-    "-skip=TestRemoteCommandParity|TestRemoteSuccessfulMutationParity|TestCloseSessionWindow_KillsExtraWindow|TestLogCgroupIsolationDecision_WiredIntoBootstrap/tui_startup_emits_line|TestPerf_ColdStart_(Help|Version)|TestStatusStale_CLI_CandidateViewAndMutatesNothing|TestIssue2388_CapabilitiesCarryProbe|TestCodexAcceptanceGuardAcceptsFreshComposerThread|TestIssue2394_HydratePrefersLiveThreadOverGuessedPaneIdentity|TestIssue2400_ArchiveKeepsLiveCodexIdentity|TestIssue2396_FirstTurnOutputIsBoundToItsConversation|TestIssue2549_(SendAdoptsRotatedLiveThread|PeerOwnedLiveThreadIsNotAdopted|SubagentLiveThreadIsNotAdopted)|TestSessionSendSocketWaitPeerReply|TestLaunchSubagentScript_(AppendsFanoutHintOnlyWithoutIdentityBlock|FanoutHintNoDuplicate)|TestConductorHeartbeatTickCLIReadsInboxAndRules"
+    # exercised separately as a focused package check. Issue2921's fake-claude
+    # fixture skips without python3 and the parent test then fails.
+    "-skip=TestRemoteCommandParity|TestRemoteSuccessfulMutationParity|TestCloseSessionWindow_KillsExtraWindow|TestLogCgroupIsolationDecision_WiredIntoBootstrap/tui_startup_emits_line|TestPerf_ColdStart_(Help|Version)|TestStatusStale_CLI_CandidateViewAndMutatesNothing|TestIssue2388_CapabilitiesCarryProbe|TestCodexAcceptanceGuardAcceptsFreshComposerThread|TestIssue2394_HydratePrefersLiveThreadOverGuessedPaneIdentity|TestIssue2400_ArchiveKeepsLiveCodexIdentity|TestIssue2396_FirstTurnOutputIsBoundToItsConversation|TestIssue2549_(SendAdoptsRotatedLiveThread|PeerOwnedLiveThreadIsNotAdopted|SubagentLiveThreadIsNotAdopted)|TestSessionSendSocketWaitPeerReply|TestLaunchSubagentScript_(AppendsFanoutHintOnlyWithoutIdentityBlock|FanoutHintNoDuplicate)|TestConductorHeartbeatTickCLIReadsInboxAndRules|TestIssue2921ClaudeLikeFakeIsGoneWhenItsCleanupReturns"
     # The cmd/agent-deck tests start real tmux servers and run longer than the
     # default 10-minute go test timeout on the Nix builders.
     "-timeout=30m"
