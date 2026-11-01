@@ -511,11 +511,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1793466677,
-        "narHash": "sha256-eHkFhtqFh/G4i4tS2gJ6j5m7uJ8NqeOW3h75mGAd1zc=",
+        "lastModified": 1793507091,
+        "narHash": "sha256-xM3byeM3/IUfUHOtaj70ljkXzLUmyemcFQqVbFNidQk=",
         "ref": "refs/heads/main",
-        "rev": "64dae131eb60894ca5d58534812924d7bed0f0b4",
-        "revCount": 1217,
+        "rev": "04374c1de6c36fbba12294e3979a1b8c96dd37e4",
+        "revCount": 1231,
         "type": "git",
         "url": "ssh://git@git.sr.ht/~fuzzybear3965/neocache"
       },
