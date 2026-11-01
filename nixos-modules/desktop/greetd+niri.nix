@@ -172,15 +172,22 @@ let
   # Without the face check, the fingerprint comes first and can only reject an
   # attempt.
   #
-  # With the face check, the password comes first. tuigreet with --remember
-  # starts PAM before any key press, so a biometric step before the password
-  # would start before the user could press Super+Alt+F. pam_biometrics then
-  # applies /etc/pam-biometrics/policy.json: by default the first fingerprint
-  # or face match satisfies it, a wrong finger or another face rejects the
-  # attempt, and no finger and no face leave the decision to the password.
+  # With the face check, every service runs the same auth flow. pam_biometrics
+  # start claims the fingerprint reader and asks for the password; an empty
+  # answer (the configured trigger) scans the face first. pam_unix checks the
+  # password the user just typed, so the keyring still gets a fresh one.
+  # pam_biometrics finish takes a finger or face from before or during the
+  # password, or offers one afterwards when the policy needs it, and applies
+  # /etc/pam-biometrics/policy.json: a wrong finger or another face rejects the
+  # attempt.
   fingerprintPamRule = ''
     # Fingerprint: success→continue, timeout/unavailable→continue, wrong→reject immediately
     auth [success=ok ignore=ignore authinfo_unavail=ignore default=die] ${pkgs.fprintd}/lib/security/pam_fprintd.so timeout=${toString cfg.fingerprint.timeoutSeconds}
+  '';
+  biometricAuth = ''
+    ${biometrics.pamRules.start}
+    auth requisite pam_unix.so nullok try_first_pass
+    ${biometrics.pamRules.finish}
   '';
   authPamConfig =
     if cfg.face.enable then
@@ -189,10 +196,7 @@ let
         account required pam_unix.so
 
         # Authentication management
-        # Password is always required (do NOT use try_first_pass - we need fresh password for keyring)
-        auth requisite pam_unix.so nullok
-        # Biometrics: fingerprint or face. Match→continue, none→continue, wrong→reject
-        ${biometrics.pamRule}
+        ${biometricAuth}
         ${commonPamConfig}
       ''
     else
@@ -206,6 +210,26 @@ let
         auth required pam_unix.so nullok
         ${commonPamConfig}
       '';
+  # su and vlock switch or lock an existing session, so they keep their own
+  # session lines (no loginuid, no logind session) around the shared auth.
+  ownSessionPamConfig =
+    {
+      authFirst ? "",
+      session,
+    }:
+    ''
+      account required pam_unix.so
+
+      ${authFirst}
+      ${biometricAuth}
+
+      password sufficient pam_unix.so nullok yescrypt
+
+      session required pam_env.so conffile=/etc/pam/environment readenv=0
+      session required pam_unix.so
+      ${session}
+      session required pam_limits.so
+    '';
   commonPamConfig = ''
     auth optional ${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so
 
@@ -563,7 +587,17 @@ in
         (_: {
           enableGnomeKeyring = true;
           text = authPamConfig;
-        });
+        })
+      // lib.optionalAttrs cfg.face.enable {
+        su.text = ownSessionPamConfig {
+          authFirst = ''
+            auth sufficient pam_rootok.so
+            auth required pam_faillock.so
+          '';
+          session = "session optional pam_xauth.so systemuser=99 xauthpath=${pkgs.xauth}/bin/xauth";
+        };
+        vlock.text = ownSessionPamConfig { session = ""; };
+      };
 
     services.pam-biometrics = lib.mkIf cfg.face.enable {
       enable = true;
@@ -571,14 +605,10 @@ in
         inherit (cfg.face) device inputFormat;
       };
       greeterUser = config.services.greetd.settings.default_session.user;
+      # pam-biometrics' default prompts name the Enter trigger and the reader.
       policy.defaults = {
         factors = lib.optional cfg.fingerprint.enable "fingerprint" ++ [ "face" ];
         timeout_seconds = cfg.fingerprint.timeoutSeconds;
-        prompt =
-          if cfg.fingerprint.enable then
-            "Touch the fingerprint reader or press Super+Alt+F."
-          else
-            "Press Super+Alt+F to scan your face.";
       };
     };
 
