@@ -5,9 +5,9 @@
 # stopped by typing at the menu; this entry is signed like the others
 # instead. It boots stage 1 into rescue.target: systemd asks for the LUKS
 # passphrase and opens /dev/mapper/cryptroot, but mounts nothing, and gives
-# a root shell (root's password; endpointSecurity.rootHashedPassword).
-# With root locked the shell cannot be opened, so the entry exists only once
-# that hash is set.
+# a root shell (endpointSecurity.initrdRootHashedPassword, root's password
+# unless set apart). With root locked there the shell cannot be opened, so
+# the entry exists only once that hash is set.
 #
 # The shell has Wi-Fi (iwd, MT7925 driver and firmware, impala), wired
 # Ethernet over USB (DHCP through systemd-networkd), DNS (systemd-resolved),
@@ -26,7 +26,7 @@
   ...
 }:
 let
-  rootHashedPassword = config.dev.johnrinehart.endpointSecurity.rootHashedPassword;
+  initrdRootHashedPassword = config.dev.johnrinehart.endpointSecurity.initrdRootHashedPassword;
   iwd = config.networking.wireless.iwd.package;
   # Not bin/omp: that is a bash script whose wrapped library path drags in
   # PipeWire and FFmpeg (1 GiB) for voice. The binary and its native module
@@ -44,7 +44,7 @@ let
   };
 in
 {
-  specialisation = lib.mkIf (rootHashedPassword != null) {
+  specialisation = lib.mkIf (initrdRootHashedPassword != null) {
     maintenance.configuration = {
       system.nixos.tags = [ "maintenance" ];
       boot.kernelParams = [ "rd.systemd.unit=rescue.target" ];

@@ -41,10 +41,25 @@ in
       description = ''
         crypt(3) hash of root's password, which every activation writes
         back to /etc/shadow, so a `passwd` as root lasts only until the next
-        boot or switch. The initrd's emergency shell takes the same password.
-        `null` locks root in both. The hash goes into the world-readable Nix
-        store. The primary user's password stays mutable: set at account
-        creation, then changed with `passwd`.
+        boot or switch. `null` locks root. The initrd's root shells take
+        initrdRootHashedPassword, which defaults to this one. The hash goes
+        into the world-readable Nix store. The primary user's password stays
+        mutable: set at account creation, then changed with `passwd`.
+      '';
+    };
+
+    initrdRootHashedPassword = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "[$].+");
+      default = cfg.rootHashedPassword;
+      defaultText = lib.literalExpression "config.dev.johnrinehart.endpointSecurity.rootHashedPassword";
+      example = "$y$j9T$...";
+      description = ''
+        crypt(3) hash of the password for root's shells in the initrd: the
+        emergency shell after a failed boot, and the `maintenance` boot
+        entry (maintenance-initrd.nix), which exists only when this is set.
+        `null` locks root there. The installed system's root is unaffected.
+        Changing it changes the initrd, so it takes effect for new
+        generations only.
       '';
     };
   };
@@ -67,7 +82,7 @@ in
     # file system check of the LUKS root left an emergency shell that no one
     # could open. lanzaboote signs the initrd's hash into the UKI, so the
     # hash cannot be changed without breaking Secure Boot.
-    boot.initrd.systemd.emergencyAccess = cfg.rootHashedPassword;
+    boot.initrd.systemd.emergencyAccess = cfg.initrdRootHashedPassword;
 
     # Secure Boot with our own keys (lanzaboote). The first boot after
     # `install-to-disk` runs unsigned, creates the keys in /var/lib/sbctl,

@@ -506,7 +506,8 @@ sets this baseline:
 
 - Secure Boot with lanzaboote and keys that the machine makes for itself.
   The boot menu editor is off. If
-  `dev.johnrinehart.endpointSecurity.rootHashedPassword` is set, each
+  `dev.johnrinehart.endpointSecurity.initrdRootHashedPassword` is set (it
+  defaults to `rootHashedPassword`), each
   generation also gets a `maintenance` boot entry
   (`nixos-configurations/framework-13-pro/maintenance-initrd.nix`). It stops
   stage 1 at a root shell after LUKS is unlocked and before `/` is mounted,
