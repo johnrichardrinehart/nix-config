@@ -91,6 +91,13 @@ in
           "cdc_ncm"
           "rndis_host"
           "ipheth"
+          # File systems to repair or mount besides ext4 and the ESP's vfat:
+          # USB drives, other machines' disks.
+          "btrfs"
+          "xfs"
+          "exfat"
+          "ntfs3"
+          "loop"
         ];
         # iwd.service may not load modules (ProtectKernelModules), so the
         # AF_ALG interfaces and ciphers its WPA handshakes ask for are loaded
@@ -133,6 +140,15 @@ in
             pkgs.dev.johnrinehart.impala
             pkgs.sudo
             config.nix.package
+            # File system repair and data recovery. e2fsprogs (e2fsck,
+            # resize2fs, tune2fs, debugfs) is in every initrd already.
+            pkgs.dosfstools
+            pkgs.exfatprogs
+            pkgs.btrfs-progs
+            pkgs.xfsprogs
+            pkgs.ntfs3g
+            pkgs.testdisk
+            pkgs.ddrescue
           ];
           extraBin.omp = "${omp}/omp";
 
