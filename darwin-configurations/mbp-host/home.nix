@@ -101,6 +101,9 @@ in
       (inputs.self.packages.aarch64-darwin.omp.withPlugins (p: [ p.context-mode ]))
     ];
 
+    home.file.".omp/agent/skills/nix-config-refresh".source =
+      ../../home-configurations/home-manager/skills/nix-config-refresh;
+
     # One full-screen editor for both: every program honors at least one.
     home.sessionVariables = {
       EDITOR = "vim";

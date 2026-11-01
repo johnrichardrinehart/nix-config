@@ -284,6 +284,9 @@ in
     // lib.optionalAttrs osConfig.dev.johnrinehart.agentTools.enable {
       ".agent-deck/config.toml".text = agentDeckConfig;
     }
+    // lib.optionalAttrs osConfig.dev.johnrinehart.agentTools.omp.enable {
+      ".omp/agent/skills/nix-config-refresh".source = ./skills/nix-config-refresh;
+    }
     // lib.optionalAttrs osConfig.dev.johnrinehart.desktop.greetd_niri.hypridle.enable {
       ".config/hypr/hypridle.conf".source =
         let
