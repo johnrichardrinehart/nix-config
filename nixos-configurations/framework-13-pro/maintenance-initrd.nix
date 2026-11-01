@@ -11,11 +11,14 @@
 #
 # The shell has Wi-Fi (iwd, MT7925 driver and firmware, impala), wired
 # Ethernet over USB (DHCP through systemd-networkd), DNS (systemd-resolved),
-# CA certificates and omp, so help is at hand while the disk is open:
+# CA certificates, omp and nix, so help is at hand while the disk is open.
+# The shell is root already; run0 and sudo are there for commands typed out
+# of habit. nix runs without a daemon and keeps its store in RAM:
 #
 #   impala                        # join a network; iwd remembers it until reboot
 #   mount -o ro /dev/mapper/cryptroot /sysroot
 #   HOME=/sysroot/home/john omp   # john's omp login; or `omp` and log in anew
+#   nix shell nixpkgs#btrfs-progs # anything else, from the binary caches
 #
 # Unmount /sysroot again before resizing anything.
 {
@@ -42,6 +45,33 @@ let
     Settings.AutoConnect = true;
     DriverQuirks.DefaultInterface = "?*";
   };
+
+  # Single-user, as root: no daemon, build users or sandbox in stage 1.
+  # Substituters as the installed system's.
+  nixConf = pkgs.writeText "nix.conf" ''
+    experimental-features = nix-command flakes
+    build-users-group =
+    sandbox = false
+    substituters = ${
+      toString (config.nix.settings.substituters ++ config.nix.settings.extra-substituters or [ ])
+    }
+    trusted-public-keys = ${
+      toString (
+        config.nix.settings.trusted-public-keys ++ config.nix.settings.extra-trusted-public-keys or [ ]
+      )
+    }
+  '';
+
+  # sudo and run0 (as systemd-run0) open PAM sessions. Stage 1 has only
+  # root, which neither asks to authenticate; one stack, as PAM's "other",
+  # lets root through and refuses anyone else.
+  pamOther = pkgs.writeText "other" ''
+    auth     sufficient ${pkgs.pam}/lib/security/pam_rootok.so
+    auth     required   ${pkgs.pam}/lib/security/pam_deny.so
+    account  required   ${pkgs.pam}/lib/security/pam_permit.so
+    password required   ${pkgs.pam}/lib/security/pam_deny.so
+    session  required   ${pkgs.pam}/lib/security/pam_permit.so
+  '';
 in
 {
   specialisation = lib.mkIf (initrdRootHashedPassword != null) {
@@ -101,12 +131,19 @@ in
             pkgs.curl
             iwd
             pkgs.dev.johnrinehart.impala
+            pkgs.sudo
+            config.nix.package
           ];
           extraBin.omp = "${omp}/omp";
 
           contents = {
             "/etc/iwd/main.conf".source = iwdConf;
             "/etc/ssl/certs/ca-certificates.crt".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            "/etc/nix/nix.conf".source = nixConf;
+            "/etc/pam.d/other".source = pamOther;
+            "/etc/sudoers".text = ''
+              root ALL=(ALL:ALL) SETENV: ALL
+            '';
             # The stage 1 bus allows only dbus's and systemd's services; iwd
             # owns net.connman.iwd, which its policy file permits.
             "/etc/dbus-1".source = lib.mkForce (
@@ -129,6 +166,10 @@ in
             "${iwd}/share/dbus-1"
             omp
             "${ompPackage.stdenv.cc.libc}/lib"
+            # Only binaries and their libraries are copied otherwise: sudo
+            # loads its policy from libexec, PAM its modules from lib/security.
+            "${pkgs.sudo}/libexec/sudo"
+            "${pkgs.pam}/lib/security"
           ];
           services.iwd.wantedBy = [ "rescue.target" ];
 
