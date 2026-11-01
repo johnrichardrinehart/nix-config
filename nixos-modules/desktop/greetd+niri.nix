@@ -309,6 +309,19 @@ in
         };
       };
     };
+
+    # services.fprintd.enable makes nixpkgs add `auth sufficient pam_fprintd`
+    # to every PAM service, so a finger alone passed su, run0, passwd, chsh
+    # and the rest without a password. Fingerprints count only where
+    # authPamConfig places them, after the password; elsewhere the password
+    # alone decides. A service can still opt in with fprintAuth = true.
+    security.pam.services = lib.mkOption {
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          config.fprintAuth = lib.mkIf cfg.enable (lib.mkDefault false);
+        }
+      );
+    };
   };
 
   config = lib.mkIf cfg.enable {
