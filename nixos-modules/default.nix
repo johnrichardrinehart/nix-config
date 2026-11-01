@@ -97,6 +97,7 @@
     ./system.nix
     ./thunderbolt-debug.nix
     ./tmux.nix
+    ./tmux-root-shell.nix
     ./tmux-socket.nix
     ./virtualisation.nix
     ./voice-dictation.nix

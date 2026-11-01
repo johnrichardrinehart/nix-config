@@ -25,6 +25,9 @@
 
   dev.johnrinehart.profiles.framework.enable = true;
 
+  # A standing `root-shell` tmux session for root and wheel members.
+  dev.johnrinehart.tmux.rootShell.enable = true;
+
   # As on framie: iwd for Wi-Fi (impala), dhcpcd for wired interfaces.
   dev.johnrinehart.network = {
     enable = true;
