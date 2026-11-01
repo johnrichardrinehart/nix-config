@@ -426,8 +426,13 @@ nixos-hardware's `framework-amd-ai-300-series` plus
   can hold large local models.
 - Voice dictation on ONNX Runtime's CPU provider: OpenVINO's GPU device is
   Intel graphics only.
-- Suspend, not suspend-then-hibernate (`dev.johnrinehart.system.suspendVerb`):
-  there is no swap to hibernate to.
+- Netbooted: suspend, not suspend-then-hibernate
+  (`dev.johnrinehart.system.suspendVerb`), as there is no swap to hibernate
+  to. Installed: suspend-then-hibernate to a 96 GiB swap file inside the LUKS
+  root (`/var/lib/swapfile`), with the image LZ4-compressed
+  (`hibernate.compressor=lz4`) and swapped pages LZ4-compressed in RAM first
+  (zswap). systemd records the file's location in the `HibernateLocation`
+  EFI variable, so no `resume_offset=` is set.
 
 Left out on purpose: `amdgpu.dcdebugmask` beyond nixos-hardware's PSR bit
 (this panel uses Replay; set `hardware.amdgpu.dcDebugMask.disableReplay` if
@@ -500,7 +505,15 @@ The installed system, and not the netbooted one, imports
 sets this baseline:
 
 - Secure Boot with lanzaboote and keys that the machine makes for itself.
-  The boot menu editor is off.
+  The boot menu editor is off. If
+  `dev.johnrinehart.endpointSecurity.rootHashedPassword` is set, each
+  generation also gets a `maintenance` boot entry
+  (`nixos-configurations/framework-13-pro/maintenance-initrd.nix`). It stops
+  stage 1 at a root shell after LUKS is unlocked and before `/` is mounted,
+  for repartitioning or resizing. The shell asks for root's password and
+  has `cryptsetup`, `sgdisk`, `parted`, `resize2fs` and `e2fsck`. For
+  networking it has Wi-Fi (iwd, `impala`), USB and expansion-card Ethernet
+  (DHCP) and DNS, and it also has `omp`.
 - The kernel arguments `iommu.passthrough=0` and `iommu.strict=1`, so that
   device DMA always goes through the IOMMU.
 - USBGuard. It blocks each USB device, also the devices that are present at

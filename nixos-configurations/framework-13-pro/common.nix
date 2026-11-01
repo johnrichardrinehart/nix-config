@@ -68,12 +68,13 @@
     }
   '';
 
-  # Nothing to hibernate to: neither system has swap.
-  dev.johnrinehart.system.suspendVerb = "suspend";
+  # The netbooted system has no swap to hibernate to; the installed one
+  # (default.nix) suspends, then hibernates.
+  dev.johnrinehart.system.suspendVerb = lib.mkDefault "suspend";
   services.logind.settings.Login = {
-    HandleLidSwitch = "suspend";
-    HandlePowerKey = "suspend";
-    HandleSuspendKey = "suspend";
+    HandleLidSwitch = lib.mkDefault "suspend";
+    HandlePowerKey = lib.mkDefault "suspend";
+    HandleSuspendKey = lib.mkDefault "suspend";
   };
 
   # Rank the built-in microphone below the Samson Q9U (profiles.framework).
