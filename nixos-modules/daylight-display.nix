@@ -35,6 +35,49 @@ let
     inherit (cfg) breakpoints location;
   };
   daylight-display = pkgs.dev.johnrinehart.daylight-display;
+
+  wl-gammarelay = pkgs.writeShellApplication {
+    name = "wl-gammarelay";
+    runtimeInputs = [
+      pkgs.wl-gammarelay-rs
+      pkgs.systemd
+      pkgs.coreutils
+    ];
+    text = ''
+      state="$XDG_RUNTIME_DIR/wl-gammarelay/state"
+      property() {
+        busctl --user "$1" rs.wl-gammarelay / rs.wl.gammarelay "''${@:2}"
+      }
+
+      if [ "''${1:-}" = save ]; then
+        brightness=$(property get-property Brightness)
+        temperature=$(property get-property Temperature)
+        mkdir -p "$(dirname "$state")"
+        printf '%s %s\n' "''${brightness#d }" "''${temperature#q }" >"$state.tmp"
+        mv "$state.tmp" "$state"
+        exit
+      fi
+
+      wl-gammarelay-rs run &
+      server=$!
+      until busctl --user status rs.wl-gammarelay >/dev/null 2>&1; do
+        if ! kill -0 "$server" 2>/dev/null; then
+          wait "$server"
+          exit 1
+        fi
+        sleep 0.01
+      done
+
+      if [ -r "$state" ] && read -r brightness temperature <"$state"; then
+        if ! property set-property Brightness d "$brightness" \
+          || ! property set-property Temperature q "$temperature"; then
+          echo "wl-gammarelay: could not restore $state" >&2
+        fi
+      fi
+      systemd-notify --ready
+      wait "$server"
+    '';
+  };
 in
 {
   options.dev.johnrinehart.desktop.daylightDisplay = {
@@ -114,6 +157,14 @@ in
       };
     };
 
+    # wl-gammarelay-rs starts at full brightness and 6500 K, so a restart (any
+    # NixOS switch that rebuilds it) would flash the screen until
+    # daylight-display caught up. The wrapper saves brightness and temperature
+    # when the unit stops (ExecStop runs while the server is still up) and
+    # restores them before the unit counts as started, so daylight-display
+    # starts after that. After a crash the last saved values come back and
+    # daylight-display corrects them. The state lives in $XDG_RUNTIME_DIR, so
+    # a fresh login starts from the daylight setting.
     systemd.user.services.wl-gammarelay = {
       description = "Wayland display gamma control";
       wantedBy = [ "graphical-session.target" ];
@@ -122,9 +173,10 @@ in
       # target wants (daylight-display), so systemd drops this job at login.
       after = [ "niri.service" ];
       serviceConfig = {
-        Type = "dbus";
-        BusName = "rs.wl-gammarelay";
-        ExecStart = "${lib.getExe pkgs.wl-gammarelay-rs} run";
+        Type = "notify";
+        NotifyAccess = "all";
+        ExecStart = lib.getExe wl-gammarelay;
+        ExecStop = "${lib.getExe wl-gammarelay} save";
         Restart = "on-failure";
         RestartSec = "2s";
       };
