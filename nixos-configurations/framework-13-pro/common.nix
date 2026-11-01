@@ -41,6 +41,21 @@
   # (metric 302). Prefer a wired link when one is plugged in.
   networking.dhcpcd.extraConfig = "metric 200";
 
+  # pam-biometrics: a fingerprint (the power-button reader, enabled by
+  # profiles.framework) or a face satisfies the biometric step after the
+  # password. Like framie's, the webcam has no infrared sensor, so a photo can
+  # pass for a face; the check can only reject an attempt.
+  dev.johnrinehart.desktop.greetd_niri.face = {
+    enable = true;
+    device = "/dev/v4l/by-id/usb-Framework_Laptop_Webcam_Module__2nd_Gen__FRANJBCHA1614400JN-video-index0";
+    inputFormat = "mjpeg";
+  };
+  # The webcam's largest mode; only MJPG offers it (YUYV stops at 640x480).
+  services.pam-biometrics.camera = {
+    width = 1920;
+    height = 1080;
+  };
+
   # 13.5" 2880x1920 touch panel, 30-120 Hz. 1.5 leaves a 1920x1280 logical
   # desktop, about what framie's panel shows at 1.0. Mode is left to the
   # panel's preferred timing.
