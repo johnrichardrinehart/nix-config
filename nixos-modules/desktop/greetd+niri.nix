@@ -625,9 +625,6 @@ in
             hyprlock.wait_message = keyWait "Super+Alt+F";
             swaylock.wait_message = keyWait "Super+Alt+F";
             greetd.wait_message = keyWait "Alt+F";
-            # polkit runs its PAM helper socket-activated, without a terminal,
-            # so run0 and pkexec ask once after the password instead.
-            polkit-1.after_password = "prompt";
           };
         };
     };
