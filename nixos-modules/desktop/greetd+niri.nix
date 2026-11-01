@@ -569,6 +569,41 @@ in
       };
     };
 
+    # hyprlock runs SIGUSR2 force updates inside the signal handler. When the
+    # signal interrupts the main thread inside getpwuid(), malloc(), or a timer
+    # mutex, the handler's label update waits on that lock forever and the
+    # lock screen hangs, even after PAM succeeds. face-scan-key sends SIGUSR2
+    # as a scan ends, right when PAM finishes and hyprlock redraws.
+    # hyprwm/hyprlock#1062, an open pull request, defers the update to the main
+    # loop through a self-pipe. It does not apply to 0.9.5, so build main. The
+    # overlay covers programs.hyprlock and home-manager's pkgs.hyprlock alike.
+    # Drop it once a release includes the fix.
+    nixpkgs.overlays = [
+      (_final: prev: {
+        hyprlock = prev.hyprlock.overrideAttrs (old: {
+          version = "0.9.6-unstable-2026-10-30";
+          src = prev.fetchFromGitHub {
+            owner = "hyprwm";
+            repo = "hyprlock";
+            rev = "9de871992f64e517eb8a56f363c5acd13690308f";
+            hash = "sha256-PVvBqN7etoTvEK9CTNLZ3Wwgi6Pcy4YMUX8KHSUb8EE=";
+          };
+          # nixpkgs builds the changelog URL from src.tag, which a rev leaves null.
+          meta = old.meta // {
+            changelog = "https://github.com/hyprwm/hyprlock/commits/9de871992f64e517eb8a56f363c5acd13690308f";
+          };
+          patches = (old.patches or [ ]) ++ [
+            # https://github.com/hyprwm/hyprlock/pull/1062
+            (prev.fetchpatch2 {
+              name = "core-fix-async-signal-safety-of-the-sigusr2-handler.patch";
+              url = "https://github.com/hyprwm/hyprlock/commit/afdf00b9b857f14e8f7f1d15039bde9ba05b7043.patch?full_index=1";
+              hash = "sha256-7m62eG3WeWj0+0cFXrzJa4Dz5RegHBOEcFtRQ3EYi0M=";
+            })
+          ];
+        });
+      })
+    ];
+
     services.hypridle.enable = true;
     programs.hyprlock.enable = true;
   };
