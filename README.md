@@ -433,10 +433,12 @@ nixos-hardware's `framework-amd-ai-300-series` plus
   (`hibernate.compressor=lz4`) and swapped pages LZ4-compressed in RAM first
   (zswap). systemd records the file's location in the `HibernateLocation`
   EFI variable, so no `resume_offset=` is set.
-- A `root-shell` tmux session (`dev.johnrinehart.tmux.rootShell`), created
-  at graphical login for root and members of wheel. Its pane asks for
-  `sudo -i` authentication once and then stays a root shell; anything that
-  can use the user's tmux socket can type into it.
+- A root shell without a password prompt (`dev.johnrinehart.tmux.rootShell`):
+  graphical login of root or a wheel member starts
+  `tmux-root-shell@<user>.service`, a root-owned tmux server on
+  `/run/tmux-root-shell/<user>/socket` that only that user may use; a polkit
+  rule allows the start. `root-shell` attaches. Every process the user runs
+  in the graphical session can get root through it.
 
 Left out on purpose: `amdgpu.dcdebugmask` beyond nixos-hardware's PSR bit
 (this panel uses Replay; set `hardware.amdgpu.dcDebugMask.disableReplay` if

@@ -1,15 +1,18 @@
-# A standing tmux session with a root shell, for root and members of wheel.
+# A root shell in a root-owned tmux server, one per root or wheel user,
+# started without authentication once their graphical login succeeded.
 #
-# A graphical login starts tmux-root-shell.service in the user's manager,
-# which creates the session in their canonical tmux server
-# (dev.johnrinehart.tmux.socketDir/socketName) unless it exists. Its pane
-# runs `command`, which asks for authentication as usual; once given, the
-# pane stays a root shell. When that shell exits the pane waits for Enter
-# and asks again, so the session does not disappear.
+# Graphical login starts the user unit tmux-root-shell.service, which starts
+# the system unit tmux-root-shell@<user>.service; a polkit rule lets root
+# and wheel members start and stop their own instance without a prompt.
+# The instance runs a tmux server as root on
+# /run/tmux-root-shell/<user>/socket with a `root-shell` session, and lets
+# only that user reach the socket (ACL) and the server (server-access).
+# `root-shell` attaches to it. When the root shell exits the server exits
+# and the instance starts a new one; ending the graphical session stops it.
 #
-# Anything that can write to the user's tmux socket can type into an
-# authenticated pane: the session trades re-authentication per command for
-# convenience, as a root shell left open in a terminal does.
+# This is passwordless root for every process the user runs during the
+# graphical session: anything that can connect to the socket gets a root
+# shell.
 {
   config,
   lib,
@@ -18,75 +21,89 @@
 }:
 let
   cfg = config.dev.johnrinehart.tmux.rootShell;
-  socketCfg = config.dev.johnrinehart.tmux;
-  tmux = lib.getExe pkgs.dev.johnrinehart.tmux;
+  tmuxPackage = pkgs.dev.johnrinehart.tmux;
+  tmux = lib.getExe tmuxPackage;
+  socket = user: "/run/tmux-root-shell/${user}/socket";
+  systemctl = lib.getExe' config.systemd.package "systemctl";
 
-  paneScript = pkgs.writeShellScript "tmux-root-shell-pane" ''
-    while :; do
-      ${cfg.command}
-      printf '\nRoot shell ended. Press Enter for a new one.\n'
-      read -r _
-    done
-  '';
+  attach = pkgs.writeShellApplication {
+    name = "root-shell";
+    text = ''
+      exec ${tmux} -S "/run/tmux-root-shell/$(id -un)/socket" attach-session -t ${lib.escapeShellArg "=${cfg.sessionName}"} "$@"
+    '';
+  };
 in
 {
   options.dev.johnrinehart.tmux.rootShell = {
-    enable = lib.mkEnableOption "a standing tmux session with a root shell for root and wheel members, created at graphical login";
+    enable = lib.mkEnableOption ''
+      a root-owned tmux server with a root shell for each root or wheel user,
+      started without authentication at graphical login (passwordless root
+      for every process of that user during the graphical session)
+    '';
 
     sessionName = lib.mkOption {
       type = lib.types.str;
       default = "root-shell";
-      description = "Name of the tmux session.";
-    };
-
-    command = lib.mkOption {
-      type = lib.types.str;
-      default =
-        if config.security.sudo.enable then
-          "${config.security.wrapperDir}/sudo -i"
-        else
-          lib.getExe' config.systemd.package "run0";
-      defaultText = lib.literalExpression ''"''${config.security.wrapperDir}/sudo -i" (run0 without sudo)'';
-      description = ''
-        Command the session's pane runs to become root. For root itself the
-        pane runs root's login shell instead.
-      '';
+      description = "Name of the tmux session in the root-owned server.";
     };
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ attach ];
+
+    systemd.services."tmux-root-shell@" = {
+      description = "Root-owned tmux server with a root shell for %i";
+      path = [
+        tmuxPackage
+        pkgs.acl
+      ];
+      serviceConfig = {
+        # new-session -d forks the server and returns.
+        Type = "forking";
+        RuntimeDirectory = "tmux-root-shell/%i";
+        # Traversable, not listable; the socket's ACL admits only the user.
+        RuntimeDirectoryMode = "0711";
+        ExecStart = "${tmux} -S ${socket "%i"} new-session -d -s ${lib.escapeShellArg cfg.sessionName} -c /root";
+        ExecStartPost = [
+          "${tmux} -S ${socket "%i"} server-access -a %i"
+          # The mask doubles as the socket's group bits, which tmux keeps
+          # when it updates the mode; the owning group's own entry stays ---.
+          "${lib.getExe' pkgs.acl "setfacl"} -m u:%i:rw,m::rw ${socket "%i"}"
+        ];
+        ExecStop = "${tmux} -S ${socket "%i"} kill-server";
+        # The server exits with the root shell's session.
+        Restart = "always";
+        RestartSec = 1;
+      };
+    };
+
+    security.polkit.extraConfig = ''
+      polkit.addRule(function (action, subject) {
+        if (action.id == "org.freedesktop.systemd1.manage-units" &&
+            action.lookup("unit") == "tmux-root-shell@" + subject.user + ".service" &&
+            (action.lookup("verb") == "start" || action.lookup("verb") == "stop") &&
+            (subject.user == "root" || subject.isInGroup("wheel"))) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
+
     systemd.user.services.tmux-root-shell = {
-      description = "tmux session with a root shell";
+      description = "Start the root-owned tmux server with a root shell";
       wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
       # Either condition suffices.
       unitConfig = {
         ConditionUser = "|root";
         ConditionGroup = "|wheel";
       };
-      environment.TMUX_TMPDIR = socketCfg.socketDir;
-      path = [
-        pkgs.coreutils
-        pkgs.getent
-        config.systemd.package
-      ];
-      serviceConfig.Type = "oneshot";
-      # The tmux server may start here. It gets a scope of its own, so it
-      # outlives this oneshot unit as it would a terminal it was started from.
-      script = ''
-        tmux() { ${tmux} -L ${lib.escapeShellArg socketCfg.socketName} "$@"; }
-        if tmux has-session -t ${lib.escapeShellArg "=${cfg.sessionName}"} 2>/dev/null; then
-          exit 0
-        fi
-        if [ "$(id -u)" = 0 ]; then
-          cmd="$(getent passwd root | cut -d: -f7) -l"
-        else
-          cmd=${paneScript}
-        fi
-        systemd-run --user --scope --quiet --collect \
-          ${tmux} -L ${lib.escapeShellArg socketCfg.socketName} \
-          new-session -d -s ${lib.escapeShellArg cfg.sessionName} -c "$HOME" "$cmd"
-      '';
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${systemctl} --no-ask-password start tmux-root-shell@%u.service";
+        ExecStop = "${systemctl} --no-ask-password stop tmux-root-shell@%u.service";
+      };
     };
   };
 }
