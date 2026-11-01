@@ -1,4 +1,4 @@
-From 12e40e1add2fa72b848c64a7fb007a33b958f012 Mon Sep 17 00:00:00 2001
+From 3527c654ae45c8418dc2be093967cd54470b7ec7 Mon Sep 17 00:00:00 2001
 From: John Rinehart <john@johnrinehart.com>
 Date: Thu, 15 Oct 2026 13:37:06 -0400
 Subject: [PATCH] dbus: accept remote desktop screencast sessions

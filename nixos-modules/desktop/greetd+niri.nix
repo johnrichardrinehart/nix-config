@@ -26,12 +26,12 @@ let
     niri = config.programs.niri.package;
   };
 
-  niriRevision = "b22eb842ca9506d4e2ff997b116031cdb3f650f8";
+  niriRevision = "a8562a1126922ed4c1c94d34c1dbb26633491d05";
   niriSource = pkgs.fetchFromGitHub {
     owner = "niri-wm";
     repo = "niri";
     rev = niriRevision;
-    hash = "sha256-Vf+Ea6sgZ2fn+NU1m0wtIl6MJIOyXZ2BBlwd/HDYKio=";
+    hash = "sha256-AtuZOzsb9p+TTzkgaPjvl+5YRsgKc+RlIQMyozOmY5A=";
   };
   niriPatches = [
     ./0000-version-report-downstream-patches.patch

@@ -1,4 +1,4 @@
-From 7a47be1b3f611677b51a0daf58f2ffdbdad3f75c Mon Sep 17 00:00:00 2001
+From b5d675d91a2c4777be003b33c491168ba6ca091e Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Wed, 21 Oct 2026 22:15:27 -0400
 Subject: [PATCH] niri: pin smithay master and the drm-extras fork
@@ -677,10 +677,10 @@ index 587a426d..0ca1e295 100644
          keymap
      }
 diff --git a/src/niri.rs b/src/niri.rs
-index e5d7ba9a..9ec57486 100644
+index b1e318e5..b5cafa28 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
-@@ -47,7 +47,7 @@ use smithay::desktop::{
+@@ -48,7 +48,7 @@ use smithay::desktop::{
      find_popup_root_surface, layer_map_for_output, LayerMap, LayerSurface, PopupGrab, PopupManager,
      PopupUngrabStrategy, Space, Window, WindowSurfaceType,
  };
@@ -689,7 +689,7 @@ index e5d7ba9a..9ec57486 100644
  use smithay::input::pointer::{
      CursorIcon, CursorImageStatus, CursorImageSurfaceData, Focus,
      GrabStartData as PointerGrabStartData, MotionEvent,
-@@ -389,7 +389,7 @@ pub struct Niri {
+@@ -390,7 +390,7 @@ pub struct Niri {
      /// active, and cleared whenever the configured keymap changes. Used to
      /// compare against virtual keyboard keymaps, and to switch back to it
      /// afterwards without going through the config again.
