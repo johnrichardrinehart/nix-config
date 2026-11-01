@@ -10,6 +10,7 @@ from unittest import mock
 from daylight_display import (
     Location,
     _parse_geoclue_output,
+    apply_cached,
     current_and_next,
     read_software_brightness,
     solar_event,
@@ -84,6 +85,55 @@ class SoftwareBrightnessTests(unittest.TestCase):
                 self.assertEqual(read_software_brightness(), 1.0)
                 path.write_text("garbage\n")
                 self.assertEqual(read_software_brightness(), 1.0)
+
+
+class StartupTests(unittest.TestCase):
+    config = {
+        "breakpoints": [
+            {
+                "event": "sunrise",
+                "offsetMinutes": 0,
+                "brightness": 100,
+                "temperature": 6500,
+            },
+            {
+                "event": "sunset",
+                "offsetMinutes": 0,
+                "brightness": 60,
+                "temperature": 3500,
+            },
+        ],
+    }
+
+    def test_cached_location_is_applied_without_geoclue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "calls"
+            busctl = Path(tmp) / "busctl"
+            busctl.write_text(f'#!/bin/sh\necho "$@" >> {log}\n')
+            busctl.chmod(0o755)
+            env = {"XDG_CACHE_HOME": tmp, "XDG_RUNTIME_DIR": tmp}
+            with mock.patch.dict(os.environ, env):
+                self.assertIsNone(apply_cached(self.config, str(busctl)))
+                self.assertFalse(log.exists())
+
+                cache = Path(tmp) / "daylight-display" / "location.json"
+                cache.parent.mkdir()
+                cache.write_text(
+                    '{"latitude": 40.5, "longitude": -74.0, '
+                    '"accuracy_meters": 26000.0, "source": "GeoClue"}'
+                )
+                location = apply_cached(self.config, str(busctl))
+            self.assertEqual(location.source, "cached GeoClue")
+            setting, _ = current_and_next(
+                self.config, location, dt.datetime.now(dt.UTC)
+            )
+            self.assertEqual(
+                log.read_text().splitlines(),
+                [
+                    f"--user set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d {setting.brightness / 100}",
+                    f"--user set-property rs.wl-gammarelay / rs.wl.gammarelay Temperature q {setting.temperature}",
+                ],
+            )
 
 
 if __name__ == "__main__":

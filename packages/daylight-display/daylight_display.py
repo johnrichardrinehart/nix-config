@@ -270,10 +270,35 @@ def status(config: dict[str, Any], geoclue: str, now: dt.datetime) -> None:
     print(f"next change: {following.at.astimezone().isoformat(timespec='minutes')}")
 
 
+def apply_cached(config: dict[str, Any], busctl: str) -> Location | None:
+    """Apply the setting for the cached location, if there is one.
+
+    The live lookup can take GeoClue's whole timeout, and wl-gammarelay starts
+    at full brightness and neutral temperature (it restarts with this service
+    on a NixOS switch). The cached location keeps that gap to the time it
+    takes to start this script.
+    """
+    try:
+        location = load_location()
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    setting, _ = current_and_next(config, location, dt.datetime.now(dt.UTC))
+    try:
+        apply(busctl, setting)
+    except subprocess.CalledProcessError as error:
+        print(
+            f"daylight-display: could not update wl-gammarelay: {error}",
+            file=sys.stderr,
+        )
+    return location
+
+
 def run(config: dict[str, Any], busctl: str, geoclue: str, interval: int) -> None:
     # brightness-notify sends SIGUSR1 to reapply its software factor immediately.
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1})
-    location: Location | None = None
+    # The live lookup below still runs first in the loop: next_location_update
+    # is already due.
+    location = apply_cached(config, busctl)
     next_location_update = 0.0
     refresh_seconds = config["location"]["refreshMinutes"] * 60
     while True:
