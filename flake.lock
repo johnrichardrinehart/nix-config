@@ -815,11 +815,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1793503451,
-        "narHash": "sha256-p3mN6LxO5wPnRuXeNSUPoRMgXNYRC0pldvKhy6EDlLg=",
+        "lastModified": 1793505503,
+        "narHash": "sha256-tNN9mR9ZkmyezrUS4fo9lcooOaEUkvDZSbmEAaUojq8=",
         "owner": "johnrichardrinehart",
         "repo": "pam-biometrics",
-        "rev": "1641d8d541fc6fbe6b3b63d5c60581d254e909e6",
+        "rev": "16afa76fc34701f36b02dfd7eb1a0d477864612a",
         "type": "github"
       },
       "original": {
