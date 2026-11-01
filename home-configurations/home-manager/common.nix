@@ -719,6 +719,18 @@ in
           # https://blog.vghaisas.com/zsh-beep-sound/
               unsetopt BEEP
 
+          # Monstar, like Ghostty, sends modified Enter as xterm's modifyOtherKeys
+          # sequence CSI 27;<mods>;13~ even when nothing asked for it. ZLE has no
+          # binding for it, so it drops the CSI 27 prefix and inserts the rest:
+          # Ctrl+Enter leaves ";5;13~" on the line, and on accept oh-my-zsh's
+          # alias `5` runs `cd -5`. Make every modified Enter accept the line.
+              for keymap in emacs viins vicmd; do
+                for mods in {2..16}; do
+                  bindkey -M "$keymap" "^[[27;$mods;13~" accept-line
+                done
+              done
+              unset keymap mods
+
               eval $("${lib.getExe pkgs.oh-my-posh}" init zsh --config "${ohMyPoshConfig}");
               _omp_get_prompt() {
                 local type=$1 ref branch
