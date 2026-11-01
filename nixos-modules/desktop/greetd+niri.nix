@@ -605,11 +605,28 @@ in
         inherit (cfg.face) device inputFormat;
       };
       greeterUser = config.services.greetd.settings.default_session.user;
-      # pam-biometrics' default prompts name the Enter trigger and the reader.
-      policy.defaults = {
-        factors = lib.optional cfg.fingerprint.enable "fingerprint" ++ [ "face" ];
-        timeout_seconds = cfg.fingerprint.timeoutSeconds;
-      };
+      # The default prompts name the Enter trigger and the reader. After the
+      # password, graphical clients have no terminal for Enter, so their wait
+      # names the key binding instead (Super+Alt+F; tuigreet's Alt+F).
+      policy =
+        let
+          seconds = toString cfg.fingerprint.timeoutSeconds;
+          keyWait =
+            key:
+            (if cfg.fingerprint.enable then "Touch the fingerprint reader or press " else "Press ")
+            + "${key} to scan your face (${seconds} s).";
+        in
+        {
+          defaults = {
+            factors = lib.optional cfg.fingerprint.enable "fingerprint" ++ [ "face" ];
+            timeout_seconds = cfg.fingerprint.timeoutSeconds;
+          };
+          services = {
+            hyprlock.wait_message = keyWait "Super+Alt+F";
+            swaylock.wait_message = keyWait "Super+Alt+F";
+            greetd.wait_message = keyWait "Alt+F";
+          };
+        };
     };
 
     # hyprlock runs SIGUSR2 force updates inside the signal handler. When the
