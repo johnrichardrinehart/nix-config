@@ -34,7 +34,7 @@ _: {
           # https://github.com/niri-wm/niri/pull/4614
           (prev.fetchpatch2 {
             name = "tty-honor-configured-node-for-software-egl.patch";
-            url = "https://github.com/johnrichardrinehart/niri/commit/2240c34b9ec4f84d7d9b6269311912c626d56e0c.patch?full_index=1";
+            url = "https://github.com/johnrichardrinehart/niri/commit/1522804426c62e9daec48d26ec41847016a40e19.patch?full_index=1";
             hash = "sha256-O7kU24QSvg/KVYZF6Znyc4belMEgg79ZigGCpqwOnW0=";
           })
         ];
