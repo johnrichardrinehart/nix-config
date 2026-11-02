@@ -239,6 +239,13 @@ Framework disables the Bluetooth idle timer so keyboards can reconnect after sle
 BlueZ automatically enables the adapter through `[Policy] AutoEnable=true`.
 Framework does not power-cycle the adapter during resume.
 
+## Login greeter
+
+Each `greetd+niri` host (`framework`, `framework-13-pro` and
+`mbp-apple-silicon`) starts tuigreet on VT1. tuigreet runs Niri after a
+password login. PAM then gets the password and unlocks GNOME Keyring. Hosts
+with `greetd_niri.face` also start a face scan with Alt+F.
+
 ## Root shell
 
 `framework`, `framework-13-pro` and `mbp-apple-silicon` enable
@@ -445,8 +452,8 @@ over PXE and runs entirely from RAM: nothing is installed to its disk, and
 every boot starts from the built system.
 
 Desktop and userspace come from `dev.johnrinehart.profiles.framework`
-(`nixos-modules/profiles/framework.nix`), which `framework` uses too: Niri
-behind tuigreet, the Dell monitor layout, daylight display, sound and
+(`nixos-modules/profiles/framework.nix`), which `framework` uses too: the Dell
+monitor layout, daylight display, sound and
 RNNoise, voice dictation, auto-suspend, v4l2loopback, chrony. Hardware is
 nixos-hardware's `framework-amd-ai-300-series` plus
 `nixos-configurations/framework-13-pro/hardware.nix`:

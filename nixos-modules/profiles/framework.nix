@@ -11,7 +11,6 @@
 let
   cfg = config.dev.johnrinehart.profiles.framework;
   primaryUser = config.dev.johnrinehart.users.primary;
-  faceCfg = config.dev.johnrinehart.desktop.greetd_niri.face;
   kittyIntegrationEnabled = config.dev.johnrinehart.users.terminalEmulator.integrations.kitty.enable;
   inherit (import ../../lib/daylight-display.nix) breakpoint;
 in
@@ -93,35 +92,6 @@ in
       };
     };
 
-    # Authenticate before starting Niri so PAM receives the login password and
-    # can unlock GNOME Keyring before applications such as Brave are launched.
-    # The shared desktop module otherwise starts Niri directly as greetd's
-    # unauthenticated default session. The console sends Super as Alt, so
-    # Super+Alt+F arrives as Alt+F. The patched tuigreet then starts a face
-    # scan for the user.
-    services.greetd = {
-      useTextGreeter = true;
-      settings.default_session = {
-        command = lib.mkForce (
-          "${lib.getExe pkgs.dev.johnrinehart.tuigreet} --time --remember --user-menu --asterisks --cmd ${lib.getExe' config.programs.niri.package "niri-session"}"
-          + lib.optionalString faceCfg.enable " --biometric-cmd '${lib.getExe config.services.pam-biometrics.package} face scan'"
-        );
-        user = lib.mkForce "greeter";
-      };
-    };
-
-    # greetd starts its default greeter through this PAM service without running
-    # authentication. Define the account/session phases explicitly; otherwise
-    # Linux-PAM falls back to the deny-all `other` service and tuigreet cannot
-    # start after reboot.
-    security.pam.services.greetd-greeter.text = ''
-      auth required pam_permit.so
-      account required pam_permit.so
-      password required pam_deny.so
-      session required pam_env.so conffile=/etc/pam/environment readenv=0
-      session required pam_unix.so
-      session optional ${pkgs.systemd}/lib/security/pam_systemd.so
-    '';
     dev.johnrinehart.voice-dictation.enable = true;
     dev.johnrinehart.kitkat-rs.variant = "faster";
 

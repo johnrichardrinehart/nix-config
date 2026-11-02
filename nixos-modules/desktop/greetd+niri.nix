@@ -384,9 +384,16 @@ in
     # Raise the fd soft limit so children (waybar, etc.) don't hit the
     # default 1024 and fail with "Too many open files" on boot.
     systemd.services.greetd.serviceConfig.LimitNOFILE = "524288";
+    # Authenticate before starting Niri so PAM receives the login password and
+    # can unlock GNOME Keyring before applications such as Brave are launched.
+    # The console sends Super as Alt, so Super+Alt+F arrives as Alt+F. The
+    # patched tuigreet then starts a face scan for the user.
+    services.greetd.useTextGreeter = true;
     services.greetd.settings.default_session = {
-      command = "${lib.getExe' config.programs.niri.package "niri-session"}";
-      user = primaryUser;
+      command =
+        "${lib.getExe pkgs.dev.johnrinehart.tuigreet} --time --remember --user-menu --asterisks --cmd ${lib.getExe' config.programs.niri.package "niri-session"}"
+        + lib.optionalString cfg.face.enable " --biometric-cmd '${lib.getExe config.services.pam-biometrics.package} face scan'";
+      user = "greeter";
     };
 
     systemd.user.services.waybar = lib.mkIf cfg.waybar.systemd.enable {
@@ -589,6 +596,20 @@ in
           enableGnomeKeyring = true;
           text = authPamConfig;
         })
+      // {
+        # greetd starts its default greeter through this PAM service without
+        # running authentication. Define the account/session phases explicitly;
+        # otherwise Linux-PAM falls back to the deny-all `other` service and
+        # tuigreet cannot start after reboot.
+        greetd-greeter.text = ''
+          auth required pam_permit.so
+          account required pam_permit.so
+          password required pam_deny.so
+          session required pam_env.so conffile=/etc/pam/environment readenv=0
+          session required pam_unix.so
+          session optional ${pkgs.systemd}/lib/security/pam_systemd.so
+        '';
+      }
       // lib.optionalAttrs cfg.face.enable {
         su.text = ownSessionPamConfig {
           authFirst = ''
