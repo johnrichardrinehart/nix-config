@@ -14,7 +14,7 @@ let
   cfg = config.dev.johnrinehart.mbp-host;
   # One build for PATH and the activation step below.
   displayMode = pkgs.callPackage ../../packages/display-mode/package.nix { };
-  glanceIdleTrigger = pkgs.callPackage ../../packages/glance-idle-trigger/package.nix { };
+  glanceTrigger = pkgs.callPackage ../../packages/glance-trigger/package.nix { };
 
   # Remote URL shapes of a GitHub owner's repositories, for `hasconfig`.
   ownerPatterns = owner: [
@@ -355,21 +355,23 @@ in
       };
     };
 
-    # Sends Glance a wake after an inactivity lock (packages/glance-idle-trigger),
-    # so that Glance looks for a face then, but not after a lock from a key
-    # combination or a menu. 60 s: the screensaver (idle lock) starts after
-    # 300 s; a lock from a key combination comes less than 1 s after the keys.
-    launchd.agents.glance-idle-trigger = {
+    # Sends Glance a wake (packages/glance-trigger) after an inactivity lock,
+    # and at a key press or a click while the screen is locked, which Glance
+    # cannot see itself. So Glance looks for a face then, but not after a
+    # lock from a key combination or a menu. 60 s: the screensaver (idle
+    # lock) starts after 300 s; a lock from a key combination comes less than
+    # 1 s after the keys.
+    launchd.agents.glance-trigger = {
       enable = true;
       config = {
         ProgramArguments = [
-          (lib.getExe glanceIdleTrigger)
+          (lib.getExe glanceTrigger)
           "60"
         ];
         RunAtLoad = true;
         KeepAlive = true;
         ProcessType = "Interactive";
-        StandardErrorPath = "/tmp/glance-idle-trigger.log";
+        StandardErrorPath = "/tmp/glance-trigger.log";
       };
     };
 
@@ -441,10 +443,16 @@ in
       #                         which made unlocks take ~3 s. Light lets a
       #                         printed photo through.
       #   unlockTriggers        "onWake" and "onSpace", not "onLock": a lock
-      #                         from a key combination or a menu waits for the
-      #                         space key, or for a wake. The glance-idle-trigger
-      #                         agent above sends Glance a wake after an
-      #                         inactivity lock.
+      #                         from a key combination or a menu waits for a
+      #                         key press, a click or a wake. The
+      #                         glance-trigger agent above sends Glance a wake
+      #                         after an inactivity lock and at a key press or
+      #                         a click.
+      #   showUnlockAnimation   Off: no notch pill or animation. With the pill
+      #                         on, Glance arms it at every lock and ignores
+      #                         any wake for 2 s after that, so a key press
+      #                         right after a lock would wait. Also removes
+      #                         the scan on hover over the notch.
       # `defaults read` shows an array as "( a, b )" over several lines; the
       # check below removes the spaces, newlines, parentheses and commas, so
       # it compares "ab".
@@ -479,6 +487,10 @@ in
               unlockTriggers = {
                 shown = "onWakeonSpace";
                 typed = "-array onWake onSpace";
+              };
+              showUnlockAnimation = {
+                shown = "0";
+                typed = "-bool false";
               };
             }
         )}

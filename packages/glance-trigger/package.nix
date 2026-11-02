@@ -3,12 +3,12 @@
   runCommandCC,
   swift,
 }:
-runCommandCC "glance-idle-trigger"
+runCommandCC "glance-trigger"
   {
     nativeBuildInputs = [ swift ];
-    meta.mainProgram = "glance-idle-trigger";
+    meta.mainProgram = "glance-trigger";
   }
   ''
     mkdir -p "$out/bin"
-    swiftc -O ${./glance-idle-trigger.swift} -o "$out/bin/glance-idle-trigger"
+    swiftc -O ${./glance-trigger.swift} -o "$out/bin/glance-trigger"
   ''
