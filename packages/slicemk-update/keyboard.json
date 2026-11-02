@@ -1032,9 +1032,9 @@
           "Args": []
         },
         {
-          "Name": "MU_TOGG",
-          "Behavior": "&none",
-          "Notes": "Unsupported: SliceMK has no audio hardware",
+          "Name": "",
+          "Behavior": "&trans",
+          "Notes": "Cmd from the base layer, so Cmd works when the mouse layer is already active",
           "Args": []
         },
         {
