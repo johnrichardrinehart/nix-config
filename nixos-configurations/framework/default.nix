@@ -12,6 +12,8 @@
 
   nixpkgs.hostPlatform = "x86_64-linux";
 
+  # Kernels and initrds live on the 3 GiB XBOOTLDR partition (/boot); the
+  # ESP (/efi, a 510 MiB file system) holds systemd-boot only.
   dev.johnrinehart.boot.loader.systemd-boot = {
     enable = true;
     configurationLimit = 5;
@@ -19,6 +21,8 @@
 
   boot.loader = {
     efi.canTouchEfiVariables = true;
+    efi.efiSysMountPoint = "/efi";
+    systemd-boot.xbootldrMountPoint = "/boot";
     timeout = 1;
   };
 

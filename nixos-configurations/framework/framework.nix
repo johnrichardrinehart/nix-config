@@ -24,13 +24,33 @@
 
   boot.initrd.kernelModules = [ ];
 
+  # Root (nvme0n1p2) and swap (nvme0n1p3) are LUKS2 containers with the same
+  # passphrase: stage 1 asks once and tries it on both.
+  boot.initrd.luks.devices = {
+    cryptroot = {
+      device = "/dev/disk/by-uuid/af2ebf61-17c7-4b8d-8544-8210551fa7cb";
+      allowDiscards = true;
+    };
+    cryptswap = {
+      device = "/dev/disk/by-uuid/e04a4dcd-1e18-4114-b458-b0e1383fe981";
+      allowDiscards = true;
+    };
+  };
+
   fileSystems."/" = {
-    device = "/dev/disk/by-uuid/9dbd56c9-2344-450a-845b-6490d0879256";
+    device = "/dev/mapper/cryptroot";
     fsType = "ext4";
   };
 
-  fileSystems."/boot" = {
+  # The ESP (nvme0n1p1) holds systemd-boot; kernels and initrds go to the
+  # 3 GiB XBOOTLDR partition (nvme0n1p4).
+  fileSystems."/efi" = {
     device = "/dev/disk/by-uuid/32F9-A71A";
+    fsType = "vfat";
+  };
+
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/0C0F-2423";
     fsType = "vfat";
   };
 
@@ -242,9 +262,10 @@
     };
   };
 
+  # 64 GiB, so a hibernation image fits after a second RAM stick.
   swapDevices = [
     {
-      device = "/dev/nvme0n1p3";
+      device = "/dev/mapper/cryptswap";
     }
   ];
 
@@ -259,13 +280,12 @@
   };
 
   boot.kernelParams = [
-    "resume=/dev/nvme0n1p3"
     "nocompress"
     "mem_sleep_default=deep"
     "pcie_ports=native"
   ];
 
-  boot.resumeDevice = "/dev/nvme0n1p3";
+  boot.resumeDevice = "/dev/mapper/cryptswap";
 
   services.logind.settings.Login = {
     SleepOperation = "suspend-then-hibernate hibernate hybrid-sleep suspend";
