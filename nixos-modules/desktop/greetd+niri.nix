@@ -609,6 +609,13 @@ in
           session required pam_unix.so
           session optional ${pkgs.systemd}/lib/security/pam_systemd.so
         '';
+        # `passwd` also re-encrypts the login keyring with the new password.
+        # Without it, the next login cannot unlock the keyring. pam_unix is
+        # `sufficient` by default, which ends the stack before the keyring.
+        passwd = {
+          enableGnomeKeyring = true;
+          rules.password.unix.control = lib.mkForce "required";
+        };
       }
       // lib.optionalAttrs cfg.face.enable {
         su.text = ownSessionPamConfig {
