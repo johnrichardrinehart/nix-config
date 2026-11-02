@@ -525,7 +525,7 @@ sets this baseline:
   for repartitioning or resizing. The shell asks for root's password and
   has `cryptsetup`, `sgdisk`, `parted`, `resize2fs` and `e2fsck`. For
   networking it has Wi-Fi (iwd, `impala`), USB and expansion-card Ethernet
-  (DHCP) and DNS, and it also has `omp`.
+  (DHCP) and DNS.
 - The kernel arguments `iommu.passthrough=0` and `iommu.strict=1`, so that
   device DMA always goes through the IOMMU.
 - USBGuard. It blocks each USB device, also the devices that are present at

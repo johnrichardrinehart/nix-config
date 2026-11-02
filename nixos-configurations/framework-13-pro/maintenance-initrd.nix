@@ -11,19 +11,17 @@
 #
 # The shell has Wi-Fi (iwd, MT7925 driver and firmware, impala), wired
 # Ethernet over USB (DHCP through systemd-networkd), DNS (systemd-resolved),
-# CA certificates, omp and nix, so help is at hand while the disk is open.
+# CA certificates and nix, so more tools are at hand while the disk is open.
 # The shell is root already; run0 and sudo are there for commands typed out
 # of habit. nix runs without a daemon and keeps its store in RAM:
 #
 #   impala                        # join a network; iwd remembers it until reboot
 #   mount -o ro /dev/mapper/cryptroot /sysroot
-#   HOME=/sysroot/home/john omp   # john's omp login; or `omp` and log in anew
 #   nix shell nixpkgs#btrfs-progs # anything else, from the binary caches
 #
 # Unmount /sysroot again before resizing anything.
 {
   config,
-  inputs,
   lib,
   pkgs,
   ...
@@ -31,14 +29,6 @@
 let
   initrdRootHashedPassword = config.dev.johnrinehart.endpointSecurity.initrdRootHashedPassword;
   iwd = config.networking.wireless.iwd.package;
-  # Not bin/omp: that is a bash script whose wrapped library path drags in
-  # PipeWire and FFmpeg (1 GiB) for voice. The binary and its native module
-  # (lib/omp, 300 MB) are enough for a text session. The binary has no
-  # RUNPATH and finds libpthread and libm next to its loader, so all of that
-  # glibc's lib/ goes along.
-  ompPackage = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.omp;
-  omp = "${ompPackage}/lib/omp";
-
   iwdConf = (pkgs.formats.ini { }).generate "main.conf" {
     General.EnableNetworkConfiguration = true;
     Network.NameResolvingService = "systemd";
@@ -150,8 +140,6 @@ in
             pkgs.testdisk
             pkgs.ddrescue
           ];
-          extraBin.omp = "${omp}/omp";
-
           contents = {
             "/etc/iwd/main.conf".source = iwdConf;
             "/etc/ssl/certs/ca-certificates.crt".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
@@ -180,8 +168,6 @@ in
           storePaths = [
             "${iwd}/libexec/iwd"
             "${iwd}/share/dbus-1"
-            omp
-            "${ompPackage.stdenv.cc.libc}/lib"
             # Only binaries and their libraries are copied otherwise: sudo
             # loads its policy from libexec, PAM its modules from lib/security.
             "${pkgs.sudo}/libexec/sudo"

@@ -43,11 +43,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # The real omp binary, for framework-13-pro's maintenance initrd: the
-    # system's `omp` (packages/omp) runs `nix run` on this flake, which
-    # stage 1 cannot do. Its own nixpkgs keeps numtide's cache hits.
-    llm-agents.url = "github:numtide/llm-agents.nix";
-
     monstar = {
       url = "github:rockorager/monstar";
       inputs.nixpkgs.follows = "nixpkgs";
