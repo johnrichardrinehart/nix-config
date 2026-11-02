@@ -308,6 +308,7 @@ To scroll, hold Cmd (the key above Tab) and the mouse layer key in either order,
 The scroll starts at 10 wheel steps per second and accelerates to 40 wheel steps per second over 1 s.
 The keyboard reads Cmd when ↑ or ↓ goes down: push Cmd before ↑ or ↓, or the key changes the volume.
 The host sees Cmd held during the scroll; Terminal.app scrolls as usual, but niri on Framie switches workspaces.
+Each scroll first taps F24, so Android does not open All Apps when Cmd (Meta) goes up after a scroll; F24 has no binding on the Mac, Framie or the phone.
 On the mouse layer, Fn sends F18, which the Mac changes to the macOS fn key (`darwin-configurations/mbp-host/keyboard.nix`).
 To select text in Terminal.app while an app uses mouse reporting, activate the mouse layer, hold Fn, and click or drag.
 Activate the mouse layer before you push Fn; otherwise Fn selects the Fn layer.
