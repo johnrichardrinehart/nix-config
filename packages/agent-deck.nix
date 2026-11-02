@@ -11,16 +11,16 @@
 }:
 buildGo126Module rec {
   pname = "agent-deck";
-  version = "1.16.35";
+  version = "1.16.36";
 
   src = fetchFromGitHub {
     owner = "asheshgoplani";
     repo = "agent-deck";
     rev = "v${version}";
-    hash = "sha256-5S0btEtXJloGtzNNXFaNDT603k8I1POxJISEZulNEwg=";
+    hash = "sha256-D6PF5KWhiTwI+1M4XiT6KFv0+uO2PrdSWm9cjdSQofg=";
   };
 
-  vendorHash = "sha256-8WZRtRXlsg/HuONcNnPjI8WjBkNlFeKgEBahAYyNsNI=";
+  vendorHash = "sha256-yNCm//ZOTAIxUUm4yEPobbNw0dD01huAth6B9xvBaiE=";
   patches = [
     # Keep the full leak test when the inherited Nix build environment is too
     # large for tmux's command buffer.
