@@ -12,8 +12,10 @@
 # profile's passphrase and [IPv4] settings apply. The series in
 # patches/impala/ opens impala in the device's current mode instead of
 # forcing station mode (which stopped a running access point), shares the
-# running access point as a Wi-Fi QR code with ctrl+q, and keeps a shared
-# passphrase masked until Tab reveals it. Local only: upstream accepts no
+# running access point as a Wi-Fi QR code with ctrl+q, keeps a shared
+# passphrase masked until Tab reveals it, starts without a cursor-position
+# query (which times out on the Linux console), and restores the terminal
+# when it exits with an error. Local only: upstream accepts no
 # LLM-written contributions.
 impala.overrideAttrs (
   finalAttrs: old: {
@@ -36,6 +38,8 @@ impala.overrideAttrs (
       ../patches/impala/0001-Keep-the-device-s-current-mode-on-startup.patch
       ../patches/impala/0002-Share-the-running-access-point-as-a-Wi-Fi-QR-code.patch
       ../patches/impala/0003-Mask-the-shared-passphrase-until-Tab-reveals-it.patch
+      ../patches/impala/0004-Clear-the-screen-at-startup-without-a-cursor-query.patch
+      ../patches/impala/0005-Restore-the-terminal-when-main-returns-an-error.patch
     ];
   }
 )

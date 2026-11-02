@@ -1,0 +1,39 @@
+From e6270213fa9ba35f91aa0022f9a8b8f1088ad005 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Sun, 1 Nov 2026 16:56:56 -0500
+Subject: [PATCH 4/5] Clear the screen at startup without a cursor query
+
+Terminal::clear() reads the cursor position (ESC [ 6 n) so that it can
+restore it. The event stream starts before Tui::init(), and its thread
+holds crossterm's event reader until a key or mouse event arrives. The
+query then cannot take the reader within its 2 s limit and fails with
+"The cursor position could not be read within a normal duration". On a
+slow terminal, such as the Linux console, impala often exits this way.
+
+The back buffer is blank at startup, so a plain screen clear through the
+backend gives the same result without the query.
+---
+ src/tui.rs | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/tui.rs b/src/tui.rs
+index 8d93cd4..7551b98 100644
+--- a/src/tui.rs
++++ b/src/tui.rs
+@@ -40,7 +40,12 @@ impl<B: Backend> Tui<B> {
+         }));
+ 
+         self.terminal.hide_cursor()?;
+-        self.terminal.clear()?;
++        // Terminal::clear() asks the terminal for the cursor position, with
++        // a 2 s timeout. The event stream's thread can already hold
++        // crossterm's event reader, and then the answer never reaches the
++        // query. The back buffer is still blank here, so clearing the screen
++        // is enough.
++        self.terminal.backend_mut().clear()?;
+         Ok(())
+     }
+ 
+-- 
+2.56.0
+
