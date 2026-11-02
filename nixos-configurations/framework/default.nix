@@ -27,6 +27,10 @@
   dev.johnrinehart.firmware.framework-ec.features = [ "F9-display-toggle" ];
   dev.johnrinehart.firmware.framework-ec.flashService.enable = true;
 
+  # `root-shell` opens a root shell without a password for root and wheel
+  # members (nixos-modules/tmux-root-shell.nix).
+  dev.johnrinehart.tmux.rootShell.enable = true;
+
   # The built-in camera has no infrared sensor, so a photo can pass for a
   # face. The check can only reject an attempt. The password is always required.
   dev.johnrinehart.desktop.greetd_niri.face = {

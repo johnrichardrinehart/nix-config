@@ -239,6 +239,17 @@ Framework disables the Bluetooth idle timer so keyboards can reconnect after sle
 BlueZ automatically enables the adapter through `[Policy] AutoEnable=true`.
 Framework does not power-cycle the adapter during resume.
 
+## Framework root shell
+
+`framework` and `framework-13-pro` enable `dev.johnrinehart.tmux.rootShell`.
+Graphical login of root or a wheel member starts
+`tmux-root-shell@<user>.service`. This is a root-owned tmux server on
+`/run/tmux-root-shell/<user>/socket` that only that user can use. A polkit
+rule allows the start without a password. Each `root-shell` call opens its
+own session with its own root shell. When that shell exits, the server stays
+up for the next call. Every process the user runs in the graphical session
+can get root through it.
+
 ## SliceMK firmware
 
 On Linux or macOS, update the SliceMK ErgoDox 202207 Green left half:
@@ -433,13 +444,6 @@ nixos-hardware's `framework-amd-ai-300-series` plus
   (`hibernate.compressor=lz4`) and swapped pages LZ4-compressed in RAM first
   (zswap). systemd records the file's location in the `HibernateLocation`
   EFI variable, so no `resume_offset=` is set.
-- A root shell without a password prompt (`dev.johnrinehart.tmux.rootShell`):
-  graphical login of root or a wheel member starts
-  `tmux-root-shell@<user>.service`, a root-owned tmux server on
-  `/run/tmux-root-shell/<user>/socket` that only that user may use; a polkit
-  rule allows the start. Each `root-shell` call opens its own session with
-  its own root shell. Every process the user runs in the graphical session
-  can get root through it.
 
 Left out on purpose: `amdgpu.dcdebugmask` beyond nixos-hardware's PSR bit
 (this panel uses Replay; set `hardware.amdgpu.dcDebugMask.disableReplay` if
