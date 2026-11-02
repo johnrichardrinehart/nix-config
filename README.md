@@ -303,7 +303,8 @@ Both configurations use native Dvorak, plain Tab, and six Bluetooth host profile
 The mouse layer moves the pointer at up to 3200 counts per second.
 It reaches that speed on a quadratic ramp over 350 ms, so short presses stay precise.
 Hold the mouse layer key (the lower tall key in the left inner column) and tap ↑ or ↓ for volume up or down; also hold Shift and tap ↓ to toggle mute.
-To scroll, hold Cmd (the key above Tab), then hold the mouse layer key, and tap ↑ or ↓.
+To scroll, hold Cmd (the key above Tab), then hold the mouse layer key, and hold ↑ or ↓.
+The scroll starts at 10 wheel steps per second and accelerates to 40 wheel steps per second over 1 s.
 Push Cmd first: on the mouse layer, the key above Tab does nothing.
 The host sees Cmd held during the scroll; Terminal.app scrolls as usual, but niri on Framie switches workspaces.
 On the mouse layer, Fn sends F18, which the Mac changes to the macOS fn key (`darwin-configurations/mbp-host/keyboard.nix`).
