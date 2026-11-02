@@ -13,10 +13,11 @@
   nixpkgs.hostPlatform = "x86_64-linux";
 
   # Kernels and initrds live on the 3 GiB XBOOTLDR partition (/boot); the
-  # ESP (/efi, a 510 MiB file system) holds systemd-boot only.
+  # ESP (/efi, a 510 MiB file system) holds systemd-boot only. Each
+  # maintenance initrd takes 230 MB.
   dev.johnrinehart.boot.loader.systemd-boot = {
     enable = true;
-    configurationLimit = 5;
+    configurationLimit = 3;
   };
 
   boot.loader = {
@@ -34,6 +35,19 @@
   # `root-shell` opens a root shell without a password for root and wheel
   # members (nixos-modules/tmux-root-shell.nix).
   dev.johnrinehart.tmux.rootShell.enable = true;
+
+  # The boot menu editor is on, so physical access can already change the
+  # kernel command line. The maintenance shell therefore asks for no
+  # password; the LUKS passphrase still guards root and swap.
+  dev.johnrinehart.maintenanceInitrd = {
+    enable = true;
+    emergencyAccess = true;
+    # The AX210 (ty-a0-gf-a0); iwlwifi loads iwlmvm on request.
+    wifiKernelModules = [
+      "iwlwifi"
+      "iwlmvm"
+    ];
+  };
 
   # The built-in camera has no infrared sensor, so a photo can pass for a
   # face. The check can only reject an attempt. The password is always required.

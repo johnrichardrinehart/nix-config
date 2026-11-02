@@ -263,6 +263,9 @@ USB and expansion-card Ethernet (DHCP) and DNS. It also has `nix`, `sudo` and
 messages only at warning level or higher; run `dmesg` for the others. If a
 program leaves the terminal without echo, type `reset` and press Enter.
 
+- `framework` (framie): the shell asks for no password. It cannot open the
+  LUKS containers without the passphrase. The boot menu editor is on, so
+  anyone at the keyboard can reach a stage 1 shell anyway.
 - `framework-13-pro`: the entry exists only when
   `dev.johnrinehart.endpointSecurity.initrdRootHashedPassword` is set (it
   defaults to `rootHashedPassword`). The shell asks for that password.
