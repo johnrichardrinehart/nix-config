@@ -186,10 +186,12 @@ in
 
           **Impact: NONE** (diagnostic only)
 
-          Enables PM timing, PM debug messages, verbose boot/initrd logging,
-          console logging across suspend/resume, and explicit pre/post sleep
-          journal markers. Useful for separating image restore time, device
-          resume time, and userspace thaw/reconnect time.
+          Enables PM timing, PM debug messages, initcall timing, console
+          output across suspend/resume, and explicit pre/post sleep journal
+          markers. The console log level stays unchanged, so the messages go
+          to the kernel log and the journal, not over the LUKS prompt or the
+          greeter. Useful for separating image restore time, device resume
+          time, and userspace thaw/reconnect time.
           Check with: journalctl -b -k -o short-monotonic | grep "PM:"
         '';
       };
@@ -394,8 +396,9 @@ in
 
       # Debug timing
       (lib.mkIf cfg.debugTiming.enable {
-        boot.consoleLogLevel = 7;
-        boot.initrd.verbose = true;
+        # The kernel log buffer keeps every level regardless of
+        # boot.consoleLogLevel. A higher console level only prints the
+        # messages over the LUKS prompt and the greeter.
 
         # Keep the printk buffer large enough for verbose PCI/TB dyndbg output
         # plus PM timing without wrapping before userspace can read it.

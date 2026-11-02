@@ -97,6 +97,8 @@ in
       boot.kernelParams = [ "rd.systemd.unit=rescue.target" ];
       # Kernel messages at a host's debug log level print over the shell and
       # over full-screen programs such as impala. `dmesg` still shows them.
+      # No host that enables this entry raises the level, so this is
+      # redundant today. It only guards against a host that does.
       boot.consoleLogLevel = lib.mkForce 4;
 
       boot.initrd = {
