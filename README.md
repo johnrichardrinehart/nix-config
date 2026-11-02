@@ -239,9 +239,10 @@ Framework disables the Bluetooth idle timer so keyboards can reconnect after sle
 BlueZ automatically enables the adapter through `[Policy] AutoEnable=true`.
 Framework does not power-cycle the adapter during resume.
 
-## Framework root shell
+## Root shell
 
-`framework` and `framework-13-pro` enable `dev.johnrinehart.tmux.rootShell`.
+`framework`, `framework-13-pro` and `mbp-apple-silicon` enable
+`dev.johnrinehart.tmux.rootShell`.
 Graphical login of root or a wheel member starts
 `tmux-root-shell@<user>.service`. This is a root-owned tmux server on
 `/run/tmux-root-shell/<user>/socket` that only that user can use. A polkit

@@ -62,6 +62,10 @@
     profiles.laptop.enable = true;
     desktop.greetd_niri.niri.displayModeWatch.enable = lib.mkDefault false;
 
+    # `root-shell` opens a root shell without a password for root and wheel
+    # members (nixos-modules/tmux-root-shell.nix).
+    tmux.rootShell.enable = true;
+
     # The guest has no Bluetooth controller. The laptop profile turns on
     # bt-auto-suspend, whose oneshot runs `bluetoothctl devices Connected`
     # with no TimeoutStartSec; without an adapter bluetoothctl blocks forever,
