@@ -303,6 +303,7 @@ Both configurations use native Dvorak, plain Tab, and six Bluetooth host profile
 The mouse layer moves the pointer at up to 3200 counts per second.
 It reaches that speed on a quadratic ramp over 350 ms, so short presses stay precise.
 Hold the mouse layer key (the lower tall key in the left inner column) and tap ↑ or ↓ for volume up or down; also hold Shift and tap ↓ to toggle mute.
+On the mouse layer, hold Shift and tap the pointer-left or pointer-right key of the right hand (Dvorak H or N) to skip to the previous or next track.
 To scroll, hold Cmd (the key above Tab) and the mouse layer key in either order, then hold ↑ or ↓.
 The scroll starts at 10 wheel steps per second and accelerates to 40 wheel steps per second over 1 s.
 The keyboard reads Cmd when ↑ or ↓ goes down: push Cmd before ↑ or ↓, or the key changes the volume.
