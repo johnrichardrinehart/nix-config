@@ -14,6 +14,7 @@ let
   cfg = config.dev.johnrinehart.mbp-host;
   # One build for PATH and the activation step below.
   displayMode = pkgs.callPackage ../../packages/display-mode/package.nix { };
+  glanceIdleTrigger = pkgs.callPackage ../../packages/glance-idle-trigger/package.nix { };
 
   # Remote URL shapes of a GitHub owner's repositories, for `hasconfig`.
   ownerPatterns = owner: [
@@ -354,6 +355,24 @@ in
       };
     };
 
+    # Sends Glance a wake after an inactivity lock (packages/glance-idle-trigger),
+    # so that Glance looks for a face then, but not after a lock from a key
+    # combination or a menu. 60 s: the screensaver (idle lock) starts after
+    # 300 s; a lock from a key combination comes less than 1 s after the keys.
+    launchd.agents.glance-idle-trigger = {
+      enable = true;
+      config = {
+        ProgramArguments = [
+          (lib.getExe glanceIdleTrigger)
+          "60"
+        ];
+        RunAtLoad = true;
+        KeepAlive = true;
+        ProcessType = "Interactive";
+        StandardErrorPath = "/tmp/glance-idle-trigger.log";
+      };
+    };
+
     home.activation = {
       # System shortcuts (com.apple.symbolichotkeys) turned off, as
       # id = [ ascii keycode modifiers ]. -dict-add leaves every other hotkey
@@ -421,6 +440,14 @@ in
       #                         "heavy" also waits for a blink or head turn,
       #                         which made unlocks take ~3 s. Light lets a
       #                         printed photo through.
+      #   unlockTriggers        "onWake" and "onSpace", not "onLock": a lock
+      #                         from a key combination or a menu waits for the
+      #                         space key, or for a wake. The glance-idle-trigger
+      #                         agent above sends Glance a wake after an
+      #                         inactivity lock.
+      # `defaults read` shows an array as "( a, b )" over several lines; the
+      # check below removes the spaces, newlines, parentheses and commas, so
+      # it compares "ab".
       # Changing a setting on the Recognition page writes over these values
       # until the next activation. Glance reads them only when it starts, so
       # restart it after a change. The launchd agent above starts it again.
@@ -431,7 +458,7 @@ in
         ${lib.concatStrings (
           lib.mapAttrsToList
             (key: value: ''
-              if [[ $(/usr/bin/defaults read com.jonathan.glance GlanceSettings.${key} 2>/dev/null) != ${value.shown} ]]; then
+              if [[ $(/usr/bin/defaults read com.jonathan.glance GlanceSettings.${key} 2>/dev/null | tr -d ' \n(),') != ${value.shown} ]]; then
                 run /usr/bin/defaults write com.jonathan.glance GlanceSettings.${key} ${value.typed}
                 glanceChanged=1
               fi
@@ -448,6 +475,10 @@ in
               livenessMode = {
                 shown = "light";
                 typed = "-string light";
+              };
+              unlockTriggers = {
+                shown = "onWakeonSpace";
+                typed = "-array onWake onSpace";
               };
             }
         )}
