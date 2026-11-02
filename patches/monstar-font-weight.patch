@@ -1,4 +1,4 @@
-From 4ed66768cd527d52fdbc9c4c3e1c48c697ae39a5 Mon Sep 17 00:00:00 2001
+From 04d7f5da6a1fc9f6bec43f4cb812b0c91a168b23 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Wed, 2 Sep 2026 10:51:23 -0400
 Subject: [PATCH 1/3] font: select medium regular faces
@@ -33,7 +33,7 @@ index efa79c4..4b04879 100644
  Set the font size.
  Bare values and
 diff --git a/src/App.zig b/src/App.zig
-index e00f94f..cf2c34e 100644
+index 6c2f17c..933080e 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -501,6 +501,10 @@ fn tmpDirPath(environ: std.process.Environ) []const u8 {
@@ -104,7 +104,7 @@ index e00f94f..cf2c34e 100644
          log.warn("font size change failed: {}", .{err});
          return;
 diff --git a/src/Config.zig b/src/Config.zig
-index 1f4ebc2..db22e3f 100644
+index 66000e2..6d868fa 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
 @@ -104,9 +104,14 @@ pub const MetricAdjustments = struct {
@@ -123,9 +123,9 @@ index 1f4ebc2..db22e3f 100644
  /// pixels. Both apply the output's fractional scale during rasterization.
  font_size: FontSize = .{ .points = 12 },
 @@ -269,6 +274,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
-         self.app_id = try arena.dupeZ(u8, value);
+         self.app_id = try arena.dupeSentinel(u8, value, 0);
      } else if (std.mem.eql(u8, key, "font-family")) {
-         self.font_family = try arena.dupeZ(u8, value);
+         self.font_family = try arena.dupeSentinel(u8, value, 0);
 +    } else if (std.mem.eql(u8, key, "font-weight")) {
 +        self.font_weight = std.meta.stringToEnum(FontWeight, value) orelse return error.InvalidValue;
      } else if (std.mem.eql(u8, key, "font-size")) {
@@ -156,10 +156,10 @@ index 1f4ebc2..db22e3f 100644
      try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
      try std.testing.expectEqual(WindowPadding{ .first = 4, .second = 4 }, config.window_padding_x);
 diff --git a/src/Font.zig b/src/Font.zig
-index b141b3d..b90e486 100644
+index 683ea70..d5006af 100644
 --- a/src/Font.zig
 +++ b/src/Font.zig
-@@ -86,9 +86,12 @@ pub const FaceStyle = enum(u2) {
+@@ -91,9 +91,12 @@ pub const FaceStyle = enum(u2) {
          else if (italic) .italic else .regular;
      }
  
@@ -174,7 +174,7 @@ index b141b3d..b90e486 100644
              .bold, .bold_italic => c.FC_WEIGHT_BOLD,
          };
      }
-@@ -101,8 +104,20 @@ pub const FaceStyle = enum(u2) {
+@@ -106,8 +109,20 @@ pub const FaceStyle = enum(u2) {
      }
  };
  
@@ -186,7 +186,7 @@ index b141b3d..b90e486 100644
 +    try std.testing.expectEqual(c.FC_WEIGHT_BOLD, FaceStyle.bold_italic.weight(.default).?);
 +}
 +
- const style_count = std.meta.fields(FaceStyle).len;
+ const style_count = std.enums.values(FaceStyle).len;
  
 +pub const Options = struct {
 +    weight: Config.FontWeight = .default,
@@ -195,7 +195,7 @@ index b141b3d..b90e486 100644
  /// Immutable Fontconfig results. Rasterizers need independent FreeType,
  /// HarfBuzz, and glyph-cache state, but can safely share these read-only
  /// candidate lists instead of repeating font discovery.
-@@ -111,12 +126,14 @@ pub const Discovery = struct {
+@@ -116,12 +131,14 @@ pub const Discovery = struct {
      family: [:0]u8,
      size_px: f64,
      adjustments: Config.MetricAdjustments,
@@ -210,16 +210,16 @@ index b141b3d..b90e486 100644
      ) Error!*Discovery {
          if (c.FcInit() != c.FcTrue) return error.FontLoadFailed;
  
-@@ -128,7 +145,7 @@ pub const Discovery = struct {
+@@ -132,7 +149,7 @@ pub const Discovery = struct {
+             }
          }
-         inline for (std.meta.fields(FaceStyle)) |field| {
-             const style: FaceStyle = @enumFromInt(field.value);
--            sort_sets_opt[field.value] = try fontSort(family, size_px, style);
-+            sort_sets_opt[field.value] = try fontSort(family, size_px, style, options);
+         inline for (comptime std.enums.values(FaceStyle)) |style| {
+-            sort_sets_opt[@backingInt(style)] = try fontSort(family, size_px, style);
++            sort_sets_opt[@backingInt(style)] = try fontSort(family, size_px, style, options);
          }
          var sort_sets: [style_count]*c.FcFontSet = undefined;
          for (sort_sets_opt, 0..) |sort_set, i| sort_sets[i] = sort_set.?;
-@@ -142,6 +159,7 @@ pub const Discovery = struct {
+@@ -146,6 +163,7 @@ pub const Discovery = struct {
              .family = family_copy,
              .size_px = size_px,
              .adjustments = adjustments,
@@ -227,7 +227,7 @@ index b141b3d..b90e486 100644
              .sort_sets = sort_sets,
          };
          return self;
-@@ -754,13 +772,13 @@ fn bitmapRow(bitmap: c.FT_Bitmap, height: u31, y: usize) usize {
+@@ -758,13 +776,13 @@ fn bitmapRow(bitmap: c.FT_Bitmap, height: u31, y: usize) usize {
      return if (bitmap.pitch < 0) height - 1 - y else y;
  }
  
@@ -243,7 +243,7 @@ index b141b3d..b90e486 100644
      if (style.slant()) |slant| _ = c.FcPatternAddInteger(pattern, c.FC_SLANT, slant);
      if (c.FcConfigSubstitute(null, pattern, c.FcMatchPattern) != c.FcTrue)
          return error.FontLoadFailed;
-@@ -816,10 +834,20 @@ pub fn init(
+@@ -820,10 +838,20 @@ pub fn init(
      family: [:0]const u8,
      size_px: f64,
      adjustments: Config.MetricAdjustments,

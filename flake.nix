@@ -43,10 +43,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    monstar = {
-      url = "github:rockorager/monstar";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # Monstar builds with Zig 0.17, which nixos-26.05 does not have, so it
+    # keeps its own nixpkgs.
+    monstar.url = "github:rockorager/monstar";
 
     # Private repository: fetched over SSH with the evaluating user's key.
     # Its own nixpkgs keeps the client identical to the one neocache CI

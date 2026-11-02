@@ -1,4 +1,4 @@
-From 79feaa28d997a17cb55964b003429c853a8e18c5 Mon Sep 17 00:00:00 2001
+From 29b3a5ebbd29bef2e1a936df611351c827227051 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 09:22:06 -0400
 Subject: [PATCH 3/3] sprite: add kitty block shade patterns
@@ -12,7 +12,7 @@ Subject: [PATCH 3/3] sprite: add kitty block shade patterns
  5 files changed, 119 insertions(+), 6 deletions(-)
 
 diff --git a/src/App.zig b/src/App.zig
-index 5c2b292..3675f61 100644
+index 1117cd3..6b4fb57 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -506,6 +506,7 @@ fn fontOptions(config: Config) Font.Options {
@@ -24,7 +24,7 @@ index 5c2b292..3675f61 100644
  }
  
 diff --git a/src/Config.zig b/src/Config.zig
-index cf9dc60..8c4f2c6 100644
+index 4b499f5..175d1e5 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
 @@ -104,6 +104,10 @@ pub const MetricAdjustments = struct {
@@ -80,10 +80,10 @@ index cf9dc60..8c4f2c6 100644
      try std.testing.expectEqual(WindowPadding{ .first = 6, .second = 10 }, config.window_padding_y);
      try std.testing.expectEqualStrings("/usr/bin/fish --login", config.command.?.shell);
 diff --git a/src/Font.zig b/src/Font.zig
-index b98cbd4..36bc809 100644
+index e6d2e6d..bbbeaaa 100644
 --- a/src/Font.zig
 +++ b/src/Font.zig
-@@ -123,6 +123,7 @@ pub const Options = struct {
+@@ -128,6 +128,7 @@ pub const Options = struct {
      weight: Config.FontWeight = .default,
      synthetic_italic: bool = false,
      synthetic_italic_weight: Config.SyntheticItalicWeight = .regular,
@@ -91,7 +91,7 @@ index b98cbd4..36bc809 100644
  };
  
  /// Immutable Fontconfig results. Rasterizers need independent FreeType,
-@@ -1229,7 +1230,14 @@ pub fn spriteGlyph(
+@@ -1231,7 +1232,14 @@ pub fn spriteGlyph(
      if (gop.found_existing) return gop.value_ptr;
      errdefer _ = self.sprite_glyphs.remove(key);
  
@@ -108,7 +108,7 @@ index b98cbd4..36bc809 100644
          .bitmap = g.bitmap,
          .fully_opaque = alphaBitmapOpaque(g.bitmap),
 diff --git a/src/sprite.zig b/src/sprite.zig
-index 4c74f4a..dab4332 100644
+index c7cab49..6a3bebb 100644
 --- a/src/sprite.zig
 +++ b/src/sprite.zig
 @@ -13,6 +13,7 @@ const z2d = @import("z2d");
@@ -197,13 +197,13 @@ index 4c74f4a..dab4332 100644
 +
  test "render decorations" {
      const alloc = std.testing.allocator;
-     inline for (@typeInfo(Decoration).@"enum".fields) |field| {
+     inline for (comptime std.enums.values(Decoration)) |decoration| {
 diff --git a/src/sprite/draw/block.zig b/src/sprite/draw/block.zig
-index 9b585e1..cca6efc 100644
+index 1086b56..3c2dad5 100644
 --- a/src/sprite/draw/block.zig
 +++ b/src/sprite/draw/block.zig
 @@ -155,6 +155,81 @@ pub fn fullBlockShade(
-         @as(sprite.Color, @enumFromInt(@intFromEnum(shade))),
+         @as(sprite.Color, @fromBackingInt(@intCast(@backingInt(shade)))),
      );
  }
 +/// Draw U+2591..U+2593 with KiTTY's spatial shade masks.

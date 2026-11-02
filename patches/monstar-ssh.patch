@@ -1,7 +1,7 @@
-From 6cfab732a86db1b5f8be48a30bdf4b6e77d5e5ef Mon Sep 17 00:00:00 2001
+From 1ea0b42feb32762c5fb32a0950fa1b5806659b0e Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 20:11:58 -0400
-Subject: [PATCH 1/2] ssh: install terminfo before remote login
+Subject: [PATCH] ssh: install terminfo before remote login
 
 ---
  README.md      |   9 +++
@@ -12,7 +12,7 @@ Subject: [PATCH 1/2] ssh: install terminfo before remote login
  create mode 100644 src/Ssh.zig
 
 diff --git a/README.md b/README.md
-index fafff9f..6f181fe 100644
+index eef1e88..d32aa50 100644
 --- a/README.md
 +++ b/README.md
 @@ -59,6 +59,15 @@ Pass `--` to run a shell expression:
@@ -229,7 +229,7 @@ index 0000000..82df8dc
 +    try std.testing.expectError(error.InvalidCli, parseArgs(&args));
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 547b838..7491d05 100644
+index cce279e..52582c6 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -12,6 +12,7 @@ const Link = @import("Link.zig");
@@ -240,9 +240,9 @@ index 547b838..7491d05 100644
  const Window = @import("Window.zig");
  
  const log = std.log.scoped(.main);
-@@ -28,6 +29,11 @@ pub fn main(init: std.process.Init) !void {
-         .run => {},
-         .bench => return @import("bench.zig").run(init),
+@@ -31,6 +32,11 @@ pub fn main(init: std.process.Init) !void {
+             unreachable;
+         },
          .help => return printUsage(init),
 +        .ssh => return Ssh.run(init, cli.command) catch |err| switch (err) {
 +            error.InvalidCli => invalidCli(init),
@@ -252,7 +252,7 @@ index 547b838..7491d05 100644
          .version => return printVersion(init),
      }
  
-@@ -37,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
+@@ -40,7 +46,7 @@ pub fn main(init: std.process.Init) !void {
      };
  }
  
@@ -261,7 +261,7 @@ index 547b838..7491d05 100644
  
  const CommandMode = enum { shell, exec };
  
-@@ -79,6 +85,11 @@ const CliParser = struct {
+@@ -82,6 +88,11 @@ const CliParser = struct {
              } else if (std.mem.eql(u8, arg, "--version")) {
                  self.cli.action = .version;
                  return self.cli;
@@ -273,7 +273,7 @@ index 547b838..7491d05 100644
              } else if (std.mem.eql(u8, arg, "--")) {
                  if (self.index + 1 >= self.args.len) return error.InvalidCli;
                  self.setCommand(.shell, self.index + 1);
-@@ -224,6 +235,7 @@ fn printUsage(init: std.process.Init) !void {
+@@ -227,6 +238,7 @@ fn printUsage(init: std.process.Init) !void {
      try writer.interface.writeAll(
          \\usage: monstar [options]
          \\       monstar [options] -e command [args...]
@@ -281,7 +281,7 @@ index 547b838..7491d05 100644
          \\       monstar [options] -- command...
          \\
          \\Options:
-@@ -240,6 +252,7 @@ fn printUsage(init: std.process.Init) !void {
+@@ -243,6 +255,7 @@ fn printUsage(init: std.process.Init) !void {
          \\  -o key=value                       Override a config key
          \\  -e command [args...]               Execute command directly
          \\  -- command...                      Run command through /bin/sh -c
@@ -289,7 +289,7 @@ index 547b838..7491d05 100644
          \\
      );
  }
-@@ -259,6 +272,14 @@ fn invalidCli(init: std.process.Init) noreturn {
+@@ -262,6 +275,14 @@ fn invalidCli(init: std.process.Init) noreturn {
      std.process.exit(2);
  }
  
@@ -304,7 +304,7 @@ index 547b838..7491d05 100644
  /// GUI mode: run a live terminal session in a window.
  fn gui(init: std.process.Init, cli: CliOptions) !void {
      const arena = init.arena.allocator();
-@@ -719,6 +740,18 @@ test "parse CLI reserves bare words for future subcommands" {
+@@ -722,6 +743,18 @@ test "parse CLI reserves bare words for future subcommands" {
      try std.testing.expectError(error.InvalidCli, parseCli(arena_state.allocator(), &args));
  }
  
