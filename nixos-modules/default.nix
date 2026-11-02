@@ -79,6 +79,7 @@
     ./ide.nix
     ./laptop.nix
     ./locale.nix
+    ./maintenance-initrd.nix
     ./network.nix
     ./monstar.nix
     ./nebula

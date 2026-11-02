@@ -56,7 +56,8 @@ in
       description = ''
         crypt(3) hash of the password for root's shells in the initrd: the
         emergency shell after a failed boot, and the `maintenance` boot
-        entry (maintenance-initrd.nix), which exists only when this is set.
+        entry (dev.johnrinehart.maintenanceInitrd), which exists only when
+        this is set.
         `null` locks root there. The installed system's root is unaffected.
         Changing it changes the initrd, so it takes effect for new
         generations only.

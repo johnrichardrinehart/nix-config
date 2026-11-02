@@ -1,15 +1,33 @@
 # The Framework 13 Pro installed on its NVMe drive, as `install-to-disk`
 # (framework-13-pro-netboot) lays it out: disko.nix. It boots with Secure
 # Boot under the endpoint security baseline: endpoint-security.nix.
-{ inputs, ... }:
+{
+  config,
+  inputs,
+  lib,
+  ...
+}:
+let
+  initrdRootHashedPassword = config.dev.johnrinehart.endpointSecurity.initrdRootHashedPassword;
+in
 {
   imports = [
     inputs.disko.nixosModules.disko
     ./common.nix
     ./disko.nix
     ./endpoint-security.nix
-    ./maintenance-initrd.nix
   ];
+
+  # The boot menu editor is off (endpoint-security.nix), so stage 1 cannot
+  # be stopped by typing at the menu. With root locked in the initrd the
+  # maintenance shell cannot be opened, so the entry exists only once
+  # initrdRootHashedPassword is set.
+  dev.johnrinehart.maintenanceInitrd = lib.mkIf (initrdRootHashedPassword != null) {
+    enable = true;
+    emergencyAccess = initrdRootHashedPassword;
+    # Its firmware comes along (modinfo).
+    wifiKernelModules = [ "mt7925e" ];
+  };
 
   # 96 GiB of swap, a file inside the LUKS root, so a hibernation image of
   # all 93 GiB of RAM fits. systemd writes the file's location (device and

@@ -250,6 +250,23 @@ own session with its own root shell. When that shell exits, the server stays
 up for the next call. Every process the user runs in the graphical session
 can get root through it.
 
+## Framework maintenance boot entry
+
+`dev.johnrinehart.maintenanceInitrd` (`nixos-modules/maintenance-initrd.nix`)
+adds a `maintenance` boot entry to each generation. It stops stage 1 at a
+root shell after systemd opens any LUKS containers and before `/` is mounted.
+Use it to repartition, resize or repair the system drive. The shell has
+`cryptsetup`, `sgdisk`, `parted`, `resize2fs`, `e2fsck`, `fatresize` and
+other file system repair tools. For networking it has Wi-Fi (iwd, `impala`),
+USB and expansion-card Ethernet (DHCP) and DNS. It also has `nix`, `sudo` and
+`run0`. `nix shell` fetches other tools into RAM. The console shows kernel
+messages only at warning level or higher; run `dmesg` for the others. If a
+program leaves the terminal without echo, type `reset` and press Enter.
+
+- `framework-13-pro`: the entry exists only when
+  `dev.johnrinehart.endpointSecurity.initrdRootHashedPassword` is set (it
+  defaults to `rootHashedPassword`). The shell asks for that password.
+
 ## SliceMK firmware
 
 On Linux or macOS, update the SliceMK ErgoDox 202207 Green left half:
@@ -518,14 +535,9 @@ sets this baseline:
 - Secure Boot with lanzaboote and keys that the machine makes for itself.
   The boot menu editor is off. If
   `dev.johnrinehart.endpointSecurity.initrdRootHashedPassword` is set (it
-  defaults to `rootHashedPassword`), each
-  generation also gets a `maintenance` boot entry
-  (`nixos-configurations/framework-13-pro/maintenance-initrd.nix`). It stops
-  stage 1 at a root shell after LUKS is unlocked and before `/` is mounted,
-  for repartitioning or resizing. The shell asks for root's password and
-  has `cryptsetup`, `sgdisk`, `parted`, `resize2fs` and `e2fsck`. For
-  networking it has Wi-Fi (iwd, `impala`), USB and expansion-card Ethernet
-  (DHCP) and DNS.
+  defaults to `rootHashedPassword`), each generation also gets a
+  password-protected `maintenance` boot entry (see "Framework maintenance
+  boot entry").
 - The kernel arguments `iommu.passthrough=0` and `iommu.strict=1`, so that
   device DMA always goes through the IOMMU.
 - USBGuard. It blocks each USB device, also the devices that are present at

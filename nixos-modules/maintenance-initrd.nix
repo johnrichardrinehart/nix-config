@@ -1,22 +1,20 @@
-# A "maintenance" boot entry for work on the NVMe drive with / unmounted:
-# repartitioning, resizing the ext4 root and its LUKS container, fsck.
+# A "maintenance" boot entry for work on the system drive with / unmounted:
+# repartitioning, resizing the root file system and its LUKS container, fsck.
 #
-# The boot menu editor is off (endpoint-security.nix), so stage 1 cannot be
-# stopped by typing at the menu; this entry is signed like the others
-# instead. It boots stage 1 into rescue.target: systemd asks for the LUKS
-# passphrase and opens /dev/mapper/cryptroot, but mounts nothing, and gives
-# a root shell (endpointSecurity.initrdRootHashedPassword, root's password
-# unless set apart). With root locked there the shell cannot be opened, so
-# the entry exists only once that hash is set.
+# The entry is a specialisation, so the boot loader lists it beside each
+# generation and lanzaboote signs it like the others. It boots stage 1 into
+# rescue.target: systemd asks for the LUKS passphrases and opens the
+# containers, but mounts nothing, and gives a root shell.
 #
-# The shell has Wi-Fi (iwd, MT7925 driver and firmware, impala), wired
-# Ethernet over USB (DHCP through systemd-networkd), DNS (systemd-resolved),
-# CA certificates and nix, so more tools are at hand while the disk is open.
-# The shell is root already; run0 and sudo are there for commands typed out
-# of habit. nix runs without a daemon and keeps its store in RAM:
+# The shell has Wi-Fi (iwd, the drivers in wifiKernelModules with their
+# firmware, impala), wired Ethernet over USB (DHCP through
+# systemd-networkd), DNS (systemd-resolved), CA certificates and nix, so
+# more tools are at hand while the disk is open. The shell is root already;
+# run0 and sudo are there for commands typed out of habit. nix runs without
+# a daemon and keeps its store in RAM:
 #
 #   impala                        # join a network; iwd remembers it until reboot
-#   mount -o ro /dev/mapper/cryptroot /sysroot
+#   mount -o ro /dev/mapper/cryptroot /sysroot   # or the plain root partition
 #   nix shell nixpkgs#btrfs-progs # anything else, from the binary caches
 #
 # Unmount /sysroot again before resizing anything.
@@ -27,7 +25,7 @@
   ...
 }:
 let
-  initrdRootHashedPassword = config.dev.johnrinehart.endpointSecurity.initrdRootHashedPassword;
+  cfg = config.dev.johnrinehart.maintenanceInitrd;
   iwd = config.networking.wireless.iwd.package;
   iwdConf = (pkgs.formats.ini { }).generate "main.conf" {
     General.EnableNetworkConfiguration = true;
@@ -64,31 +62,71 @@ let
   '';
 in
 {
-  specialisation = lib.mkIf (initrdRootHashedPassword != null) {
+  options.dev.johnrinehart.maintenanceInitrd = {
+    enable = lib.mkEnableOption ''
+      a "maintenance" boot entry that stops stage 1 at a root shell with the
+      LUKS containers open and nothing mounted
+    '';
+
+    emergencyAccess = lib.mkOption {
+      type = lib.types.either (lib.types.enum [ true ]) (lib.types.strMatching "[$].+");
+      example = "$y$j9T$...";
+      description = ''
+        Access to the root shell of the maintenance entry, as
+        boot.initrd.systemd.emergencyAccess: a crypt(3) hash of root's
+        password, or `true` for a shell without a password. It applies to
+        the maintenance entry only. The hash goes into the world-readable
+        Nix store.
+      '';
+    };
+
+    wifiKernelModules = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [ "mt7925e" ];
+      description = ''
+        Kernel modules of the Wi-Fi card. The initrd also gets the firmware
+        files that the modules name (modinfo).
+      '';
+    };
+  };
+
+  config.specialisation = lib.mkIf cfg.enable {
     maintenance.configuration = {
       system.nixos.tags = [ "maintenance" ];
       boot.kernelParams = [ "rd.systemd.unit=rescue.target" ];
+      # Kernel messages at a host's debug log level print over the shell and
+      # over full-screen programs such as impala. `dmesg` still shows them.
+      boot.consoleLogLevel = lib.mkForce 4;
 
       boot.initrd = {
-        availableKernelModules = [
-          # Wi-Fi; its firmware comes along (modinfo).
-          "mt7925e"
-          # USB Ethernet: Framework's card (RTL8156), common dongles and docks,
-          # phone tethering.
-          "r8152"
-          "ax88179_178a"
-          "cdc_ether"
-          "cdc_ncm"
-          "rndis_host"
-          "ipheth"
-          # File systems to repair or mount besides ext4 and the ESP's vfat:
-          # USB drives, other machines' disks.
-          "btrfs"
-          "xfs"
-          "exfat"
-          "ntfs3"
-          "loop"
-        ];
+        availableKernelModules =
+          cfg.wifiKernelModules
+          # cryptsetup, also on hosts without LUKS devices, which do not get
+          # dm-crypt or the ciphers in their initrd otherwise.
+          ++ [
+            "dm_mod"
+            "dm_crypt"
+          ]
+          ++ config.boot.initrd.luks.cryptoModules
+          ++ lib.optional pkgs.stdenv.hostPlatform.isx86_64 "aesni_intel"
+          ++ [
+            # USB Ethernet: Framework's card (RTL8156), common dongles and docks,
+            # phone tethering.
+            "r8152"
+            "ax88179_178a"
+            "cdc_ether"
+            "cdc_ncm"
+            "rndis_host"
+            "ipheth"
+            # File systems to repair or mount besides ext4 and the ESP's vfat:
+            # USB drives, other machines' disks.
+            "btrfs"
+            "xfs"
+            "exfat"
+            "ntfs3"
+            "loop"
+          ];
         # iwd.service may not load modules (ProtectKernelModules), so the
         # AF_ALG interfaces and ciphers its WPA handshakes ask for are loaded
         # up front.
@@ -114,6 +152,8 @@ in
         ];
 
         systemd = {
+          inherit (cfg) emergencyAccess;
+
           initrdBin = [
             pkgs.cryptsetup
             pkgs.gptfdisk
@@ -125,6 +165,9 @@ in
             pkgs.findutils
             pkgs.gnugrep
             pkgs.gnused
+            # reset, clear and tput, for a terminal that a program left in
+            # raw mode.
+            pkgs.ncurses
             pkgs.curl
             iwd
             pkgs.dev.johnrinehart.impala
@@ -133,6 +176,8 @@ in
             # File system repair and data recovery. e2fsprogs (e2fsck,
             # resize2fs, tune2fs, debugfs) is in every initrd already.
             pkgs.dosfstools
+            # Grows or shrinks a FAT file system, such as the ESP.
+            pkgs.fatresize
             pkgs.exfatprogs
             pkgs.btrfs-progs
             pkgs.xfsprogs
