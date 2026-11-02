@@ -22,12 +22,19 @@ in
       inherit (cfg) configurationLimit;
     };
 
-    # Mount point '/boot' which backs the random seed file is world accessible, which is a security hole!
-    # and
-    # Random seed file '/boot/loader/random-seed' is world accessible, which is a security hole!
-    fileSystems."/boot".options = [
-      "umask=0077"
-      "defaults"
-    ];
+    # bootctl warns that world-accessible boot file systems are a security
+    # hole (the random seed lives on the ESP), so the ESP and XBOOTLDR, if
+    # any, are mounted 0077.
+    fileSystems = lib.genAttrs (
+      [ config.boot.loader.efi.efiSysMountPoint ]
+      ++ lib.optional (
+        config.boot.loader.systemd-boot.xbootldrMountPoint != null
+      ) config.boot.loader.systemd-boot.xbootldrMountPoint
+    ) (_: {
+      options = [
+        "umask=0077"
+        "defaults"
+      ];
+    });
   };
 }
