@@ -1,14 +1,15 @@
-# A root shell in a root-owned tmux server, one per root or wheel user,
-# started without authentication once their graphical login succeeded.
+# Root shells in a root-owned tmux server, one server per root or wheel
+# user, started without authentication once their graphical login succeeded.
 #
 # Graphical login starts the user unit tmux-root-shell.service, which starts
 # the system unit tmux-root-shell@<user>.service; a polkit rule lets root
 # and wheel members start and stop their own instance without a prompt.
 # The instance runs a tmux server as root on
-# /run/tmux-root-shell/<user>/socket with a `root-shell` session, and lets
-# only that user reach the socket (ACL) and the server (server-access).
-# `root-shell` attaches to it. When the root shell exits the server exits
-# and the instance starts a new one; ending the graphical session stops it.
+# /run/tmux-root-shell/<user>/socket, and lets only that user reach the
+# socket (ACL) and the server (server-access). Each `root-shell` call
+# creates its own session with its own root shell. The server stays up when
+# the last shell exits (exit-empty off); ending the graphical session stops
+# it, and the instance restarts it if it dies.
 #
 # This is passwordless root for every process the user runs during the
 # graphical session: anything that can connect to the socket gets a root
@@ -29,7 +30,7 @@ let
   attach = pkgs.writeShellApplication {
     name = "root-shell";
     text = ''
-      exec ${tmux} -S "/run/tmux-root-shell/$(id -un)/socket" attach-session -t ${lib.escapeShellArg "=${cfg.sessionName}"} "$@"
+      exec ${tmux} -S "/run/tmux-root-shell/$(id -un)/socket" new-session -c /root "$@"
     '';
   };
 in
@@ -40,12 +41,6 @@ in
       started without authentication at graphical login (passwordless root
       for every process of that user during the graphical session)
     '';
-
-    sessionName = lib.mkOption {
-      type = lib.types.str;
-      default = "root-shell";
-      description = "Name of the tmux session in the root-owned server.";
-    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -58,20 +53,21 @@ in
         pkgs.acl
       ];
       serviceConfig = {
-        # new-session -d forks the server and returns.
+        # start-server forks the server and returns. Without sessions the
+        # server would exit at once; exit-empty off keeps it up.
         Type = "forking";
         RuntimeDirectory = "tmux-root-shell/%i";
         # Traversable, not listable; the socket's ACL admits only the user.
         RuntimeDirectoryMode = "0711";
-        ExecStart = "${tmux} -S ${socket "%i"} new-session -d -s ${lib.escapeShellArg cfg.sessionName} -c /root";
+        ExecStart = "${tmux} -S ${socket "%i"} start-server \\; set-option -g exit-empty off";
         ExecStartPost = [
           "${tmux} -S ${socket "%i"} server-access -a %i"
           # The mask doubles as the socket's group bits, which tmux keeps
           # when it updates the mode; the owning group's own entry stays ---.
           "${lib.getExe' pkgs.acl "setfacl"} -m u:%i:rw,m::rw ${socket "%i"}"
         ];
-        ExecStop = "${tmux} -S ${socket "%i"} kill-server";
-        # The server exits with the root shell's session.
+        # The server can be gone already, after a crash.
+        ExecStop = "-${tmux} -S ${socket "%i"} kill-server";
         Restart = "always";
         RestartSec = 1;
       };

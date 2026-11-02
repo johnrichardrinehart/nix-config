@@ -437,8 +437,9 @@ nixos-hardware's `framework-amd-ai-300-series` plus
   graphical login of root or a wheel member starts
   `tmux-root-shell@<user>.service`, a root-owned tmux server on
   `/run/tmux-root-shell/<user>/socket` that only that user may use; a polkit
-  rule allows the start. `root-shell` attaches. Every process the user runs
-  in the graphical session can get root through it.
+  rule allows the start. Each `root-shell` call opens its own session with
+  its own root shell. Every process the user runs in the graphical session
+  can get root through it.
 
 Left out on purpose: `amdgpu.dcdebugmask` beyond nixos-hardware's PSR bit
 (this panel uses Replay; set `hardware.amdgpu.dcDebugMask.disableReplay` if

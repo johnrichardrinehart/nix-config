@@ -25,7 +25,8 @@
 
   dev.johnrinehart.profiles.framework.enable = true;
 
-  # A standing `root-shell` tmux session for root and wheel members.
+  # `root-shell` opens a root shell without a password for root and wheel
+  # members (nixos-modules/tmux-root-shell.nix).
   dev.johnrinehart.tmux.rootShell.enable = true;
 
   # As on framie: iwd for Wi-Fi (impala), dhcpcd for wired interfaces.
