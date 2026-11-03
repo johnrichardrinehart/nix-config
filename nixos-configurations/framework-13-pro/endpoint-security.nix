@@ -95,7 +95,7 @@ in
     boot.lanzaboote = {
       enable = true;
       pkiBundle = "/var/lib/sbctl";
-      configurationLimit = 20;
+      configurationLimit = 10;
       autoGenerateKeys.enable = true;
       # Rebooting is done below, only after the keys were staged.
       autoEnrollKeys.enable = true;
