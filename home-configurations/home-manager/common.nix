@@ -308,6 +308,7 @@ in
               lib.getExe confirmSshActivityPackage
             );
             inherit (osConfig.dev.johnrinehart.system) suspendVerb;
+            lockerProcessName = baseNameOf (lib.getExe pkgs.hyprlock);
           };
         in
         (pkgs.replaceVars ./hypridle.conf {
