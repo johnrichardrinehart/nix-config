@@ -98,6 +98,17 @@ in
           optional = [ "caps_lock" ];
         };
       }
+      # Fn+E opens the Emoji & Symbols picker in every app; System Settings
+      # has no switch for it. E is the key as apps see it: the built-in
+      # keyboard's physical D, the SliceMK's Dvorak E (with fn from F18).
+      {
+        description = "Swallow Fn+E (Emoji & Symbols) in every app";
+        key = "e";
+        modifiers = {
+          mandatory = [ "fn" ];
+          optional = [ "caps_lock" ];
+        };
+      }
     ];
   };
 

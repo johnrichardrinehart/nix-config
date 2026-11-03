@@ -73,14 +73,16 @@ func userKeyMapping(_ remaps: [DeviceRemap], _ property: (String) -> Any?) -> [[
 
 // MARK: - Apps
 
-/// Modifiers as CGEventFlags carries them, side-independent. Fn is left
-/// out: macOS sets its flag on arrow and function keys pressed alone.
+/// Modifiers as CGEventFlags carries them, side-independent. macOS also
+/// sets the fn flag on arrow and function keys pressed alone, so rules for
+/// those keys need fn as optional.
 enum Modifier: String, Decodable, CaseIterable {
   case capsLock = "caps_lock"
   case shift
   case control
   case option
   case command
+  case fn
 
   var flag: UInt64 {
     switch self {
@@ -89,6 +91,7 @@ enum Modifier: String, Decodable, CaseIterable {
     case .control: return 0x4_0000  // maskControl
     case .option: return 0x8_0000  // maskAlternate
     case .command: return 0x10_0000  // maskCommand
+    case .fn: return 0x80_0000  // maskSecondaryFn
     }
   }
 

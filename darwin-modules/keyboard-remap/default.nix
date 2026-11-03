@@ -28,6 +28,7 @@ let
     "control"
     "option"
     "command"
+    "fn"
   ];
   # Key events carry no press or release of these, only flag changes.
   modifierKeys = [
@@ -185,7 +186,9 @@ in
                 default = [ ];
                 description = ''
                   Modifiers that may be held too; any other held modifier
-                  stops the match. "any" allows all. Fn is ignored.
+                  stops the match. "any" allows all. macOS also sets fn on
+                  arrow and function keys pressed alone, so rules for those
+                  keys need "fn" here.
                 '';
               };
             };

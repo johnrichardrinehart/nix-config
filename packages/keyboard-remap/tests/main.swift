@@ -13,6 +13,7 @@ func check(_ ok: Bool, _ what: String, line: Int = #line) {
 let command: UInt64 = 0x10_0000
 let shift: UInt64 = 0x2_0000
 let capsLock: UInt64 = 0x1_0000
+let fn: UInt64 = 0x80_0000
 let kVK_ANSI_H: UInt16 = 0x04
 let kVK_ANSI_J: UInt16 = 0x26
 
@@ -109,6 +110,19 @@ _ = drop(false, kVK_ANSI_H, 0, terminal)
 check(drop(true, kVK_ANSI_J, command | shift | capsLock, terminal), "any optional modifier, in any app")
 _ = drop(false, kVK_ANSI_J, 0, terminal)
 check(!drop(true, kVK_ANSI_J, shift, terminal), "mandatory modifiers still apply with any optional")
+
+// Fn is a modifier like the others.
+check(!drop(true, kVK_ANSI_H, command | fn, qemu), "Fn is neither mandatory nor optional for Cmd+H")
+let kVK_ANSI_E: UInt16 = 0x0E
+var fnFilter = try! KeyFilter([AppRule(
+  description: "Fn+E", frontmostApplication: FrontmostApplication(filePaths: [], bundleIdentifiers: []),
+  keyCode: kVK_ANSI_E, mandatory: [.fn], optional: [.capsLock], anyOptional: false)])
+check(fnFilter.drop(down: true, keyCode: kVK_ANSI_E, flags: fn, frontmost: { terminal }), "Fn+E is swallowed")
+check(fnFilter.drop(down: false, keyCode: kVK_ANSI_E, flags: 0, frontmost: { terminal }), "and its release")
+check(!fnFilter.drop(down: true, keyCode: kVK_ANSI_E, flags: 0, frontmost: { terminal }), "plain E passes")
+_ = fnFilter.drop(down: false, keyCode: kVK_ANSI_E, flags: 0, frontmost: { terminal })
+check(!fnFilter.drop(down: true, keyCode: kVK_ANSI_E, flags: fn | command, frontmost: { terminal }),
+  "Fn+Cmd+E passes")
 
 check((try? KeyFilter([AppRule(
   description: "bad", frontmostApplication: FrontmostApplication(filePaths: ["("], bundleIdentifiers: []),
