@@ -1,0 +1,153 @@
+From cde988be81b12c7cf7db5b0d18f1e76950ae3a98 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Tue, 3 Nov 2026 14:39:56 -0500
+Subject: [PATCH] network: Add a per-BSS UseDefaultEccGroup setting
+
+[Settings].UseDefaultEccGroup applies to every BSS of a network. A
+network served by several access points may have only some that
+reject the groups IWD tries first, while the others should keep
+using the most secure group.
+
+A [BSS.<address>] group in the network profile now overrides
+UseDefaultEccGroup for the BSS with that address, when connecting
+and when roaming. The address matches regardless of case.
+---
+ autotests/testSAE/default_group_test.py | 24 +++++++++++++
+ src/iwd.network.rst                     | 22 ++++++++++++
+ src/network.c                           | 45 +++++++++++++++++++++++++
+ 3 files changed, 91 insertions(+)
+
+diff --git a/autotests/testSAE/default_group_test.py b/autotests/testSAE/default_group_test.py
+index 3b7812c3..7513e3bf 100644
+--- a/autotests/testSAE/default_group_test.py
++++ b/autotests/testSAE/default_group_test.py
+@@ -73,6 +73,30 @@ class Test(unittest.TestCase):
+         # IWD should then retry but use only group 19
+         self.validate_connection(self.wd, self.hostapd, rejected=True)
+ 
++    def create_bss_profile(self, address, value, settings=None):
++        content = '[Security]\nPassphrase=secret123\n'
++        if settings is not None:
++            content += '\n[Settings]\nUseDefaultEccGroup=%s\n' % settings
++        content += '\n[BSS.%s]\nUseDefaultEccGroup=%s\n' % (address, value)
++        IWD.create_in_storage('ssidSAE.psk', content)
++
++    # Try group 19 first with the BSS named in the profile. The address
++    # matches regardless of case.
++    def test_bss_default_group_enabled(self):
++        self.create_bss_profile(self.hostapd.bssid.upper(), 'true')
++        self.validate_connection(self.wd, self.hostapd)
++
++    # A [BSS.<address>] group for another BSS changes nothing
++    def test_bss_default_group_other_bss(self):
++        self.create_bss_profile('02:00:00:00:00:01', 'true')
++        self.validate_connection(self.wd, self.hostapd, rejected=True)
++
++    # The BSS setting takes precedence over [Settings], on every connection
++    def test_bss_default_group_overrides_settings(self):
++        self.create_bss_profile(self.hostapd.bssid, 'false', settings='true')
++        self.validate_connection(self.wd, self.hostapd, rejected=True)
++        self.validate_connection(self.wd, self.hostapd, rejected=True)
++
+     def setUp(self):
+         self.hostapd.default()
+         self.hostapd.set_value('sae_groups', '19')
+diff --git a/src/iwd.network.rst b/src/iwd.network.rst
+index 892c6eb8..b307414e 100644
+--- a/src/iwd.network.rst
++++ b/src/iwd.network.rst
+@@ -182,6 +182,28 @@ The group ``[Settings]`` contains general settings.
+        the network based on its initial association and retain that setting for
+        the duration of its process lifetime.
+ 
++Per-BSS Settings
++----------------
++
++A group named ``[BSS.<address>]``, with the address of one BSS of this
++network (e.g. ``[BSS.12:34:56:78:9a:bc]``), contains settings that apply only
++when connecting or roaming to that BSS. They take precedence over the same
++settings in ``[Settings]``.
++
++.. list-table::
++   :header-rows: 0
++   :stub-columns: 0
++   :widths: 20 80
++   :align: left
++
++   * - UseDefaultEccGroup
++     - Values: true, false
++
++       As ``[Settings].UseDefaultEccGroup``, for this BSS only. If true, the
++       default ECC group (19) is always used with this BSS. If false, the
++       most secure group is tried first with this BSS, even if the network
++       has learned or been configured to use the default group.
++
+ Network Authentication Settings
+ -------------------------------
+ 
+diff --git a/src/network.c b/src/network.c
+index a5a2375a..3c0e0ec9 100644
+--- a/src/network.c
++++ b/src/network.c
+@@ -476,6 +476,50 @@ static int network_set_handshake_secrets_psk(struct network *network,
+ 	return 0;
+ }
+ 
++/*
++ * A [BSS.<address>] group in the network's profile overrides
++ * [Settings].UseDefaultEccGroup for one BSS of this network.
++ */
++static void network_set_bss_ecc_group(struct l_settings *settings,
++					const struct scan_bss *bss,
++					struct handshake_state *hs)
++{
++	char **groups;
++	char **group;
++	uint8_t addr[ETH_ALEN];
++	bool b;
++
++	if (!settings)
++		return;
++
++	groups = l_settings_get_groups(settings);
++
++	for (group = groups; group && *group; group++) {
++		if (strncmp(*group, "BSS.", 4) ||
++				!util_string_to_address(*group + 4, addr) ||
++				memcmp(addr, bss->addr, ETH_ALEN))
++			continue;
++
++		if (!l_settings_has_key(settings, *group,
++						"UseDefaultEccGroup"))
++			continue;
++
++		if (!l_settings_get_bool(settings, *group,
++						"UseDefaultEccGroup", &b)) {
++			l_warn("[%s].UseDefaultEccGroup is not a boolean value",
++				*group);
++			continue;
++		}
++
++		l_debug("%s ECC group 19 for "MAC, b ? "Forcing" : "Not forcing",
++			MAC_STR(bss->addr));
++		hs->force_default_ecc_group = b;
++		break;
++	}
++
++	l_strfreev(groups);
++}
++
+ int network_handshake_setup(struct network *network, struct scan_bss *bss,
+ 						struct handshake_state *hs)
+ {
+@@ -536,6 +580,7 @@ int network_handshake_setup(struct network *network, struct scan_bss *bss,
+ 	}
+ 
+ 	hs->force_default_ecc_group = network->force_default_ecc_group;
++	network_set_bss_ecc_group(settings, bss, hs);
+ 
+ 	/*
+ 	 * The randomization options in the provisioning file are dependent on
+-- 
+2.56.0
+

@@ -22,34 +22,36 @@ let
     ];
     text = builtins.readFile ./uplink-watchdog.sh;
   };
-  # Sets [Settings].UseDefaultEccGroup=true in existing iwd profiles
-  # (iwd.network(5)) without touching their passphrases. iwd reads the key
-  # only from profiles, not main.conf.
-  iwdDefaultEccGroup = pkgs.writeShellApplication {
-    name = "iwd-default-ecc-group";
+  # Sets keys in existing iwd profiles (iwd.network(5)) without touching
+  # the rest, such as their passphrases. Arguments come in fours: profile
+  # file name, group, key, value.
+  iwdProfileSettings = pkgs.writeShellApplication {
+    name = "iwd-profile-settings";
     runtimeInputs = [
       pkgs.coreutils
       pkgs.gawk
       pkgs.diffutils
     ];
     text = ''
-      for name in "$@"; do
-        file=/var/lib/iwd/$name
+      while (($# >= 4)); do
+        file=/var/lib/iwd/$1 group=$2 key=$3 value=$4
+        shift 4
         [[ -f $file ]] || continue
         tmp=$(mktemp "$file.XXXXXX")
-        awk '
-          function add() { if (!done) { print "UseDefaultEccGroup=true"; done = 1 } }
+        awk -v group="$group" -v key="$key" -v value="$value" '
+          function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+          function put() { if (!done) { print key "=" value; done = 1 } }
           /^[[:space:]]*\[/ {
-            if (insettings) add()
-            insettings = ($0 ~ /^[[:space:]]*\[Settings\][[:space:]]*$/)
-            seen = seen || insettings
+            if (ingroup) put()
+            ingroup = (trim($0) == "[" group "]")
+            seen = seen || ingroup
             print; next
           }
-          insettings && /^[[:space:]]*UseDefaultEccGroup[[:space:]]*=/ { add(); next }
+          ingroup && index($0, "=") && trim(substr($0, 1, index($0, "=") - 1)) == key { put(); next }
           { print }
           END {
-            if (insettings) add()
-            else if (!seen) { print ""; print "[Settings]"; print "UseDefaultEccGroup=true" }
+            if (ingroup) put()
+            else if (!seen) { print ""; print "[" group "]"; print key "=" value }
           }
         ' "$file" >"$tmp"
         if cmp -s "$file" "$tmp"; then
@@ -61,6 +63,22 @@ let
       done
     '';
   };
+  iwdProfileSettingsArgs = lib.concatLists (
+    lib.mapAttrsToList (
+      file: groups:
+      lib.concatLists (
+        lib.mapAttrsToList (
+          group: keys:
+          lib.mapAttrsToList (key: value: [
+            file
+            group
+            key
+            (if lib.isBool value then lib.boolToString value else toString value)
+          ]) keys
+        ) groups
+      )
+    ) cfg.iwd.profileSettings
+  );
 in
 {
   options = {
@@ -86,17 +104,35 @@ in
         default = true;
         description = "Keep path-based wireless interface names when iwd is selected.";
       };
-      iwd.defaultEccGroupProfiles = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        example = [ "MyNetwork.psk" ];
+      iwd.profileSettings = lib.mkOption {
+        type =
+          with lib.types;
+          attrsOf (
+            attrsOf (
+              attrsOf (oneOf [
+                bool
+                int
+                str
+              ])
+            )
+          );
+        default = { };
+        example = {
+          "MyNetwork.psk"."BSS.12:34:56:78:9a:bc".UseDefaultEccGroup = true;
+        };
         description = ''
-          iwd profile file names in /var/lib/iwd whose WPA3 (SAE) handshake
-          always uses ECC group 19 ([Settings].UseDefaultEccGroup=true).
-          Without it iwd learns a group per network and keeps it for its
-          lifetime, so an access point that later rejects that group (status
-          77) stays unreachable until iwd restarts. Applied at activation to
-          profiles that exist then; the passphrase stays in the profile.
+          Keys to set in iwd network profiles (iwd.network(5)), by profile
+          file name in /var/lib/iwd, group and key. Profiles hold their
+          passphrases, so they stay iwd's state: activation sets the listed
+          keys in profiles that exist then and leaves everything else alone.
+          Removing an entry does not remove the key from the profile.
+
+          For example, [BSS.<address>].UseDefaultEccGroup=true (from
+          patches/iwd-per-bss-default-ecc-group.patch) makes the WPA3 (SAE)
+          handshake with one access point always use ECC group 19. Without
+          it iwd learns a group per network and keeps it for its lifetime,
+          so an access point that rejects that group (status 77) can stay
+          unreachable until iwd restarts.
         '';
       };
       tools.enable = lib.mkEnableOption "wireless diagnostic and manager frontend tools";
@@ -157,10 +193,14 @@ in
         # and skips the EAP-SIM/AKA unit tests on kernels whose AF_ALG has no
         # HMAC, as the other HMAC tests do. It is on its way upstream.
         #
-        # Of the last two patches, the first stops iwd's own P2P device from
+        # Of the next two patches, the first stops iwd's own P2P device from
         # ending the DefaultInterface wait at boot. The second makes scans for
         # hidden networks dwell 15 TU per channel where the driver allows it
         # (packages/iwlwifi does), so slow-answering hidden APs are found.
+        #
+        # The last adds [BSS.<address>].UseDefaultEccGroup to profiles, so
+        # one access point of a network can be held to ECC group 19 while
+        # the others keep the most secure group.
         package = pkgs.iwd.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ../patches/iwd/0001-ap-Default-the-DHCP-router-to-the-AP-address.patch
@@ -173,6 +213,7 @@ in
             ../patches/iwd/0008-ap-Add-a-General-.Hidden-profile-setting.patch
             ../patches/iwd-create-p2p-after-default-interface.patch
             ../patches/iwd-dwell-longer-on-scans-for-hidden-networks.patch
+            ../patches/iwd-per-bss-default-ecc-group.patch
           ];
         });
         settings = {
@@ -197,8 +238,8 @@ in
         ${pkgs.dev.johnrinehart.legacy-network-configs.toIwd}/bin/legacy-network-config-to-iwd
       '';
 
-      system.activationScripts.iwdDefaultEccGroup = lib.mkIf (cfg.iwd.defaultEccGroupProfiles != [ ]) ''
-        ${lib.getExe iwdDefaultEccGroup} ${lib.escapeShellArgs cfg.iwd.defaultEccGroupProfiles}
+      system.activationScripts.iwdProfileSettings = lib.mkIf (cfg.iwd.profileSettings != { }) ''
+        ${lib.getExe iwdProfileSettings} ${lib.escapeShellArgs iwdProfileSettingsArgs}
       '';
 
       # Phone USB tethers rank behind iwd's Wi-Fi route (300 + ifindex), so a
