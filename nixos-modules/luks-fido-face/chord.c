@@ -1,9 +1,12 @@
-// Waits for Super+Alt+F on any keyboard, then exits 0. Exits 2 when
+// Waits for Super+Alt+KEY on any keyboard, then exits 0. Exits 2 when
 // TIMEOUT_MS passes without the chord, so the caller can look for new
 // keyboards and check whether it is still needed. Prints nothing: the
 // chord is not announced on the console.
 //
-//   chord TIMEOUT_MS
+// KEY is a Linux key code, the key position before any keymap: the F of a
+// Dvorak layout is KEY_Y (21), of a US layout KEY_F (33).
+//
+//   chord TIMEOUT_MS KEY
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/input.h>
@@ -19,10 +22,12 @@
 #define BITS_PER_LONG (sizeof(long) * 8)
 #define TEST_BIT(bit, array) ((array[(bit) / BITS_PER_LONG] >> ((bit) % BITS_PER_LONG)) & 1)
 
+static int chord_key = KEY_F;
+
 static bool is_keyboard(int fd) {
   unsigned long keys[KEY_MAX / BITS_PER_LONG + 1] = {0};
   if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) < 0) return false;
-  return TEST_BIT(KEY_F, keys) && TEST_BIT(KEY_LEFTALT, keys);
+  return TEST_BIT(chord_key, keys) && TEST_BIT(KEY_LEFTALT, keys);
 }
 
 static long now_ms(void) {
@@ -33,6 +38,7 @@ static long now_ms(void) {
 
 int main(int argc, char **argv) {
   long timeout = argc > 1 ? atol(argv[1]) : 1000;
+  if (argc > 2) chord_key = atoi(argv[2]);
   struct pollfd fds[MAX_DEVICES];
   int count = 0;
 
@@ -85,8 +91,8 @@ int main(int argc, char **argv) {
           case KEY_RIGHTALT:
             alt[i] = down;
             break;
-          case KEY_F:
-            if (e->value == 1 && meta[i] && alt[i]) return 0;
+          default:
+            if (e->code == chord_key && e->value == 1 && meta[i] && alt[i]) return 0;
             break;
         }
       }

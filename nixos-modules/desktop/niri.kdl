@@ -21,27 +21,8 @@ input {
         // Enable numlock on startup, omitting this setting disables it.
         numlock
     }
-    // The SliceMK firmware emits the selected layout directly.
-    keyboard "ZMK Project SliceMK ErgoDox Keyboard" {
-        xkb {
-            layout "us"
-        }
-    }
-    keyboard "ZMK Project SliceMK Kbd Keyboard" {
-        xkb {
-            layout "us"
-        }
-    }
-    keyboard "SliceMK Kbd Keyboard" {
-        xkb {
-            layout "us"
-        }
-    }
-    keyboard "ZMK Project SliceMK Dongle Keyboard" {
-        xkb {
-            layout "us"
-        }
-    }
+    // The SliceMK types Dvorak itself; a udev hwdb table (locale.nix) maps
+    // its keys back to QWERTY positions, so it shares the Dvorak layout above.
     // Next sections include libinput settings.
     // Omitting settings disables them, or leaves them at their default values.
     // All commented-out settings here are examples, not defaults.

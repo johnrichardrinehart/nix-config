@@ -149,7 +149,7 @@ if [ "$mode" = --test ]; then
 fi
 
 while [ ! -e /dev/mapper/@volume@ ]; do
-  chord 1000 || continue
+  chord 1000 @chordKey@ || continue
   if attempt; then
     log "passphrase sent"
   fi

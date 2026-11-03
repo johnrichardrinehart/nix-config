@@ -61,6 +61,9 @@ let
     policy = "${policy}";
     modelDir = "${modelDir}";
     faceStateDir = "/var/lib/private/pam-biometrics";
+    # The key position that types F in the console layout: Dvorak puts F
+    # on the US layout's Y.
+    chordKey = if config.services.xserver.xkb.variant == "dvorak" then "21" else "33";
     cameraArgs = lib.escapeShellArgs (
       [
         "--width"
