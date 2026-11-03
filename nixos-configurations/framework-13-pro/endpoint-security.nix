@@ -138,8 +138,8 @@ in
     # plugged in before boot. The built-in keyboard (i8042) and touchpad
     # (I2C) are not USB. The expansion card slots are "hotplug" ports, so
     # every card and other device needs a rule downstream
-    # (`usbguard generate-policy` prints them). Rules are read-only:
-    # `usbguard allow-device` lasts until reboot.
+    # (`usbguard generate-policy` prints them), except the SliceMK below.
+    # Rules are read-only: `usbguard allow-device` lasts until reboot.
     services.usbguard = {
       enable = true;
       implicitPolicyTarget = "block";
@@ -152,6 +152,17 @@ in
         # Built-in devices on ports that ACPI marks "not used": the
         # fingerprint reader in the power button.
         ''allow with-connect-type "not used"''
+        # The SliceMK keyboard over USB. Stage 1 has no Bluetooth, so the
+        # LUKS prompt takes it only by cable or through its dongle. USBGuard
+        # does not run in stage 1; from stage 2 on it would take the
+        # keyboard away from tuigreet and the session without these rules.
+        # ZMK reports 1d50:615e for every board, so the product name and the
+        # serial (the nRF52's device ID) narrow it down. The left half,
+        # which the cable connects:
+        ''allow id 1d50:615e serial "F6766C9E78D57732" name "SliceMK Kbd"''
+        # The dongle (packages/slicemk-update/dongle.json). Its serial has
+        # not been read off the device, so it is matched by name only.
+        ''allow id 1d50:615e name "SliceMK Dongle"''
       ];
     };
 

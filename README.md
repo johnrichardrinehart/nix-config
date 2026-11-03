@@ -555,8 +555,12 @@ sets this baseline:
 - The kernel arguments `iommu.passthrough=0` and `iommu.strict=1`, so that
   device DMA always goes through the IOMMU.
 - USBGuard. It blocks each USB device, also the devices that are present at
-  boot, unless a rule allows it. The module allows only devices on ports that
-  ACPI marks hardwired.
+  boot, unless a rule allows it. The module allows devices on ports that ACPI
+  marks hardwired or not used, and the SliceMK keyboard (by serial) and its
+  dongle (by name). Stage 1 has no Bluetooth, so type the LUKS passphrase on
+  the built-in keyboard or on the SliceMK through its USB cable or dongle.
+  USBGuard does not run in stage 1. Its rules keep the SliceMK working at
+  tuigreet and in the session.
 - An assertion that the root file system is on LUKS. disko formats it as
   LUKS2.
 - An assertion that the firewall is on. The NixOS firewall drops all inbound
