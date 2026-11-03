@@ -63,19 +63,20 @@ let
       done
     '';
   };
-  iwdProfileSettingsArgs = lib.concatLists (
+  # [ file group key value file group key value ... ]
+  iwdProfileSettingsArgs = lib.flatten (
     lib.mapAttrsToList (
-      file: groups:
-      lib.concatLists (
+      file:
+      lib.mapAttrsToList (
+        group:
         lib.mapAttrsToList (
-          group: keys:
-          lib.mapAttrsToList (key: value: [
+          key: value: [
             file
             group
             key
             (if lib.isBool value then lib.boolToString value else toString value)
-          ]) keys
-        ) groups
+          ]
+        )
       )
     ) cfg.iwd.profileSettings
   );
