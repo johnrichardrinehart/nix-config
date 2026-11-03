@@ -158,6 +158,9 @@ in
     ];
 
     boot.initrd = {
+      # The chord listener reads /dev/input/event*. evdev is a module that
+      # no device's modalias loads, so stage 1 lacks it unless named here.
+      kernelModules = [ "evdev" ];
       availableKernelModules = [
         "uvcvideo"
         "vfat"
