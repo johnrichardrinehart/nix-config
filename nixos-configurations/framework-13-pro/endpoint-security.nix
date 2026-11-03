@@ -163,6 +163,9 @@ in
         # The dongle (packages/slicemk-update/dongle.json). Its serial has
         # not been read off the device, so it is matched by name only.
         ''allow id 1d50:615e name "SliceMK Dongle"''
+        # The YubiKey 5 (OTP, FIDO and CCID), for dev.johnrinehart.luksFidoFace
+        # enrollment and the session. It reports no serial over USB.
+        ''allow id 1050:0407 name "YubiKey OTP+FIDO+CCID" with-interface { 03:01:01 03:00:00 0b:00:00 }''
       ];
     };
 

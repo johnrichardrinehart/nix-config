@@ -278,6 +278,40 @@ program leaves the terminal without echo, type `reset` and press Enter.
   `dev.johnrinehart.endpointSecurity.initrdRootHashedPassword` is set (it
   defaults to `rootHashedPassword`). The shell asks for that password.
 
+## LUKS unlock with a YubiKey and a face
+
+On `framework-13-pro`, `dev.johnrinehart.luksFidoFace`
+(`nixos-modules/luks-fido-face`) opens the LUKS root without the passphrase
+when three factors hold:
+
+1. Press Super+Alt+F at the passphrase prompt. Nothing on screen changes.
+2. Look at the webcam. The TPM decrypts the bundle on the ESP only in this
+   Secure Boot state (PCR 7). The face must match the model in the bundle.
+3. Touch the YubiKey when it blinks.
+
+The keyslot passphrase is SHA-256 of the YubiKey's hmac-secret output and a
+secret that only the TPM releases. Neither factor alone opens the volume.
+The signed stage 1 code checks the face. A photo can pass that check; the
+YubiKey and the TPM protect the disk. The typed passphrase keeps working.
+
+The bundle, `/boot/luks-fido-face/cryptroot.cred`, holds the TPM-held secret,
+the YubiKey credential and a copy of the pam-biometrics face model. It is
+encrypted by `systemd-creds` with the TPM, so no face data enters the Nix
+store and a new enrollment needs no rebuild. Enroll as root with the
+YubiKey plugged in, after `pam-biometrics face enroll`:
+
+```console
+luks-fido-face-enroll         # two touches, then an existing passphrase
+luks-fido-face-unlock --test  # face, then a touch; checks the derived key
+```
+
+Enroll again after a new face enrollment or a Secure Boot change (new keys,
+Setup Mode, firmware updates that change PCR 7). Each enrollment replaces
+the keyslot of the previous one. `journalctl -b -u luks-fido-face` shows
+why a stage 1 attempt failed. Alt+F also reaches the console prompt, so
+after a failed attempt the typed passphrase can be rejected once; type it
+again.
+
 ## SliceMK firmware
 
 On Linux or macOS, update the SliceMK ErgoDox 202207 Green left half:

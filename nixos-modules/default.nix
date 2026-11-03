@@ -79,6 +79,7 @@
     ./ide.nix
     ./laptop.nix
     ./locale.nix
+    ./luks-fido-face
     ./maintenance-initrd.nix
     ./network.nix
     ./monstar.nix

@@ -29,6 +29,15 @@ in
     wifiKernelModules = [ "mt7925e" ];
   };
 
+  # Super+Alt+F, the face and a YubiKey touch open the LUKS root, while the
+  # TPM sees this Secure Boot state (PCR 7). `luks-fido-face-enroll` sets it
+  # up; the passphrase keeps working.
+  dev.johnrinehart.luksFidoFace = {
+    enable = true;
+    # The Framework Laptop Webcam Module (2nd Gen).
+    cameraUsbId = "32ac:001c";
+  };
+
   # 96 GiB of swap, a file inside the LUKS root, so a hibernation image of
   # all 93 GiB of RAM fits. systemd writes the file's location (device and
   # offset) to the HibernateLocation EFI variable when it hibernates and
