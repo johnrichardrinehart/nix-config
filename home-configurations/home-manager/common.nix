@@ -286,6 +286,8 @@ in
     }
     // lib.optionalAttrs osConfig.dev.johnrinehart.agentTools.omp.enable {
       ".omp/agent/skills/nix-config-refresh".source = ./skills/nix-config-refresh;
+      # Native discovery loads every module in ~/.omp/agent/extensions.
+      ".omp/agent/extensions/refuseless.ts".source = ./omp-extensions/refuseless.ts;
     }
     // lib.optionalAttrs osConfig.dev.johnrinehart.desktop.greetd_niri.hypridle.enable {
       ".config/hypr/hypridle.conf".source =
