@@ -298,6 +298,13 @@ in
         ];
       };
 
+      # Finder writes no .DS_Store files on USB or network volumes (read at
+      # Finder launch). macOS has no such switch for .fseventsd.
+      "com.apple.desktopservices" = {
+        DSDontWriteNetworkStores = true;
+        DSDontWriteUSBStores = true;
+      };
+
       # On this macOS `target-screenshot` overrides `target` for stills.
       "com.apple.screencapture"."target-screenshot" = "file";
     };
