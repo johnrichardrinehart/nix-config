@@ -104,6 +104,9 @@ in
 
     home.file.".omp/agent/skills/nix-config-refresh".source =
       ../../home-configurations/home-manager/skills/nix-config-refresh;
+    # omp loads every module in ~/.omp/agent/extensions at start-up.
+    home.file.".omp/agent/extensions/refuseless.ts".source =
+      ../../home-configurations/home-manager/omp-extensions/refuseless.ts;
 
     # One full-screen editor for both: every program honors at least one.
     home.sessionVariables = {
