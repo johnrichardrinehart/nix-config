@@ -85,7 +85,8 @@ let
   # itself: macOS nfsd leaves a connection this client closes half open, and
   # a hard mount waits on it forever. nolock: the Mac's lockd would have to
   # call back into the guest, which slirp does not route; locks stay local.
-  # actimeo=5 as on the Mac's side.
+  # actimeo=5: the guest caches the Mac's attributes for at most five
+  # seconds.
   mountHostShares = pkgs.writeShellApplication {
     name = "vm-mount-host-shares";
     runtimeInputs = [

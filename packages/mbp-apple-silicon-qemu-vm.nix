@@ -266,11 +266,11 @@ in
     (locallocks) and never meet the guest's; exclusive create is decided by
     the guest, so lock files do exclude across the boundary.
 
-    This Mac trusts what it has cached about a file or directory for at most
-    five seconds (actimeo=5), so a change made in the guest shows up here
-    within that. FSEvents does not see the guest's writes, so nothing on this
-    Mac should watch the mount: a watchman-backed git fsmonitor would report
-    stale status. Let git scan it.
+    This Mac caches no attributes or missing names of the guest's shares
+    (actimeo=0, nonegnamecache), so a change made in the guest shows up here
+    at once, and Git sees the guest's writes. FSEvents does not see the
+    guest's writes, so nothing on this Mac should watch the mount: a
+    watchman-backed git fsmonitor would report stale status. Let git scan it.
 
     The guest reaches this Mac's loopback as 10.0.2.2 and mounts the "host"
     shares from there: mountd directly, nfsd through a socat relay the
@@ -1124,10 +1124,13 @@ in
       # Port and mountport name the forwards, so mount_nfs never asks a
       # portmapper, which is not forwarded. retrycnt=0 makes each attempt a
       # single connection with the quick 8s timeout, since the loop below is
-      # the retry; timeout covers an attempt that hangs regardless. actimeo=5
-      # caps how stale this Mac's view of a file or directory can get at five
-      # seconds, where macOS would otherwise trust an old one for up to 60.
-      nfs_mount_options="vers=3,tcp,port=$nfs_port,mountport=$mountd_port,locallocks,soft,intr,deadtimeout=60,retrycnt=0,nobrowse,actimeo=5"
+      # the retry; timeout covers an attempt that hangs regardless.
+      # actimeo=0 turns off this Mac's attribute cache, and nonegnamecache its
+      # cache of names that do not exist: the guest changes the same files
+      # (Git, builds), and a cached size, time, or "no such file" made Git on
+      # this Mac take clean files for changed ones. Over the loopback relay
+      # the extra GETATTR calls cost little.
+      nfs_mount_options="vers=3,tcp,port=$nfs_port,mountport=$mountd_port,locallocks,soft,intr,deadtimeout=60,retrycnt=0,nobrowse,actimeo=0,nonegnamecache"
 
       # Runs in the background while QEMU does: waits for the guest to export
       # each share, mounts it, and records it for unmount_shares. It keeps

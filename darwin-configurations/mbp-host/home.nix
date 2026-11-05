@@ -250,7 +250,21 @@ in
               }) (ownerPatterns owner)
             ) identity.owners
           ) cfg.github.ownerIdentities
-        );
+        )
+        # ~/code is the guest's disk over NFS (vm-shares.nix). The NFS client
+        # can report an old ctime or inode, and Git then takes clean files
+        # for changed ones ("local changes would be overwritten" on a clean
+        # tree). Git's own advice for such file systems: do not trust the
+        # ctime, and compare only the mtime, the size, and the mode.
+        ++ [
+          {
+            condition = "gitdir:~/code/";
+            contents.core = {
+              trustctime = false;
+              checkStat = "minimal";
+            };
+          }
+        ];
       # GitHub over SSH, never HTTPS, as on the NixOS machines (nixosModules
       # common.nix). An HTTPS push would authenticate with whatever
       # ~/.netrc or a credential helper holds, not the key picked by the
