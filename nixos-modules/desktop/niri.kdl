@@ -339,6 +339,14 @@ binds {
     XF86AudioMicMute allow-when-locked=true {
         spawn "@volume_notify@" "mic"
     }
+    // Media transport keys act on the active MPRIS player. A held Rewind or
+    // Forward key repeats; the cooldown limits it to 4 seeks per second.
+    XF86AudioPlay allow-when-locked=true { spawn "@playerctl@" "play-pause"; }
+    XF86AudioPause allow-when-locked=true { spawn "@playerctl@" "play-pause"; }
+    XF86AudioPrev allow-when-locked=true { spawn "@playerctl@" "previous"; }
+    XF86AudioNext allow-when-locked=true { spawn "@playerctl@" "next"; }
+    XF86AudioRewind allow-when-locked=true cooldown-ms=250 { spawn "@playerctl@" "position" "10-"; }
+    XF86AudioForward allow-when-locked=true cooldown-ms=250 { spawn "@playerctl@" "position" "10+"; }
     // Example brightness key mappings for brightnessctl.
     // You can use regular spawn with multiple arguments too (to avoid going through "sh"),
     // but you need to manually put each argument in separate "" quotes.

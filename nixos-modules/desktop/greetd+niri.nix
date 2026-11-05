@@ -522,6 +522,7 @@ in
             display_layout_editor = lib.getExe display-layout;
             niri_cycle_display_mode = lib.getExe niri-cycle-display-mode;
             niri_screenshot = lib.getExe niri-screenshot;
+            playerctl = lib.getExe pkgs.playerctl;
             volume_notify = lib.getExe volume-notify;
             wormhole_send = lib.getExe wormhole-send;
             xcursor_theme = xcursorTheme;
