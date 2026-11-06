@@ -42,6 +42,10 @@
     "/" = lib.mkForce {
       device = "UUID=4f338d98-cf03-4853-a2b8-2452e5494bb3";
       fsType = "bcachefs";
+      # A new bcachefs version upgrades the on-disk format on the first mount
+      # and checks the whole file system. That takes longer than the default
+      # 90 s mount timeout, which kills the mount and fails the boot.
+      options = [ "x-systemd.mount-timeout=infinity" ];
     };
 
     "/boot" = lib.mkForce {
