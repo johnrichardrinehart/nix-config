@@ -28,14 +28,6 @@ let
     {}
   '';
   ompMcpConfigPath = "${config.home.homeDirectory}/.omp/agent/mcp.json";
-  defaultOmpMcpConfig = pkgs.writeText "omp-mcp.json" (
-    builtins.toJSON {
-      mcpServers.context-mode = {
-        type = "stdio";
-        command = "context-mode";
-      };
-    }
-  );
   agentDeckConfig = ''
     # Agent Deck Configuration
     # Managed by Home Manager
@@ -350,15 +342,14 @@ in
         if [[ ! -e "${ompRuntimeConfigPath}" ]]; then
           run install -m 600 ${emptyOmpRuntimeConfig} "${ompRuntimeConfigPath}"
         fi
+        # context-mode registers its tools through the OMP extension. An
+        # mcp.json entry starts a second server with duplicate tools.
         if [[ -e "${ompMcpConfigPath}" ]]; then
           mcp_config_tmp="$(mktemp)"
-          ${lib.getExe pkgs.jq} \
-            '.mcpServers."context-mode" = {"type":"stdio","command":"context-mode"}' \
+          ${lib.getExe pkgs.jq} 'del(.mcpServers."context-mode")' \
             "${ompMcpConfigPath}" > "$mcp_config_tmp"
           run install -m 600 "$mcp_config_tmp" "${ompMcpConfigPath}"
           run rm "$mcp_config_tmp"
-        else
-          run install -m 600 ${defaultOmpMcpConfig} "${ompMcpConfigPath}"
         fi
       ''
     );

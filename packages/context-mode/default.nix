@@ -1,35 +1,40 @@
 {
-  buildNpmPackage,
   bun,
   cargo,
   fetchurl,
   lib,
-  pkg-config,
-  python3,
+  makeWrapper,
+  nodejs,
   rustc,
+  stdenvNoCC,
 }:
-buildNpmPackage rec {
+# The npm package bundles all of its dependencies, so it needs no npm install.
+stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "context-mode";
-  version = "1.0.169";
+  version = "2.1.5";
 
   src = fetchurl {
-    url = "https://registry.npmjs.org/context-mode/-/context-mode-${version}.tgz";
-    hash = "sha512-94JIaFuLjF9SO2BsGTrbGtyT44K95+9OC8BdbaL/UT76xOkanJLfUR5CzmNw+GELXZQqH4nBrKg9wjBnSFkVnQ==";
+    url = "https://registry.npmjs.org/context-mode/-/context-mode-${finalAttrs.version}.tgz";
+    hash = "sha256-qGaomacPe9WgKOW028dDC2ayJLVOpxjzwWcPSew8vbo=";
   };
 
-  npmDepsHash = "sha256-tfuaTp3XeASjPIpGSgTBE6GAZbqE4kA7fj11Z8NbE8Q=";
+  nativeBuildInputs = [ makeWrapper ];
 
-  nativeBuildInputs = [
-    pkg-config
-    python3
-  ];
-  postPatch = ''
-    sed -i '/"scripts": {/,/^  },$/d' package.json
-    sed -i '/"devDependencies": {/,/^  },$/d' package.json
-    cp ${./package-lock.json} package-lock.json
+  dontBuild = true;
+
+  # OMP loads lib/node_modules/context-mode as an extension through the "pi"
+  # field of package.json.
+  installPhase = ''
+    runHook preInstall
+
+    pkgRoot="$out/lib/node_modules/context-mode"
+    mkdir -p "$pkgRoot"
+    cp -r . "$pkgRoot"
+    makeWrapper ${lib.getExe nodejs} "$out/bin/context-mode" \
+      --add-flags "$pkgRoot/cli.mjs"
+
+    runHook postInstall
   '';
-
-  dontNpmBuild = true;
 
   passthru.ompRuntimeInputs = [
     bun
@@ -44,4 +49,4 @@ buildNpmPackage rec {
     mainProgram = "context-mode";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
-}
+})
