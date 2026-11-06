@@ -32,6 +32,7 @@
     # s3_mount.enable = false;
     # gocryptfs.enable = false;
     profiles.laptop.enable = true;
+    initrdPkcs11.enable = true;
     network = {
       enable = true;
       manager = "iwd";
@@ -86,20 +87,30 @@
     };
   };
 
-  boot.initrd.luks.devices."dm-0".device =
-    lib.mkForce "/dev/disk/by-uuid/002adea0-5c10-45a8-bc8a-701a0d71577b";
+  boot.initrd.luks.devices."dm-0" = {
+    device = lib.mkForce "/dev/disk/by-uuid/002adea0-5c10-45a8-bc8a-701a0d71577b";
+    # Unlock with the PIVKey or the passphrase. Keyslot 1 holds the card's
+    # systemd-pkcs11 token, and keyslot 0 holds the passphrase. With the card
+    # in the reader, stage 1 asks for its PIN. Without the card, stage 1 waits
+    # 15 s (token-timeout) and then asks for the passphrase.
+    #
+    # "auto" reads the card's URI from the token in the LUKS header. If that
+    # token is gone, the patched stage-1 systemd-cryptsetup
+    # (nixos-modules/initrd-pkcs11.nix) asks for the passphrase at once.
+    crypttabExtraOpts = [
+      "pkcs11-uri=auto"
+      "token-timeout=15s"
+    ];
+  };
 
   services.upower.enable = true;
 
   environment.systemPackages = [
-    pkgs.opensc
     pkgs.pcsc-tools
     pkgs.global-platform-pro
     config.boot.kernelPackages.v4l2loopback.bin
   ]
   ++ [ pkgs.nload ];
-
-  services.pcscd.enable = true;
 
   boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback.out ];
   boot.kernelModules = [ "v4l2loopback" ];
