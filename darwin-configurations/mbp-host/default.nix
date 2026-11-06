@@ -47,7 +47,7 @@ in
   imports = [
     inputs.home-manager.darwinModules.home-manager
     ../../darwin-modules/keyboard-remap
-    ./apps.nix
+    (import ./apps.nix { inherit inputs; })
     ./dock.nix
     ./keyboard.nix
     ./manual-steps.nix

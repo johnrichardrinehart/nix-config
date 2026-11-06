@@ -11,6 +11,7 @@
 #
 # An app is installed only when it is missing or older than declared, so an
 # app that updated itself is never downgraded. A running app is left alone.
+{ inputs }:
 {
   config,
   lib,
@@ -19,6 +20,10 @@
 }:
 let
   inherit (pkgs) fetchurl;
+
+  braveOrigin = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.brave-origin;
+  # The bundle version prefixes the Brave version with the Chromium major.
+  braveOriginChromiumMajor = "157";
 
   apps = {
     KeePassXC = {
@@ -41,14 +46,23 @@ let
         hash = "sha256-wQrXA+kwbz5BdMJpxsGEXYNpTzT+vvG4+TbMsLPwlts=";
       };
     };
+    # The vendor DMG of packages/brave-origin, so a bump there updates the
+    # Mac too. Its Keychain item ("Brave Origin Safe Storage") is keyed to
+    # Brave's Team ID, which the store copy of the bundle does not keep.
+    "Brave Origin" = {
+      version = "${braveOriginChromiumMajor}.${braveOrigin.version}";
+      bundle = "Brave Origin.app";
+      inherit (braveOrigin) src;
+    };
   };
 
-  # Apps installed by hand that update themselves with Electron's Squirrel.
-  # Squirrel swaps the bundle unprivileged when the user can write it;
+  # Apps that update themselves (Electron's Squirrel, Brave's Sparkle). The
+  # updater swaps the bundle unprivileged when the user can write it;
   # otherwise it asks for an admin password every update check (hourly) to
   # run its installer as root, which then waits for the app to quit. Owning
   # the bundle keeps updates silent.
   userOwnedBundles = [
+    "Brave Origin.app"
     "Proton Mail.app"
     "Proton Pass.app"
   ];
