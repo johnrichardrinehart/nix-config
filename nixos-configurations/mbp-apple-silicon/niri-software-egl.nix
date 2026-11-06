@@ -26,15 +26,16 @@ _: {
       niri = prev.niri.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [
           # https://github.com/niri-wm/niri/pull/3959
+          # The fork's software-egl-opt-in branch carries it on top of niri main.
           (prev.fetchpatch2 {
             name = "render-allow-software-rendering-as-last-resort.patch";
-            url = "https://github.com/niri-wm/niri/compare/e19df12cf81ffe805609fee497da1a097066ad2f...a6d7aef58835cd8e7f763878288e7300df0f7a60.patch?full_index=1";
-            hash = "sha256-KPVHINi9cLZPQ3eMG1DdbFgqUew094fLv0S/ZLH/mq4=";
+            url = "https://github.com/johnrichardrinehart/niri/compare/e7a92816d832811f454f507b0afd31cd17938e48...b154a2d4463477d21df5f3f57b719d3f80ab79d6.patch?full_index=1";
+            hash = "sha256-1sE4u++jrpuAdMfKEhleLnqTUhNAfxtM5q24gRnXI8k=";
           })
           # https://github.com/niri-wm/niri/pull/4614
           (prev.fetchpatch2 {
             name = "tty-honor-configured-node-for-software-egl.patch";
-            url = "https://github.com/johnrichardrinehart/niri/commit/1522804426c62e9daec48d26ec41847016a40e19.patch?full_index=1";
+            url = "https://github.com/johnrichardrinehart/niri/commit/8213eb88f5187001c9d81d29ffe34ed20296bab6.patch?full_index=1";
             hash = "sha256-O7kU24QSvg/KVYZF6Znyc4belMEgg79ZigGCpqwOnW0=";
           })
         ];

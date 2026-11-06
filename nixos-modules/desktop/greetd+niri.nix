@@ -26,12 +26,12 @@ let
     niri = config.programs.niri.package;
   };
 
-  niriRevision = "a8562a1126922ed4c1c94d34c1dbb26633491d05";
+  niriRevision = "e7a92816d832811f454f507b0afd31cd17938e48";
   niriSource = pkgs.fetchFromGitHub {
     owner = "niri-wm";
     repo = "niri";
     rev = niriRevision;
-    hash = "sha256-AtuZOzsb9p+TTzkgaPjvl+5YRsgKc+RlIQMyozOmY5A=";
+    hash = "sha256-UFfR2mD8YiLZM3Kr4RiUPh4OJa8FVIGxxnvChYQygUA=";
   };
   niriPatches = [
     ./0000-version-report-downstream-patches.patch
@@ -44,7 +44,7 @@ let
     patch: "\n+ ${builtins.baseNameOf (toString patch)}"
   ) niriPatches;
   # Niri 26.04 predates Smithay's SHM damage fix and does not compile with current Smithay APIs.
-  # Follow Niri main for compatible APIs, then pin Smithay to the current upstream master tip.
+  # Follow Niri main for compatible APIs; it already pins Smithay to the upstream master tip.
   # Keep smithay-drm-extras on the fork containing the unmerged late-CRTC mapping fix
   # (Smithay/smithay#2125).
   niriPatched = pkgs.niri.overrideAttrs (old: {
@@ -55,7 +55,7 @@ let
       name = "${old.pname}-${old.version}";
       src = niriSource;
       patches = (old.cargoPatches or [ ]) ++ niriPatches;
-      hash = "sha256-eJ2pb8ZvLpoisGp1+aSAdi0O6536wR2Ox8VCZVIcGIc=";
+      hash = "sha256-jTjEq8XH7FW0zbkmemn8ax22O7n5Aab9cUIo5dh/8SM=";
     };
     env = (old.env or { }) // {
       NIRI_BUILD_COMMIT = niriRevision;

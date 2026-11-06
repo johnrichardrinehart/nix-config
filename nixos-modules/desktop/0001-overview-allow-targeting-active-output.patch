@@ -1,4 +1,4 @@
-From bcac0fea308f27c7b9ed4d89a58989f7e1b58873 Mon Sep 17 00:00:00 2001
+From 753dab97f795180c8b79c38df5242c54ff708496 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Fri, 10 Jul 2026 13:43:58 -0400
 Subject: [PATCH] Let each Overview action narrow its output scope
@@ -132,7 +132,7 @@ index fad654b3..367ebeea 100644
                          repeat: false,
                          pass_through: None,
 diff --git a/niri-ipc/src/lib.rs b/niri-ipc/src/lib.rs
-index 4b65ab57..890e9d29 100644
+index c3711924..e51b7345 100644
 --- a/niri-ipc/src/lib.rs
 +++ b/niri-ipc/src/lib.rs
 @@ -931,9 +931,25 @@ pub enum Action {
@@ -164,10 +164,10 @@ index 4b65ab57..890e9d29 100644
      CloseOverview {},
      /// Toggle urgent status of a window.
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index c2227b7e..c9301e9a 100644
+index b8518e96..63c61787 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
-@@ -2505,12 +2505,12 @@ impl State {
+@@ -2484,12 +2484,12 @@ impl State {
              Action::StopCast(session_id) => {
                  self.niri.stop_cast(CastSessionId::from(session_id));
              }
@@ -184,7 +184,7 @@ index c2227b7e..c9301e9a 100644
                      self.niri.queue_redraw_all();
                  }
              }
-@@ -2871,7 +2871,7 @@ impl State {
+@@ -2850,7 +2850,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -193,7 +193,7 @@ index c2227b7e..c9301e9a 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -2962,7 +2962,7 @@ impl State {
+@@ -2941,7 +2941,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -202,7 +202,7 @@ index c2227b7e..c9301e9a 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -5676,8 +5676,8 @@ fn hardcoded_overview_binds<'a>() -> impl Iterator<Item = &'a Bind> + Clone {
+@@ -5655,8 +5655,8 @@ fn hardcoded_overview_binds<'a>() -> impl Iterator<Item = &'a Bind> + Clone {
      }
  
      const BINDS: &[Bind] = &[
@@ -213,7 +213,7 @@ index c2227b7e..c9301e9a 100644
          bind(Keysym::Left, Action::FocusColumnLeft, true),
          bind(Keysym::Right, Action::FocusColumnRight, true),
          bind(Keysym::Up, Action::FocusWindowOrWorkspaceUp, true),
-@@ -5864,7 +5864,7 @@ mod tests {
+@@ -5843,7 +5843,7 @@ mod tests {
              bind(
                  Trigger::Keysym(Keysym::Super_L),
                  Modifiers::empty(),
