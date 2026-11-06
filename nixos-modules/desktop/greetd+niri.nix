@@ -665,22 +665,18 @@ in
     # lock screen hangs, even after PAM succeeds. face-scan-key sends SIGUSR2
     # as a scan ends, right when PAM finishes and hyprlock redraws.
     # hyprwm/hyprlock#1062, an open pull request, defers the update to the main
-    # loop through a self-pipe. It does not apply to 0.9.5, so build main. The
+    # loop through a self-pipe. It does not apply to 0.9.5, so build 0.9.7. The
     # overlay covers programs.hyprlock and home-manager's pkgs.hyprlock alike.
-    # Drop it once a release includes the fix.
+    # Drop the patch once a release includes the fix.
     nixpkgs.overlays = [
       (_final: prev: {
         hyprlock = prev.hyprlock.overrideAttrs (old: {
-          version = "0.9.6-unstable-2026-10-30";
+          version = "0.9.7";
           src = prev.fetchFromGitHub {
             owner = "hyprwm";
             repo = "hyprlock";
-            rev = "9de871992f64e517eb8a56f363c5acd13690308f";
-            hash = "sha256-PVvBqN7etoTvEK9CTNLZ3Wwgi6Pcy4YMUX8KHSUb8EE=";
-          };
-          # nixpkgs builds the changelog URL from src.tag, which a rev leaves null.
-          meta = old.meta // {
-            changelog = "https://github.com/hyprwm/hyprlock/commits/9de871992f64e517eb8a56f363c5acd13690308f";
+            tag = "v0.9.7";
+            hash = "sha256-P8pBEk0fKsYlWfYe/Qrt1ovGa5fPSFlqRPn2D3nMV6w=";
           };
           patches = (old.patches or [ ]) ++ [
             # https://github.com/hyprwm/hyprlock/pull/1062
