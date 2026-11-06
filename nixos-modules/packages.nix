@@ -47,7 +47,7 @@ let
   '';
 
   braveWithInputLogging =
-    (pkgs.brave.override {
+    (pkgs.dev.johnrinehart.brave.override {
       commandLineArgs = lib.concatStringsSep " " [
         "--enable-logging=stderr"
         "--vmodule=${lib.concatStringsSep "," braveInputLogModules}"
