@@ -13,6 +13,17 @@
     enable = true;
     device = "/dev/sda";
   };
+  # /boot is a 100 MiB partition for the kernel and the initrds of two
+  # generations. nixpkgs installs the bcachefs module with its debug info:
+  # 13.6 MiB compressed in each initrd, 1.2 MiB when stripped.
+  boot.bcachefs.modulePackage =
+    (config.boot.kernelPackages.callPackage config.boot.bcachefs.package.kernelModule { })
+    .overrideAttrs
+      (old: {
+        makeFlags = old.makeFlags ++ [ "INSTALL_MOD_STRIP=1" ];
+      });
+  # The W510 has a TPM 1.2, which systemd cannot unlock with.
+  boot.initrd.systemd.tpm2.enable = false;
 
   # Root filesystem already defined below, removing duplicate
 
