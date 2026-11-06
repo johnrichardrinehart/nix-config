@@ -37,6 +37,23 @@
       manager = "iwd";
     };
     nix.enable = true;
+
+    # `root-shell` opens a root shell without a password for root and wheel
+    # members (nixos-modules/tmux-root-shell.nix).
+    tmux.rootShell.enable = true;
+
+    # pam-biometrics: a swipe on the UPEK TouchStrip (147e:2016) or a face
+    # satisfies the biometric step after the password. The webcam has no
+    # infrared sensor, so a photo can pass for a face; the check can only
+    # reject an attempt. The password is always required.
+    desktop.greetd_niri = {
+      fingerprint.enable = true;
+      face = {
+        enable = true;
+        device = "/dev/v4l/by-id/usb-Chicony_Electronics_Co.__Ltd._Integrated_Camera-video-index0";
+        inputFormat = "mjpeg";
+      };
+    };
   };
 
   # The Intel Centrino Wi-Fi card (iwlwifi) needs its firmware files.
