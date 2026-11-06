@@ -17,19 +17,27 @@ import java.util.List;
 /**
  * Turns held Fast Forward / Rewind media keys into repeated seeks for players
  * that accept seekTo but not fast-forward/rewind (for example YouTube Music).
+ * Like scrubbing with a TV remote, the steps grow the longer the key is held.
  * Players that advertise fast-forward/rewind get the key unchanged.
  */
 public final class SeekService extends AccessibilityService {
     private static final String TAG = "MediaSeek";
-    private static final long STEP_MS = 10_000;
+    // Step size by time held: 5 s, then 10 s after 1 s, then 30 s after 2.5 s.
+    private static final long[] STEP_AFTER_MS = {0, 1_000, 2_500};
+    private static final long[] STEP_MS = {5_000, 10_000, 30_000};
     private static final long REPEAT_MS = 300;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private MediaController controller;
     private int heldKey = KeyEvent.KEYCODE_UNKNOWN;
     private long direction;
+    private long holdStart;
+    // Players report a seek late, so a hold that starts within TRUST_TARGET_MS
+    // of the previous seek on the same track continues from that seek's target.
+    private static final long TRUST_TARGET_MS = 5_000;
     private long lastTarget = -1;
     private long lastSeekAt;
+    private String lastTrack;
 
     private final Runnable repeat = new Runnable() {
         @Override
@@ -63,8 +71,13 @@ public final class SeekService extends AccessibilityService {
         stop();
         controller = target;
         heldKey = key;
-        direction = key == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ? STEP_MS : -STEP_MS;
-        lastTarget = -1;
+        direction = key == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ? 1 : -1;
+        holdStart = SystemClock.elapsedRealtime();
+        String track = trackOf(target);
+        if (!track.equals(lastTrack) || holdStart - lastSeekAt > TRUST_TARGET_MS) {
+            lastTarget = -1;
+        }
+        lastTrack = track;
         repeat.run();
         return true;
     }
@@ -92,7 +105,7 @@ public final class SeekService extends AccessibilityService {
         } else {
             base = state.getPosition() + (long) ((now - state.getLastPositionUpdateTime()) * speed);
         }
-        long position = Math.max(0, base + direction);
+        long position = Math.max(0, base + direction * step(now - holdStart));
         MediaMetadata metadata = controller.getMetadata();
         long duration = metadata == null ? 0 : metadata.getLong(MediaMetadata.METADATA_KEY_DURATION);
         if (duration > 0) {
@@ -102,6 +115,23 @@ public final class SeekService extends AccessibilityService {
         Log.d(TAG, controller.getPackageName() + " seekTo " + position);
         lastTarget = position;
         lastSeekAt = now;
+    }
+
+    private static long step(long heldMs) {
+        int i = STEP_AFTER_MS.length - 1;
+        while (heldMs < STEP_AFTER_MS[i]) {
+            i--;
+        }
+        return STEP_MS[i];
+    }
+
+    private static String trackOf(MediaController session) {
+        MediaMetadata metadata = session.getMetadata();
+        String id = metadata == null ? null : metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID);
+        if (id == null && metadata != null) {
+            id = metadata.getString(MediaMetadata.METADATA_KEY_TITLE);
+        }
+        return session.getPackageName() + "/" + id;
     }
 
     private MediaController activeController() {
