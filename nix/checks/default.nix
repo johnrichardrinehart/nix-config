@@ -30,6 +30,7 @@ in
   keyboard-remap = import ./keyboard-remap.nix { inherit pkgs; };
 }
 // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+  initrd-pkcs11 = import ./initrd-pkcs11.nix { inherit lib pkgs; };
   slicemk-host-bluetooth = import ../../packages/slicemk-update/host-bluetooth-check.nix {
     inherit pkgs;
     firmwareSource = pkgs.applyPatches {

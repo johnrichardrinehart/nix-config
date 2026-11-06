@@ -77,6 +77,7 @@
     ./kitkat-rs.nix
     ./gocryptfs.nix
     ./ide.nix
+    ./initrd-pkcs11.nix
     ./laptop.nix
     ./locale.nix
     ./luks-fido-face
