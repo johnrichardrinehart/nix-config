@@ -46,6 +46,14 @@ let
       mkdir -p $out/bin
       ln -s ${patched}/bin/systemd-cryptenroll $out/bin/systemd-cryptenroll
     '';
+  # With "pkcs11-uri=auto" and no systemd-pkcs11 token in the LUKS header,
+  # stock systemd-cryptsetup fails instead of asking for the passphrase, so a
+  # wiped card keyslot stops the boot. Stage 1 runs systemd-cryptsetup from
+  # this patched systemd, which falls back to the passphrase as it does for
+  # FIDO2 and TPM2. The running system keeps the stock systemd.
+  initrdSystemd = config.systemd.package.overrideAttrs (old: {
+    patches = old.patches or [ ] ++ [ ../patches/systemd-cryptsetup-pkcs11-plugin-fallback.patch ];
+  });
 in
 {
   options.dev.johnrinehart.initrdPkcs11.enable = lib.mkEnableOption ''
@@ -70,6 +78,7 @@ in
     environment.etc."pkcs11/modules/opensc.module".text = openscModule;
 
     boot.initrd.systemd = {
+      package = initrdSystemd;
       storePaths = [
         {
           source = "${systemd}/lib/cryptsetup/libcryptsetup-token-systemd-pkcs11.so";
