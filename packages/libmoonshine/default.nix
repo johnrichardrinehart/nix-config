@@ -89,7 +89,7 @@ stdenv.mkDerivation {
     repo = "moonshine";
     tag = "v${version}";
     sparseCheckout = [ "core" ];
-    hash = "sha256-NZdIb+ftIP3JSEhz8nk60xYt56Bh3T9sBK/GHLvICQo=";
+    hash = "sha256-SvhJh8L5p5X95/GzS7m0skhT5TSjD4r3rG23zUCdTm4=";
   };
 
   patches = [ ./runtime-diarization-models.patch ];

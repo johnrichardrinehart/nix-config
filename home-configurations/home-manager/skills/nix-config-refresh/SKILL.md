@@ -36,12 +36,13 @@ Check upstream (GitHub `releases/latest`, npm `latest`, `go.dev/VERSION?m=text`,
 | `packages/nebula.nix` | slackhq/nebula (needs `buildGo127Module` while go.mod requires Go 1.27) |
 | `packages/oh-my-codex.nix` | Yeachan-Heo/oh-my-codex tag → rebased fork branch (step 3) |
 | `packages/context-mode/default.nix` | npm `context-mode` |
+| `packages/brave/default.nix`, `packages/brave-origin/default.nix` | brave/brave-browser `releases/latest` (nixpkgs dropped both; keep one version, prefetch the `.deb` and arm64 `.dmg` assets) |
 | tmux, herdr, impala, util-linux, git-local-namespace, cliphist-master, kdlfmt, libmoonshine, mighty-mitts | their upstreams |
 
 This table is not exhaustive. Each pass, also scan `packages/`, `overlays/`, `nixos-modules/`, and `nixos-configurations/` for `version =`, `rev =`, `tag =`, `fetchurl`, `fetchFromGitHub`, and `fetchpatch` pins, and check every pin you find against its upstream.
 
 Hash workflow: source hash via `nix store prefetch-file --json --unpack <archive-url>`; vendor/npm/cargo hashes by setting `sha256-AAAA…=` (fakeHash), building locally with `--builders ''`, and copying the `got:` hash.
-Known gotchas: `gh` is not on PATH in sandboxes — use `fetch` against api.github.com; ctx_batch_execute shells choke on `for` loops — one command per entry.
+Known gotchas: `gh` is not on PATH in sandboxes — use `fetch` against api.github.com; ctx_batch_execute shells choke on `for` loops — one command per entry; upstream tags can move (moonshine re-tagged v0.1.6), so recheck tag-pinned sources with `nix build --rebuild <attr>.src`.
 
 ## 3. Maintained branches and patches
 Rebase, verify, push with an explicit lease (`--force-with-lease=refs/heads/<b>:<old-sha>`; plain `--force-with-lease` reports stale info), then regenerate artifacts:

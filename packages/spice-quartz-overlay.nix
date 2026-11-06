@@ -161,11 +161,11 @@ final: prev: {
         # macOS reports Caps Lock as a press when the lock turns on and a
         # release when it turns off, so the guest turned it off only when
         # the lock sync caught up, a second or two late. Send each change
-        # as a whole keystroke.
+        # as a whole keystroke. Upstream merged it after v0.43.
         (prev.fetchpatch2 {
           name = "spice-widget-quartz-caps-lock-tap.patch";
-          url = "https://gitlab.freedesktop.org/johnrichardrinehart/spice-gtk/-/commit/5bb1f2e604f024318a67f54eed2b854e71f025c4.patch";
-          hash = "sha256-3eZQ7k6vYriswt8BGx+awyqIh69p7p+YZqMZ/PRBa0M=";
+          url = "https://gitlab.freedesktop.org/spice/spice-gtk/-/commit/a5e3b704267810bc0666f0ffb69168caafa18f01.patch";
+          hash = "sha256-SE2OJPX5elcH9brp83HvyeZt3oQH5qdWjh1m3ievD5A=";
         })
         # https://gitlab.freedesktop.org/spice/spice-gtk/-/merge_requests/157
         # Adds --maximized, which the VM launcher passes so the viewer opens

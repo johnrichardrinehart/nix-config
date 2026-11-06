@@ -21,7 +21,7 @@ python3.pkgs.buildPythonPackage {
     repo = "moonshine";
     tag = "v${libmoonshine.version}";
     sparseCheckout = [ "language-bindings/python" ];
-    hash = "sha256-SgqRQYdIot8aXLdfri6KZvGShV6YBylVI8mt00NBSjk=";
+    hash = "sha256-4eCS7/owc/UAhR7th8Tz8arV0Zcp++XhmHGILm/uCu0=";
   };
 
   sourceRoot = "source/language-bindings/python";
