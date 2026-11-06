@@ -2,7 +2,7 @@
 # PIV card in a CCID reader. Enroll a card in a running system:
 #
 #   systemd-cryptenroll --pkcs11-token-uri=list
-#   systemd-cryptenroll --pkcs11-token-uri=<URI from the list> /dev/sdXN
+#   systemd-cryptenroll --pkcs11-token-uri=auto /dev/sdXN
 #
 # Then add "pkcs11-uri=auto" to the container's
 # boot.initrd.luks.devices.<name>.crypttabExtraOpts. systemd-cryptsetup asks
@@ -31,6 +31,21 @@ let
   openscModule = "module: ${opensc}/lib/opensc-pkcs11.so";
   # An empty file stops pcscd from parsing every file in /etc as reader.conf.
   readerConf = pkgs.writeText "reader.conf" "";
+  # `--pkcs11-token-uri=auto` tests the token flags where it means the slot
+  # flags, so it rejects every token without CKF_RNG, such as PIVKey cards.
+  # The fix is in libsystemd-shared, so this installs systemd-cryptenroll from
+  # a patched systemd. The system keeps the stock systemd: boot unlock with
+  # "pkcs11-uri=auto" takes the URI from the LUKS header, not from this check.
+  cryptenroll =
+    let
+      patched = config.systemd.package.overrideAttrs (old: {
+        patches = old.patches or [ ] ++ [ ../patches/systemd-pkcs11-auto-check-slot-flags.patch ];
+      });
+    in
+    pkgs.runCommand "systemd-cryptenroll-pkcs11-auto" { } ''
+      mkdir -p $out/bin
+      ln -s ${patched}/bin/systemd-cryptenroll $out/bin/systemd-cryptenroll
+    '';
 in
 {
   options.dev.johnrinehart.initrdPkcs11.enable = lib.mkEnableOption ''
@@ -48,7 +63,10 @@ in
 
     # systemd-cryptenroll finds the card through the same p11-kit module.
     services.pcscd.enable = true;
-    environment.systemPackages = [ opensc ];
+    environment.systemPackages = [
+      opensc
+      (lib.hiPrio cryptenroll)
+    ];
     environment.etc."pkcs11/modules/opensc.module".text = openscModule;
 
     boot.initrd.systemd = {
