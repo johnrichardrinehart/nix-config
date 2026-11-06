@@ -20,10 +20,20 @@
     # Temporarily disable complex s3/gocryptfs setup for building
     # s3_mount.enable = false;
     # gocryptfs.enable = false;
-    desktop.enable = true;
+    profiles.laptop.enable = true;
+    network = {
+      enable = true;
+      manager = "iwd";
+    };
+    nix.enable = true;
   };
 
+  # The Intel Centrino Wi-Fi card (iwlwifi) needs its firmware files.
+  hardware.enableRedistributableFirmware = true;
+
   networking.hostName = "thinkie";
+  # iwd handles Wi-Fi. dhcpcd handles the wired port.
+  networking.interfaces.enp0s25.useDHCP = true;
 
   # really noisy webcam
   programs.noisetorch.enable = true;
@@ -46,8 +56,6 @@
 
   boot.initrd.luks.devices."dm-0".device =
     lib.mkForce "/dev/disk/by-uuid/002adea0-5c10-45a8-bc8a-701a0d71577b";
-
-  networking.interfaces.wlp3s0.useDHCP = true;
 
   services.upower.enable = true;
 
