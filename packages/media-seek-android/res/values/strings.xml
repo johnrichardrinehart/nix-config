@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Media Seek</string>
+    <string name="description">Seeks the playing media 10 seconds per step while a Fast Forward or Rewind key is held, for players that do not handle these keys.</string>
+</resources>

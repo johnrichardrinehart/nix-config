@@ -122,7 +122,13 @@
 
       allowUnfreePackages =
         pkg:
-        builtins.elem (lib.getName pkg) [
+        let
+          name = lib.getName pkg;
+        in
+        # packages/media-seek-android builds with the Android SDK. Its
+        # packages and archives all share androidenv's meta.homepage.
+        (pkg.meta.homepage or null) == "https://developer.android.com/tools"
+        || builtins.elem name [
           "arm-trusted-firmware-rk3588"
           "context-mode"
           "moonshine-models-source"
