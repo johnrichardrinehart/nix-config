@@ -18,6 +18,7 @@
 #define CONFIG_ZMK_BLE_PROFILE_ADVERTISING 1
 #endif
 #define CONFIG_ZMK_SPLIT 1
+#define CONFIG_ZMK_SPLIT_BLE 1
 #define CONFIG_ZMK_BLE 1
 #define CONFIG_ZMK_USB 1
 #define CONFIG_ZMK_SPLIT_BLE_CENTRAL_PERIPHERALS 2
@@ -100,6 +101,8 @@ static inline uint32_t ring_buf_get(struct ring_buf *buffer, uint8_t *data, uint
 
 typedef struct { uint8_t type; struct { uint8_t val[6]; } a; } bt_addr_le_t;
 #define BT_ADDR_LE_ANY (&(const bt_addr_le_t){0})
+static const bt_addr_le_t bt_addr_le_none = {0, {{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}}};
+#define BT_ADDR_LE_NONE (&bt_addr_le_none)
 #define BT_ADDR_LE_STR_LEN 32
 #define BT_ID_DEFAULT 0
 static inline int bt_addr_le_cmp(const bt_addr_le_t *a, const bt_addr_le_t *b) {
@@ -170,7 +173,7 @@ struct bt_data { uint8_t type; };
 #define BT_DATA_UUID16_SOME 3
 #define BT_LE_AD_GENERAL 1
 #define BT_LE_AD_NO_BREDR 2
-#define BT_LE_ADV_OPT_CONNECTABLE 1
+#define BT_LE_ADV_OPT_CONN 1
 #define BT_LE_ADV_OPT_ONE_TIME 2
 #define BT_LE_ADV_OPT_USE_NAME 4
 #define BT_LE_ADV_OPT_FORCE_NAME_IN_AD 8

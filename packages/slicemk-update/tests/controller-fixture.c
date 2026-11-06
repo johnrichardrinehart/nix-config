@@ -277,7 +277,7 @@ static void connect_host(struct bt_conn *conn) {
 static void test_off_routes_usb_before_async_disconnect(void) {
     reset_fixture(true);
     assert(zmk_ble_active_profile_is_connected());
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_BLE);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_BLE);
     assert(press_command(off_command) == 0);
     assert(!zmk_ble_host_is_enabled());
     assert(!controller_advertising);
@@ -287,22 +287,22 @@ static void test_off_routes_usb_before_async_disconnect(void) {
     assert(connections[0].state == BT_CONN_STATE_CONNECTED);
     assert(!zmk_ble_active_profile_is_connected());
     assert(zmk_ble_active_profile_conn() == NULL);
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_USB);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_USB);
     assert_split_unchanged();
     assert_existing_bonds();
 
     usb_ready = false;
-    endpoint_listener(NULL);
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_USB);
+    endpoint_listener(NULL); /* No transport is ready: a disabled host must not be selected. */
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_NONE);
     usb_ready = true;
-    assert(zmk_endpoints_select_transport(ZMK_TRANSPORT_USB) == 0);
-    assert(zmk_endpoints_select_transport(ZMK_TRANSPORT_BLE) == 0);
+    assert(zmk_endpoint_set_preferred_transport(ZMK_TRANSPORT_USB) == 0);
+    assert(zmk_endpoint_set_preferred_transport(ZMK_TRANSPORT_BLE) == 0);
     assert(!zmk_ble_host_is_enabled());
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_USB);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_USB);
     unsigned old_ble_reports = ble_reports;
     unsigned old_usb_reports = usb_keyboard_reports + usb_consumer_reports;
-    assert(zmk_endpoints_send_report(HID_USAGE_KEY) == 0);
-    assert(zmk_endpoints_send_report(HID_USAGE_CONSUMER) == 0);
+    assert(zmk_endpoint_send_report(HID_USAGE_KEY) == 0);
+    assert(zmk_endpoint_send_report(HID_USAGE_CONSUMER) == 0);
     assert(ble_reports == old_ble_reports);
     assert(usb_keyboard_reports + usb_consumer_reports == old_usb_reports + 2);
 
@@ -348,13 +348,13 @@ static void test_off_routes_usb_before_async_disconnect(void) {
     assert(press_command(on_command) == 0);
     assert(zmk_ble_host_is_enabled());
     assert(controller_advertising);
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_USB);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_USB);
     connect_host(&connections[0]);
     drain_work();
     assert(zmk_ble_active_profile_is_connected());
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_BLE);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_BLE);
     unsigned old_reports = ble_reports;
-    assert(zmk_endpoints_send_report(HID_USAGE_KEY) == 0);
+    assert(zmk_endpoint_send_report(HID_USAGE_KEY) == 0);
     assert(ble_reports == old_reports + 1);
     assert(bluetooth_enables == 1);
     assert_existing_bonds();
@@ -403,7 +403,7 @@ static void test_controller_failures(void) {
     assert(connections[0].disconnect_requests == 1);
     assert(connections[1].disconnect_requests == 1);
     assert(zmk_ble_active_profile_conn() == NULL);
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_USB);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_USB);
     assert_split_unchanged();
     assert_existing_bonds();
     connect_host(&connections[4]);
@@ -441,7 +441,7 @@ static void test_controller_failures(void) {
     assert(press_command(on_command) == -ENOMEM);
     assert(zmk_ble_host_is_enabled()); /* Requested policy remains applied on failure. */
     assert(!controller_advertising);
-    assert(zmk_endpoints_selected().transport == ZMK_TRANSPORT_USB);
+    assert(zmk_endpoint_get_selected().transport == ZMK_TRANSPORT_USB);
     advertising_start_error = 0;
     registered_connections->disconnected(&connections[0], BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     drain_work();

@@ -33,9 +33,6 @@ in
   initrd-pkcs11 = import ./initrd-pkcs11.nix { inherit lib pkgs; };
   slicemk-host-bluetooth = import ../../packages/slicemk-update/host-bluetooth-check.nix {
     inherit pkgs;
-    firmwareSource = pkgs.applyPatches {
-      src = pkgs.dev.johnrinehart.slicemk-firmware.src;
-      patches = pkgs.dev.johnrinehart.slicemk-firmware.patches;
-    };
+    firmwareSource = pkgs.dev.johnrinehart.slicemk-firmware.src;
   };
 }

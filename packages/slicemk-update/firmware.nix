@@ -13,16 +13,15 @@
   config ? ./keyboard.json,
   keymap ? null,
   conf ? null,
-  board ? "slicemk_ergodox_202207_green_left",
+  board ? "slicemk_ergodox_202207_green_left//zmk",
   shield ? "slicemk_ergodox_leftcentral",
-  hostBluetoothPatch ? ./host-bluetooth.patch,
   # Zephyr snippets, e.g. "zmk-usb-logging" (serial log on the USB port).
   snippets ? [ ],
 }:
 let
-  sourceRevision = "71f8242b8ab2e9f9c86ebbb221ba15876413f295";
+  sourceRevision = "cb63068a27f26f9ba58ae926b2430d1a85d3cb23";
   # app/west.yml names a branch, so freeze its resolved commit too.
-  zephyrRevision = "dacab4875df72109b96cc8977547a0dc04875bcd";
+  zephyrRevision = "10ba6d0cb38bc3d258775d27982f707599320085";
   githubSource =
     owner: repo: rev: hash:
     fetchzip {
@@ -31,63 +30,69 @@ let
       extension = "tar.gz";
     };
   source =
-    githubSource "slicemk" "zmk" sourceRevision
-      "sha256-9yE0egEJG+lfHMyadQb6dhmlLPaa/EWokbCThi9ZO4A=";
+    githubSource "johnrichardrinehart" "zmk" sourceRevision
+      "sha256-D3hNdmxqGqNmBUmuIJAODuEVyMH6gJ50N3f8mAWaLlQ=";
   zephyr =
     githubSource "zmkfirmware" "zephyr" zephyrRevision
-      "sha256-7QpHcotCG+m16PvGdB+aZrU+5p/FSXhmkmtMoUkKqs4=";
+      "sha256-c9gPM6K/RYZzsS1aIIjrgQNMlEFy10DjCYKzvVbkTmg=";
 
-  # Hardware modules imported by app/west.yml from Zephyr's west.yml,
-  # plus the two direct ZMK dependencies. BabbleSim's disabled test-only
-  # group is not needed for either physical target.
+  # Modules allowed by app/west.yml from Zephyr's west.yml (including its
+  # optional submanifest), plus the direct ZMK dependencies. BabbleSim's
+  # test-only modules are not needed for either physical target.
   modulePins = [
     {
       name = "cmsis";
       owner = "zephyrproject-rtos";
-      rev = "5a00331455dd74e31e80efa383a489faea0590e3";
-      hash = "sha256-1oCeT681nFDbCyhp0mErktuoj3YtFDzP5dLYdWz0+AM=";
+      rev = "d1b8b20b6278615b00e136374540eb1c00dcabe7";
+      hash = "sha256-41c6ugwL9D5aQHh6lLCTf2iJP0yAn8bVXOsVUsguuQg=";
     }
     {
       name = "hal_nordic";
       owner = "zephyrproject-rtos";
-      rev = "884c4d61746bc35fbd379c169fc87ddb56c6461d";
-      hash = "sha256-L6jCDtBfE78JZDo81VCvdJxFWMoj7EJYzXMAhgqyJ9Q=";
+      rev = "37ca068d7b013fb65a2acc9306bffa48a3e72839";
+      hash = "sha256-2Johs7F9W4tspOT+6fRz1kNFN+SKSjaWx2i9tl10Hlw=";
     }
     {
       name = "hal_rpi_pico";
       owner = "zephyrproject-rtos";
-      rev = "fba7162cc7bee06d0149622bbcaac4e41062d368";
-      hash = "sha256-oJQPq//mAxAQW8QzxixbiHJsMMANtQl3BevMUL9Kv5g=";
+      rev = "7b57b24588797e6e7bf18b6bda168e6b96374264";
+      hash = "sha256-jpEq/h/ec3cCH0ZZK4OTs+zx9V+g4Sg05HF5uDbwmI8=";
     }
     {
-      name = "lvgl";
+      name = "mbedtls";
       owner = "zephyrproject-rtos";
-      rev = "8a6a2d1d29d17d1e4bdc94c243c146a39d635fdd";
-      hash = "sha256-RDirbdNZ0QQ1g0WJyWx2k70J+zUhTdWiF484VAakVWc=";
+      rev = "4952e1328529ee549d412b498ea71c54f30aa3b1";
+      hash = "sha256-kiB6ZxMLAEJSxQNRaWj+ggMYmk/QqkHsxCN6YbvPSC8=";
+    }
+    {
+      name = "nanopb";
+      owner = "zephyrproject-rtos";
+      rev = "7307ce399b81ddcb3c3a5dc862c52d4754328d38";
+      hash = "sha256-v06q2v1ifISPvO+0Elqa4N1q4/oxnG7C6lTj72Y2uZY=";
     }
     {
       name = "segger";
       owner = "zephyrproject-rtos";
-      rev = "9d0191285956cef43daf411edc2f1a7788346def";
-      hash = "sha256-9nt0z674ubxxvIANPMf82Qf7KsOwR3Hg8wYAK5r/i4c=";
+      rev = "cf56b1d9c80f81a26e2ac5727c9cf177116a4692";
+      hash = "sha256-RiQm92YGm+pZPLDcZxI9brNfIerumduLFNi6JKGj99E=";
     }
     {
       name = "tinycrypt";
       owner = "zephyrproject-rtos";
-      rev = "3e9a49d2672ec01435ffbf0d788db6d95ef28de0";
-      hash = "sha256-5gtZbZNx+D/EUkyYk7rPtcxBZaNs4IFGTP/7IXzCoqU=";
+      rev = "1012a3ebee18c15ede5efc8332ee2fc37817670f";
+      hash = "sha256-JQmkN+ircGU5Ald1+Q4lysuxhZLg2mJpNQ92+agMoCQ=";
     }
     {
       name = "zcbor";
       owner = "zephyrproject-rtos";
-      rev = "67fd8bb88d3136738661fa8bb5f9989103f4599e";
-      hash = "sha256-Z4I14nLsER+GcqGzd8ILuk9QBUOV3u3aMA4q2s9EI5g=";
+      rev = "9b07780aca6fb21f82a241ba386ad9b379809337";
+      hash = "sha256-PIxfJfj0WztvsBZPTybkyQ+XImU8b83UtYQwt02CVuc=";
     }
     {
-      name = "nanopb";
+      name = "lvgl";
       owner = "zmkfirmware";
-      rev = "8c60555d6277a0360c876bd85d491fc4fb0cd74a";
-      hash = "sha256-L+BBhQX/oRscA/J7muAmJ/9gr+BE8/Vd7efBzQ7B5/A=";
+      rev = "f1db87ee98f1810328a8419572fa42a3b5f352ae";
+      hash = "sha256-4cIQLNHZ8tLUbDg3BX+RopVEg2YBwE13R7J387mUCzM=";
     }
     {
       name = "zmk-studio-messages";
@@ -129,10 +134,9 @@ assert lib.assertMsg (
   keymap != null || config != null
 ) "SliceMK firmware needs either a keymap path or a configurator JSON path";
 stdenv.mkDerivation {
-  pname = "slicemk-firmware-${board}-${shield}";
-  version = "20251223-${builtins.substring 0 7 sourceRevision}";
+  pname = "slicemk-firmware-${lib.strings.sanitizeDerivationName board}-${shield}";
+  version = "20261106-${builtins.substring 0 7 sourceRevision}";
   src = source;
-  patches = [ hostBluetoothPatch ];
 
   nativeBuildInputs = [
     cmake
@@ -263,7 +267,7 @@ stdenv.mkDerivation {
 
   meta = {
     description = "Offline custom SliceMK ZMK firmware with host-only Bluetooth controls";
-    homepage = "https://github.com/slicemk/zmk";
+    homepage = "https://github.com/johnrichardrinehart/zmk";
     license = lib.licenses.mit;
     platforms = gcc-arm-embedded-13.meta.platforms;
   };
