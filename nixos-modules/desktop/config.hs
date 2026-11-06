@@ -398,7 +398,7 @@ yad       = ClassApp "Yad"                  "yad --text-info --text 'XMonad'"
 
 myManageHook = manageApps <+> manageSpawn <+> manageScratchpads
  where
-  isBrowserDialog     = isDialog <&&> className =? "Brave-browser"
+  isBrowserDialog     = isDialog <&&> className =? "Brave-origin"
   isFileChooserDialog = isRole =? "GtkFileChooserDialog"
   isPopup             = isRole =? "pop-up"
   isSplash            = isInProperty "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_SPLASH"
@@ -480,7 +480,7 @@ projects =
   , Project { projectName      = commWs
             , projectDirectory = "~/"
             , projectStartHook = Just $ do spawn "discord"
-                                           spawn "brave"
+                                           spawn "brave-origin"
             }
   , Project { projectName      = free1Ws
             , projectDirectory = "~/workspace/cr/app"

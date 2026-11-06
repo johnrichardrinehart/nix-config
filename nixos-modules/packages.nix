@@ -43,11 +43,11 @@ let
       -v chromium="$brave_log.log" \
       -v wayland="${pkgs.daemontools}/bin/multilog t s16777215 n32 '$brave_log.wayland'" \
       ${lib.escapeShellArg braveLogSplitter})
-    printf "%s launch: brave %s\n" "$(${pkgs.coreutils}/bin/date -Is)" "$*" >&2
+    printf "%s launch: brave-origin %s\n" "$(${pkgs.coreutils}/bin/date -Is)" "$*" >&2
   '';
 
   braveWithInputLogging =
-    (pkgs.dev.johnrinehart.brave.override {
+    (pkgs.dev.johnrinehart.brave-origin.override {
       commandLineArgs = lib.concatStringsSep " " [
         "--enable-logging=stderr"
         "--vmodule=${lib.concatStringsSep "," braveInputLogModules}"
@@ -63,7 +63,7 @@ in
   options.dev.johnrinehart.packages = {
     shell.enable = lib.mkEnableOption "Shell tools (zoxide, tmux, fzf, ripgrep, fd, etc.)";
     editors.enable = lib.mkEnableOption "Text editors (vim)";
-    gui.enable = lib.mkEnableOption "GUI apps (brave, vscodium, keepassxc, etc.)";
+    gui.enable = lib.mkEnableOption "GUI apps (brave-origin, vscodium, keepassxc, etc.)";
     devops.enable = lib.mkEnableOption "DevOps tools (minikube, kubectl)";
     media.enable = lib.mkEnableOption "Media tools (mpv, ffmpeg, obs-studio, etc.)";
     system.enable = lib.mkEnableOption "System utilities (htop, tree, lsof, etc.)";
