@@ -16,10 +16,11 @@
   board ? "slicemk_ergodox_202207_green_left//zmk",
   shield ? "slicemk_ergodox_leftcentral",
   # Zephyr snippets, e.g. "zmk-usb-logging" (serial log on the USB port).
+  # At least one is required; see the assertion below.
   snippets ? [ ],
 }:
 let
-  sourceRevision = "cb63068a27f26f9ba58ae926b2430d1a85d3cb23";
+  sourceRevision = "88c960b44610b41ae36456e60c29593c67ee9e3b";
   # app/west.yml names a branch, so freeze its resolved commit too.
   zephyrRevision = "10ba6d0cb38bc3d258775d27982f707599320085";
   githubSource =
@@ -31,7 +32,7 @@ let
     };
   source =
     githubSource "johnrichardrinehart" "zmk" sourceRevision
-      "sha256-D3hNdmxqGqNmBUmuIJAODuEVyMH6gJ50N3f8mAWaLlQ=";
+      "sha256-nXY1/2Xe6XyCwpCA6rU1Xs3EWX0XYDEVDGYF0cmt/0Y=";
   zephyr =
     githubSource "zmkfirmware" "zephyr" zephyrRevision
       "sha256-c9gPM6K/RYZzsS1aIIjrgQNMlEFy10DjCYKzvVbkTmg=";
@@ -133,6 +134,12 @@ in
 assert lib.assertMsg (
   keymap != null || config != null
 ) "SliceMK firmware needs either a keymap path or a configurator JSON path";
+# configurePhase adds the -DSNIPPET line to the backslash-continued cmake call
+# only when snippets is non-empty. Without it, the remaining empty line ends
+# the cmake command early and the build fails, so require a snippet here.
+assert lib.assertMsg (
+  snippets != [ ]
+) "SliceMK firmware needs at least one Zephyr snippet, e.g. snippets = [ \"zmk-usb-logging\" ]";
 stdenv.mkDerivation {
   pname = "slicemk-firmware-${lib.strings.sanitizeDerivationName board}-${shield}";
   version = "20261106-${builtins.substring 0 7 sourceRevision}";
