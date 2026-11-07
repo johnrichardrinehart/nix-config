@@ -25,6 +25,17 @@ let
   cfg = config.dev.johnrinehart.hibernate-resume-optimization;
 in
 {
+  imports = [
+    (lib.mkRemovedOptionModule
+      [ "dev" "johnrinehart" "hibernate-resume-optimization" "enableResumeCompression" ]
+      ''
+        It assumed a bare `nocompress` kernel parameter disables compression;
+        the kernel only knows `hibernate=nocompress`, so images were always
+        LZO-compressed. Use `compression.algorithm` and `compression.threads`.
+      ''
+    )
+  ];
+
   options.dev.johnrinehart.hibernate-resume-optimization = {
     enable = lib.mkEnableOption "Hibernate resume optimizations for faster session interactivity";
 
@@ -156,23 +167,43 @@ in
       };
     };
 
-    enableResumeCompression = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
+    compression = {
+      algorithm = lib.mkOption {
+        type = lib.types.nullOr (
+          lib.types.enum [
+            "lzo"
+            "lz4"
+            "none"
+          ]
+        );
+        default = null;
+        example = "lz4";
         description = ''
-          Enable LZO compression for hibernate images.
+          Hibernation image compressor, set on the kernel command line
+          (`hibernate.compressor=` or `hibernate=nocompress`). The image
+          header records it, so the resume kernel decompresses either. null
+          keeps the kernel default (lzo).
 
-          **Impact: VARIABLE** (may improve or worsen depending on hardware)
+          On framie (i5-1135G7, LUKS swap on NVMe), with 7 threads, lz4
+          beat lzo by a few seconds per cycle and decompresses about 3x
+          faster, at a 3% larger image. Images compress to about 41-44% of
+          their size, so writing them uncompressed would mean more than
+          twice the data.
+        '';
+      };
 
-          Compression reduces the amount of data written to/read from swap,
-          but adds CPU overhead. On systems with fast NVMe but slower CPUs,
-          disabling compression (the default) may be faster. On systems with
-          slower storage, compression typically helps.
+      threads = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.positive;
+        default = null;
+        example = 7;
+        description = ''
+          Upper bound on hibernation (de)compression threads
+          (`hibernate_compression_threads=`). The kernel uses
+          min(online CPUs - 1, this) and defaults to 3. null keeps the
+          default.
 
-          This option removes 'nocompress' from kernel command line if present.
-          Note: This conflicts with nocompress in boot.kernelParams - you may
-          need to remove it manually from your config.
+          On framie, 7 threads instead of 3 shortened a hibernate-and-restore
+          cycle with a 12 GiB image from about 54 s to 36-41 s.
         '';
       };
     };
@@ -385,14 +416,29 @@ in
         ];
       })
 
-      # Enable resume compression (remove nocompress)
-      (lib.mkIf cfg.enableResumeCompression.enable {
-        # Note: This doesn't remove existing nocompress from boot.kernelParams
-        # User needs to remove it manually. We just warn here.
-        warnings =
-          lib.optional (lib.any (p: p == "nocompress") config.boot.kernelParams)
-            "hibernate-resume-optimization: enableResumeCompression is set but 'nocompress' is in boot.kernelParams. Remove 'nocompress' to enable compression.";
+      (lib.mkIf (cfg.compression.algorithm != null) {
+        boot.kernelParams = [
+          (
+            if cfg.compression.algorithm == "none" then
+              "hibernate=nocompress"
+            else
+              "hibernate.compressor=${cfg.compression.algorithm}"
+          )
+        ];
       })
+
+      (lib.mkIf (cfg.compression.threads != null) {
+        boot.kernelParams = [
+          "hibernate_compression_threads=${toString cfg.compression.threads}"
+        ];
+      })
+
+      {
+        # A bare `nocompress` is not a kernel parameter: it does nothing.
+        warnings =
+          lib.optional (lib.elem "nocompress" config.boot.kernelParams)
+            "hibernate-resume-optimization: 'nocompress' in boot.kernelParams does nothing; use compression.algorithm = \"none\" (hibernate=nocompress).";
+      }
 
       # Debug timing
       (lib.mkIf cfg.debugTiming.enable {

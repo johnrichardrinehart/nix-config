@@ -133,9 +133,19 @@
     prioritizeUserSession.enable = true;
     prioritizeUserSession.userSliceCPUWeight = 200;
 
-    # LOW-MEDIUM impact: Smaller hibernate image = faster write/read
-    # Disabled by default - enable if hibernate/resume itself is slow
+    # Keep the default image_size (2/5 of RAM). A 4 GiB cap shortened test
+    # cycles (on AC, ~24 s against 36-41 s with 12 GiB of images; on
+    # battery, ~4 s with 7 GiB), but reaching it with full RAM means
+    # swapping out first (one run spent 75 s freeing memory) and faulting
+    # pages back in after resume.
     reduceHibernateImageSize.enable = false;
+
+    # Benchmarked 2026-11-07 with test_resume cycles, on AC and battery:
+    # 7 threads beat the default 3, and lz4 edged out lzo.
+    compression = {
+      algorithm = "lz4";
+      threads = 7; # 8 hardware threads; the kernel caps at CPUs - 1
+    };
 
     # Diagnostic: Enable to debug slow resume with PM timing
     debugTiming.enable = true;
@@ -280,7 +290,6 @@
   };
 
   boot.kernelParams = [
-    "nocompress"
     "mem_sleep_default=deep"
     "pcie_ports=native"
   ];
