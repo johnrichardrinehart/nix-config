@@ -117,6 +117,9 @@ in
       lowLevel = 30;
       criticalLevel = 20;
       notificationLevels = builtins.genList (i: 45 - (i * 5)) 6; # [ 45 40 35 30 25 20 ]
+      # framie's worn battery (75% health) read 9% and then cut out at
+      # ~42 W, and read 19% at rest after reboot.
+      predictive.emptyPercent = 10;
       enable = true;
     };
 

@@ -141,7 +141,7 @@ let
     inherit pkgs;
     inherit (cfg) lowLevel criticalLevel notificationLevels;
     inherit dismissNotificationsScript sendNotificationScript sshPromptUnit;
-    inherit (cfg) sshActivityDeferSeconds;
+    inherit (cfg) sshActivityDeferSeconds predictive;
   };
 in
 {
@@ -176,6 +176,49 @@ in
         discharging, UPower battery updates also start a check, at most every
         `eventCheckIntervalSeconds`.
       '';
+    };
+
+    predictive = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Also act on the discharge rate. Each check records the charge; the
+          drop over `windowSeconds` projects the minutes left until
+          `emptyPercent`. Under heavy load a laptop can lose 5% per minute,
+          so fixed levels alone can fire too late.
+        '';
+      };
+
+      emptyPercent = lib.mkOption {
+        type = lib.types.ints.between 0 100;
+        default = 5;
+        description = ''
+          Gauge reading at which the battery cuts out under load. Worn
+          batteries sag under high draw and can shut down well above 0%.
+        '';
+      };
+
+      lowMinutes = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 6;
+        description = "Projected minutes left that trigger the low action (suspend-then-hibernate).";
+      };
+
+      criticalMinutes = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 3;
+        description = "Projected minutes left that trigger the critical action, without the SSH prompt.";
+      };
+
+      windowSeconds = lib.mkOption {
+        type = lib.types.ints.between 60 600;
+        default = 120;
+        description = ''
+          Span of samples used for the drain rate. Estimates need at least
+          45 s of samples; gaps over 5 min (sleep) restart the window.
+        '';
+      };
     };
 
     eventCheckIntervalSeconds = lib.mkOption {

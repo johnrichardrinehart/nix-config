@@ -94,6 +94,7 @@ assert monitorService.serviceConfig.Restart == "always";
 pkgs.runCommand "auto-suspend-module" { } ''
   export AUTO_SUSPEND_STATE_DIR="$TMPDIR/state"
   export AUTO_SUSPEND_POWER_STATE_FILE="$TMPDIR/power-state"
+  export AUTO_SUSPEND_RUNTIME_DIR="$TMPDIR/run"
   export TEST_LOG="$TMPDIR/actions"
   export TEST_UPOWER_COUNTER="$TMPDIR/upower-counter"
 
@@ -106,7 +107,7 @@ pkgs.runCommand "auto-suspend-module" { } ''
   }
 
   reset_test() {
-    rm -rf "$AUTO_SUSPEND_STATE_DIR"
+    rm -rf "$AUTO_SUSPEND_STATE_DIR" "$AUTO_SUSPEND_RUNTIME_DIR"
     mkdir -p "$AUTO_SUSPEND_STATE_DIR"
     rm -f "$AUTO_SUSPEND_POWER_STATE_FILE" "$TEST_UPOWER_COUNTER"
     : > "$TEST_LOG"
@@ -199,6 +200,38 @@ pkgs.runCommand "auto-suspend-module" { } ''
   ${checkBatteryWithPromptScript}
   grep -Fx 'systemctl stop --no-block auto-suspend-ssh-prompt.service' "$TEST_LOG"
   grep -q '^systemctl suspend-then-hibernate\|^systemctl hibernate' "$TEST_LOG"
+
+  # Fast drain above the low level: 40% -> 29% in 100 s is 6.6%/min,
+  # about 3.6 min until 5%, under lowMinutes (6).
+  reset_test
+  export TEST_POWER_MODE=discharging
+  mkdir -p "$AUTO_SUSPEND_RUNTIME_DIR"
+  echo "$(( $(date +%s) - 100 )) 40" > "$AUTO_SUSPEND_RUNTIME_DIR/discharge-samples"
+  ${checkBatteryScript} | grep -F 'Draining 6.6'
+  grep -Fx 'systemctl suspend-then-hibernate' "$TEST_LOG"
+  grep -q '^notify Low Battery Battery draining at' "$TEST_LOG"
+  test "$(cat "$AUTO_SUSPEND_STATE_DIR/last-action")" = low
+
+  # 40% -> 29% in 60 s is 11%/min, about 2.2 min left: critical, no prompt.
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_UNIT_ACTIVE=1
+  mkdir -p "$AUTO_SUSPEND_RUNTIME_DIR"
+  echo "$(( $(date +%s) - 60 )) 40" > "$AUTO_SUSPEND_RUNTIME_DIR/discharge-samples"
+  ${checkBatteryWithPromptScript}
+  grep -Fx 'systemctl stop --no-block auto-suspend-ssh-prompt.service' "$TEST_LOG"
+  test "$(cat "$AUTO_SUSPEND_STATE_DIR/last-action")" = critical
+
+  # Samples under 45 s old, or older than a sleep gap, give no estimate.
+  for age in 10 400; do
+    reset_test
+    export TEST_POWER_MODE=discharging
+    mkdir -p "$AUTO_SUSPEND_RUNTIME_DIR"
+    echo "$(( $(date +%s) - age )) 40" > "$AUTO_SUSPEND_RUNTIME_DIR/discharge-samples"
+    ${checkBatteryScript}
+    refute grep -qx 'systemctl \(suspend\|suspend-then-hibernate\|hibernate\)' "$TEST_LOG"
+  done
+  # The stale sample was dropped; the current one was kept.
+  test "$(wc -l < "$AUTO_SUSPEND_RUNTIME_DIR/discharge-samples")" = 1
 
   # A second check skips while another holds the lock.
   reset_test

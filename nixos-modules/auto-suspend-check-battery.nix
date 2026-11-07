@@ -12,6 +12,15 @@
   dismissNotificationsScript,
   sendNotificationScript,
   stateDir ? "/var/lib/auto-suspend",
+  runtimeDir ? "/run/auto-suspend",
+  # Discharge-rate model; see the `predictive` options in auto-suspend.nix.
+  predictive ? {
+    enable = true;
+    emptyPercent = 5;
+    lowMinutes = 6;
+    criticalMinutes = 3;
+    windowSeconds = 120;
+  },
 }:
 
 pkgs.writeShellScript "check-battery" ''
@@ -21,6 +30,8 @@ pkgs.writeShellScript "check-battery" ''
   STATE_FILE="$STATE_DIR/last-action"
   NOTIFIED_FILE="$STATE_DIR/notified-levels"
   SSH_PROMPT_FILE="$STATE_DIR/ssh-prompt"
+  RUNTIME_DIR="''${AUTO_SUSPEND_RUNTIME_DIR:-${runtimeDir}}"
+  SAMPLES_FILE="$RUNTIME_DIR/discharge-samples"
   SSH_PROMPT_UNIT=${pkgs.lib.escapeShellArg sshPromptUnit}
   ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR"
 
@@ -70,7 +81,7 @@ pkgs.writeShellScript "check-battery" ''
   reset_discharge_cycle() {
     stop_ssh_prompt
     ${dismissNotificationsScript}
-    ${pkgs.coreutils}/bin/rm -f "$STATE_FILE" "$NOTIFIED_FILE" "$SSH_PROMPT_FILE"
+    ${pkgs.coreutils}/bin/rm -f "$STATE_FILE" "$NOTIFIED_FILE" "$SSH_PROMPT_FILE" "$SAMPLES_FILE"
   }
 
   # Low-level suspends ask idle SSH sessions first. The prompt runs in its own
@@ -134,6 +145,62 @@ pkgs.writeShellScript "check-battery" ''
     reset_discharge_cycle
     exit 0
   fi
+
+  # Discharge-rate model. Under heavy load the gauge can fall 5%/min and the
+  # battery can cut out well above 0%, so fixed levels alone come too late.
+  # Each check records (time, charge %); the drop over the last
+  # windowSeconds projects the minutes left until emptyPercent.
+  NOW=$(${pkgs.coreutils}/bin/date +%s)
+  PERCENT_EXACT=$(${pkgs.gawk}/bin/awk -v e="$ENERGY" -v f="$ENERGY_FULL" -v p="$PERCENTAGE" \
+    'BEGIN { if (e != "" && f > 0) printf "%.3f", 100 * e / f; else printf "%.3f", p }')
+  PREDICTED_LOW=0
+  PREDICTED_CRITICAL=0
+  DRAIN_PER_MIN=""
+  MINUTES_LEFT=""
+  ${pkgs.lib.optionalString predictive.enable ''
+    ${pkgs.coreutils}/bin/mkdir -p "$RUNTIME_DIR"
+    next_samples=$(${pkgs.coreutils}/bin/mktemp "$RUNTIME_DIR/samples.XXXXXX")
+    if [ -f "$SAMPLES_FILE" ]; then
+      # Drop old samples, and all of them after a gap (sleep, or no checks):
+      # a rate across a gap means nothing.
+      ${pkgs.gawk}/bin/awk -v now="$NOW" -v keep=${toString (predictive.windowSeconds * 2)} '
+        { t[NR] = $1; line[NR] = $0 }
+        END {
+          if (NR == 0 || now - t[NR] > 300) exit
+          for (i = 1; i <= NR; i++) if (now - t[i] <= keep) print line[i]
+        }' "$SAMPLES_FILE" > "$next_samples"
+    fi
+
+    PREDICTION=$(${pkgs.gawk}/bin/awk -v now="$NOW" -v p="$PERCENT_EXACT" \
+      -v window=${toString predictive.windowSeconds} -v empty=${toString predictive.emptyPercent} '
+        !found && now - $1 <= window && now - $1 >= 45 { t = $1; old = $2; found = 1 }
+        END {
+          if (!found) exit
+          rate = (old - p) / (now - t) * 60
+          if (rate <= 0) exit
+          left = (p - empty) / rate
+          if (left < 0) left = 0
+          printf "%.2f %.1f\n", rate, left
+        }' "$next_samples")
+
+    printf '%s %s\n' "$NOW" "$PERCENT_EXACT" >> "$next_samples"
+    ${pkgs.coreutils}/bin/mv "$next_samples" "$SAMPLES_FILE"
+
+    if [ -n "$PREDICTION" ]; then
+      read -r DRAIN_PER_MIN MINUTES_LEFT <<< "$PREDICTION"
+      echo "Draining $DRAIN_PER_MIN%/min: about $MINUTES_LEFT min until ${toString predictive.emptyPercent}%"
+      if ${pkgs.gawk}/bin/awk -v m="$MINUTES_LEFT" 'BEGIN { exit !(m <= ${toString predictive.criticalMinutes}) }'; then
+        PREDICTED_CRITICAL=1
+      fi
+      if ${pkgs.gawk}/bin/awk -v m="$MINUTES_LEFT" 'BEGIN { exit !(m <= ${toString predictive.lowMinutes}) }'; then
+        PREDICTED_LOW=1
+      fi
+    fi
+  ''}
+
+  notify_fast_drain() {
+    ${sendNotificationScript} "Low Battery" "Battery draining at $DRAIN_PER_MIN%/min ($PERCENTAGE%, about $MINUTES_LEFT min left). Suspending now." "critical"
+  }
 
   # Read last action from state file
   LAST_ACTION=""
@@ -205,13 +272,23 @@ pkgs.writeShellScript "check-battery" ''
     done
   fi
 
-  # Critical level: UPower says "critical" OR energy below calculated threshold
+  # Critical level: UPower says "critical", energy below the calculated
+  # threshold, or the drain rate leaves under criticalMinutes.
+  CRITICAL_BY_LEVEL=0
   if [ "$CAPACITY_LEVEL" = "critical" ] || ([ -n "$ENERGY" ] && [ "$(echo "$ENERGY < $CRITICAL_ENERGY_THRESHOLD" | ${pkgs.bc}/bin/bc)" = "1" ]); then
+    CRITICAL_BY_LEVEL=1
+  fi
+  if [ "$CRITICAL_BY_LEVEL" = 1 ] || [ "$PREDICTED_CRITICAL" = 1 ]; then
     if [ "$LAST_ACTION" != "critical" ]; then
       # Critical never waits for SSH sessions.
       stop_ssh_prompt
       exit_unless_discharging
-      echo "Battery critical (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $CRITICAL_ENERGY_THRESHOLD Wh [${toString criticalLevel}%]), attempting suspend-then-hibernate"
+      if [ "$CRITICAL_BY_LEVEL" = 1 ]; then
+        echo "Battery critical (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $CRITICAL_ENERGY_THRESHOLD Wh [${toString criticalLevel}%]), attempting suspend-then-hibernate"
+      else
+        echo "Battery draining at $DRAIN_PER_MIN%/min, about $MINUTES_LEFT min left, attempting suspend-then-hibernate"
+        notify_fast_drain
+      fi
       echo "critical" > "$STATE_FILE"
       do_suspend
     else
@@ -220,14 +297,24 @@ pkgs.writeShellScript "check-battery" ''
     exit 0
   fi
 
-  # Low level: UPower says "low" OR energy below calculated threshold
+  # Low level: UPower says "low", energy below the calculated threshold, or
+  # the drain rate leaves under lowMinutes.
+  LOW_BY_LEVEL=0
   if [ "$CAPACITY_LEVEL" = "low" ] || ([ -n "$ENERGY" ] && [ "$(echo "$ENERGY < $LOW_ENERGY_THRESHOLD" | ${pkgs.bc}/bin/bc)" = "1" ]); then
+    LOW_BY_LEVEL=1
+  fi
+  if [ "$LOW_BY_LEVEL" = 1 ] || [ "$PREDICTED_LOW" = 1 ]; then
     if [ "$LAST_ACTION" != "low" ] && [ "$LAST_ACTION" != "critical" ]; then
       if ! ssh_prompt_allows_suspend; then
         exit 0
       fi
       exit_unless_discharging
-      echo "Battery low (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $LOW_ENERGY_THRESHOLD Wh [${toString lowLevel}%]), attempting suspend-then-hibernate"
+      if [ "$LOW_BY_LEVEL" = 1 ]; then
+        echo "Battery low (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $LOW_ENERGY_THRESHOLD Wh [${toString lowLevel}%]), attempting suspend-then-hibernate"
+      else
+        echo "Battery draining at $DRAIN_PER_MIN%/min, about $MINUTES_LEFT min left, attempting suspend-then-hibernate"
+        notify_fast_drain
+      fi
       echo "low" > "$STATE_FILE"
       do_suspend
     else
