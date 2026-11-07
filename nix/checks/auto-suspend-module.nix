@@ -102,6 +102,11 @@ let
 in
 assert builtins.elem "multi-user.target" monitorService.wantedBy;
 assert monitorService.serviceConfig.Restart == "always";
+# UPower's backstop follows the module levels (defaults 15/10).
+assert evaluated.config.services.upower.percentageLow == 15;
+assert evaluated.config.services.upower.percentageCritical == 10;
+assert evaluated.config.services.upower.percentageAction == 5;
+assert evaluated.config.services.upower.criticalPowerAction == "Hibernate";
 pkgs.runCommand "auto-suspend-module" { } ''
   export AUTO_SUSPEND_STATE_DIR="$TMPDIR/state"
   export AUTO_SUSPEND_POWER_STATE_FILE="$TMPDIR/power-state"

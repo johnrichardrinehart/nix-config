@@ -302,8 +302,27 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Ensure upower is available
-    services.upower.enable = true;
+    assertions = [
+      {
+        assertion = cfg.lowLevel > cfg.criticalLevel && cfg.criticalLevel > 1;
+        message = "dev.johnrinehart.auto-suspend: lowLevel must exceed criticalLevel, and criticalLevel must exceed 1.";
+      }
+    ];
+
+    # UPower's own policy is the backstop if these checks fail to act. Its
+    # defaults (warn at 20/5%, hybrid-sleep at 2%) act too late for worn
+    # batteries that cut out early under load. Keep low > critical > action,
+    # as UPower expects.
+    services.upower = {
+      enable = true;
+      percentageLow = lib.mkDefault cfg.lowLevel;
+      percentageCritical = lib.mkDefault cfg.criticalLevel;
+      percentageAction = lib.mkDefault (lib.max 1 (cfg.criticalLevel - 5));
+      # Hibernate powers off after writing the image; HybridSleep would keep
+      # draining the battery in suspend. Hosts that cannot hibernate get
+      # UPower's PowerOff fallback either way.
+      criticalPowerAction = lib.mkDefault "Hibernate";
+    };
 
     # Create state directory
     systemd.tmpfiles.rules = [
