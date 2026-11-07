@@ -149,10 +149,18 @@ pkgs.runCommand "auto-suspend-module" { } ''
 
   reset_test
   touch "$AUTO_SUSPEND_STATE_DIR/last-action" "$AUTO_SUSPEND_STATE_DIR/notified-levels"
+  rm -f "$AUTO_SUSPEND_POWER_STATE_FILE.last-check"
   export TEST_POWER_MODE=discharging
   ${handlePowerStateScript}
   test -e "$AUTO_SUSPEND_STATE_DIR/last-action"
   test -e "$AUTO_SUSPEND_STATE_DIR/notified-levels"
+  # Battery updates while discharging start a check...
+  grep -Fx 'systemctl start --no-block auto-suspend-check.service' "$TEST_LOG"
+  refute grep -q -e '^dismiss$' -e '^systemctl stop' "$TEST_LOG"
+
+  # ...but no more often than eventCheckIntervalSeconds.
+  : > "$TEST_LOG"
+  ${handlePowerStateScript}
   test ! -s "$TEST_LOG"
 
   # Low level with SSH sessions: start the prompt unit and return at once.

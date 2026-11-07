@@ -4,6 +4,8 @@
   stateDir ? "/var/lib/auto-suspend",
   powerStateFile ? "/run/auto-suspend/power-state",
   sshPromptUnit ? "",
+  # Minimum spacing between event-triggered battery checks.
+  eventCheckIntervalSeconds ? 15,
 }:
 
 pkgs.writeShellScript "handle-auto-suspend-power-state" ''
@@ -28,13 +30,30 @@ pkgs.writeShellScript "handle-auto-suspend-power-state" ''
     previous_state=$(${pkgs.coreutils}/bin/cat "$state_file")
   fi
 
-  if [ "$state" = "$previous_state" ]; then
+  if [ "$state" != "$previous_state" ]; then
+    printf '%s\n' "$state" > "$state_file"
+  fi
+
+  if [ "$state" = "discharging" ]; then
+    # UPower refreshes the battery every 10-30 s. Check on those updates
+    # rather than only on the timer: a busy laptop can lose 5% per minute.
+    trigger_file="$state_file.last-check"
+    now=$(${pkgs.coreutils}/bin/date +%s)
+    last_check=0
+    if [ -f "$trigger_file" ]; then
+      last_check=$(${pkgs.coreutils}/bin/cat "$trigger_file")
+    fi
+    case "$last_check" in
+      "" | *[!0-9]*) last_check=0 ;;
+    esac
+    if [ $((now - last_check)) -ge ${toString eventCheckIntervalSeconds} ]; then
+      printf '%s\n' "$now" > "$trigger_file"
+      ${pkgs.systemd}/bin/systemctl start --no-block auto-suspend-check.service
+    fi
     exit 0
   fi
 
-  printf '%s\n' "$state" > "$state_file"
-
-  if [ "$state" = "discharging" ]; then
+  if [ "$state" = "$previous_state" ]; then
     exit 0
   fi
 

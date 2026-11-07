@@ -120,6 +120,7 @@ let
       powerStateFile
       sshPromptUnit
       ;
+    inherit (cfg) eventCheckIntervalSeconds;
   };
 
   powerMonitorScript = pkgs.writeShellScript "monitor-auto-suspend-power-state" ''
@@ -170,7 +171,19 @@ in
     checkInterval = lib.mkOption {
       type = lib.types.str;
       default = "90s";
-      description = "How often to check battery level (systemd timer format, default: 90s)";
+      description = ''
+        Backup interval for battery checks (systemd timer format). While
+        discharging, UPower battery updates also start a check, at most every
+        `eventCheckIntervalSeconds`.
+      '';
+    };
+
+    eventCheckIntervalSeconds = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 15;
+      description = ''
+        Minimum spacing between battery checks started by UPower events.
+      '';
     };
 
     sshPromptTimeoutSeconds = lib.mkOption {
@@ -253,7 +266,7 @@ in
 
     # React to charging before the periodic check can use stale battery data.
     systemd.services.auto-suspend-power-monitor = {
-      description = "Dismiss auto-suspend warnings when charging starts";
+      description = "Check the battery on UPower events and dismiss warnings when charging starts";
       wantedBy = [ "multi-user.target" ];
       after = [ "upower.service" ];
       wants = [ "upower.service" ];
