@@ -83,8 +83,43 @@ let
       fi
     } 9>"$ids_file.lock"
   '';
+  sshPromptEnabled = sshSessionLockCfg.enable;
+  sshPromptUnit = lib.optionalString sshPromptEnabled "auto-suspend-ssh-prompt.service";
+
+  # Runs outside auto-suspend-check.service, so checks keep running (and the
+  # critical action stays possible) while SSH sessions have time to answer.
+  sshPromptScript = pkgs.writeShellScript "auto-suspend-ssh-prompt" ''
+    set -u
+
+    confirm=${
+      lib.getExe (
+        pkgs.dev.johnrinehart.confirm-ssh-activity-before-suspend.override {
+          promptTimeoutSeconds = cfg.sshPromptTimeoutSeconds;
+        }
+      )
+    }
+    status=0
+    "$confirm" || status=$?
+
+    # Exit 1 means activity; any other failure must not block suspend.
+    result=idle
+    if [ "$status" -eq 1 ]; then
+      result=active
+    elif [ "$status" -ne 0 ]; then
+      echo "SSH prompt failed with status $status; treating sessions as idle"
+    fi
+
+    printf '%s %s\n' "$result" "$(${pkgs.coreutils}/bin/date +%s)" > /var/lib/auto-suspend/ssh-prompt
+    ${pkgs.systemd}/bin/systemctl start --no-block auto-suspend-check.service
+  '';
+
   handlePowerStateScript = import ./auto-suspend-handle-power-state.nix {
-    inherit pkgs dismissNotificationsScript powerStateFile;
+    inherit
+      pkgs
+      dismissNotificationsScript
+      powerStateFile
+      sshPromptUnit
+      ;
   };
 
   powerMonitorScript = pkgs.writeShellScript "monitor-auto-suspend-power-state" ''
@@ -104,14 +139,8 @@ let
   checkBatteryScript = import ./auto-suspend-check-battery.nix {
     inherit pkgs;
     inherit (cfg) lowLevel criticalLevel notificationLevels;
-    inherit dismissNotificationsScript sendNotificationScript;
-    confirmSshActivityCommand = lib.optionalString sshSessionLockCfg.enable (
-      lib.getExe (
-        pkgs.dev.johnrinehart.confirm-ssh-activity-before-suspend.override {
-          promptTimeoutSeconds = sshSessionLockCfg.suspendPromptTimeoutSeconds;
-        }
-      )
-    );
+    inherit dismissNotificationsScript sendNotificationScript sshPromptUnit;
+    inherit (cfg) sshActivityDeferSeconds;
   };
 in
 {
@@ -142,6 +171,27 @@ in
       type = lib.types.str;
       default = "90s";
       description = "How often to check battery level (systemd timer format, default: 90s)";
+    };
+
+    sshPromptTimeoutSeconds = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 120;
+      description = ''
+        How long SSH sessions may answer before a low-battery suspend, when
+        `dev.johnrinehart.sshSessionLock` is enabled. The prompt runs in its
+        own unit: checks continue meanwhile, and the critical action never
+        waits for it. Kept short because a busy laptop can lose several
+        percent per minute.
+      '';
+    };
+
+    sshActivityDeferSeconds = lib.mkOption {
+      type = lib.types.ints.unsigned;
+      default = 600;
+      description = ''
+        How long SSH activity found by the prompt defers the low-battery
+        suspend. The critical action ignores it.
+      '';
     };
 
     notificationLevels = lib.mkOption {
@@ -189,6 +239,15 @@ in
         ExecStart = "${checkBatteryScript}";
         # Run as root to access systemctl suspend
         User = "root";
+      };
+    };
+
+    systemd.services.auto-suspend-ssh-prompt = lib.mkIf sshPromptEnabled {
+      description = "Ask SSH sessions before a low-battery suspend";
+      serviceConfig = {
+        # Simple, so `systemctl is-active` reports a running prompt.
+        Type = "simple";
+        ExecStart = "${sshPromptScript}";
       };
     };
 

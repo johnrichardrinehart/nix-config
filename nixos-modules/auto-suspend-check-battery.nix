@@ -3,7 +3,12 @@
   lowLevel,
   criticalLevel,
   notificationLevels,
-  confirmSshActivityCommand ? "",
+  # Empty disables the SSH prompt. Otherwise this unit asks SSH sessions
+  # before a low-level suspend and writes "idle|active <epoch>" to
+  # $STATE_DIR/ssh-prompt.
+  sshPromptUnit ? "",
+  sshActivityDeferSeconds ? 600,
+  sshPromptResultMaxAgeSeconds ? 300,
   dismissNotificationsScript,
   sendNotificationScript,
   stateDir ? "/var/lib/auto-suspend",
@@ -15,7 +20,16 @@ pkgs.writeShellScript "check-battery" ''
   STATE_DIR="''${AUTO_SUSPEND_STATE_DIR:-${stateDir}}"
   STATE_FILE="$STATE_DIR/last-action"
   NOTIFIED_FILE="$STATE_DIR/notified-levels"
+  SSH_PROMPT_FILE="$STATE_DIR/ssh-prompt"
+  SSH_PROMPT_UNIT=${pkgs.lib.escapeShellArg sshPromptUnit}
   ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR"
+
+  # Timer runs and power events can overlap; only one check decides at a time.
+  exec 9>"$STATE_DIR/check.lock"
+  if ! ${pkgs.util-linux}/bin/flock -n 9; then
+    echo "Another battery check is running, skipping"
+    exit 0
+  fi
 
   # Function to suspend with fallback
   do_suspend() {
@@ -47,9 +61,55 @@ pkgs.writeShellScript "check-battery" ''
   LOW_ENERGY_THRESHOLD=$(echo "$ENERGY_FULL * ${toString lowLevel} / 100" | ${pkgs.bc}/bin/bc -l)
   CRITICAL_ENERGY_THRESHOLD=$(echo "$ENERGY_FULL * ${toString criticalLevel} / 100" | ${pkgs.bc}/bin/bc -l)
 
+  stop_ssh_prompt() {
+    if [ -n "$SSH_PROMPT_UNIT" ]; then
+      ${pkgs.systemd}/bin/systemctl stop --no-block "$SSH_PROMPT_UNIT" || true
+    fi
+  }
+
   reset_discharge_cycle() {
+    stop_ssh_prompt
     ${dismissNotificationsScript}
-    ${pkgs.coreutils}/bin/rm -f "$STATE_FILE" "$NOTIFIED_FILE"
+    ${pkgs.coreutils}/bin/rm -f "$STATE_FILE" "$NOTIFIED_FILE" "$SSH_PROMPT_FILE"
+  }
+
+  # Low-level suspends ask idle SSH sessions first. The prompt runs in its own
+  # unit, so a pending prompt never blocks later checks or the critical action.
+  # Returns 0 when the suspend may proceed now.
+  ssh_prompt_allows_suspend() {
+    local now result result_time
+    if [ -z "$SSH_PROMPT_UNIT" ]; then
+      return 0
+    fi
+
+    now=$(${pkgs.coreutils}/bin/date +%s)
+    result=""
+    result_time=""
+    if [ -f "$SSH_PROMPT_FILE" ]; then
+      read -r result result_time < "$SSH_PROMPT_FILE" || true
+    fi
+    case "$result_time" in
+      "" | *[!0-9]*) result="" ;;
+    esac
+
+    if [ "$result" = "active" ] && [ $((now - result_time)) -lt ${toString sshActivityDeferSeconds} ]; then
+      echo "SSH activity detected $((now - result_time))s ago, deferring low-battery suspend"
+      return 1
+    fi
+    if [ "$result" = "idle" ] && [ $((now - result_time)) -lt ${toString sshPromptResultMaxAgeSeconds} ]; then
+      ${pkgs.coreutils}/bin/rm -f "$SSH_PROMPT_FILE"
+      return 0
+    fi
+
+    if ${pkgs.systemd}/bin/systemctl is-active --quiet "$SSH_PROMPT_UNIT"; then
+      echo "Waiting for SSH sessions to answer the suspend prompt"
+      return 1
+    fi
+
+    ${pkgs.coreutils}/bin/rm -f "$SSH_PROMPT_FILE"
+    echo "Asking SSH sessions before low-battery suspend"
+    ${pkgs.systemd}/bin/systemctl start --no-block "$SSH_PROMPT_UNIT"
+    return 1
   }
 
   current_state() {
@@ -148,10 +208,8 @@ pkgs.writeShellScript "check-battery" ''
   # Critical level: UPower says "critical" OR energy below calculated threshold
   if [ "$CAPACITY_LEVEL" = "critical" ] || ([ -n "$ENERGY" ] && [ "$(echo "$ENERGY < $CRITICAL_ENERGY_THRESHOLD" | ${pkgs.bc}/bin/bc)" = "1" ]); then
     if [ "$LAST_ACTION" != "critical" ]; then
-      if [ -n "${confirmSshActivityCommand}" ] && ! ${confirmSshActivityCommand}; then
-        echo "SSH activity detected, deferring battery auto-suspend"
-        exit 0
-      fi
+      # Critical never waits for SSH sessions.
+      stop_ssh_prompt
       exit_unless_discharging
       echo "Battery critical (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $CRITICAL_ENERGY_THRESHOLD Wh [${toString criticalLevel}%]), attempting suspend-then-hibernate"
       echo "critical" > "$STATE_FILE"
@@ -165,8 +223,7 @@ pkgs.writeShellScript "check-battery" ''
   # Low level: UPower says "low" OR energy below calculated threshold
   if [ "$CAPACITY_LEVEL" = "low" ] || ([ -n "$ENERGY" ] && [ "$(echo "$ENERGY < $LOW_ENERGY_THRESHOLD" | ${pkgs.bc}/bin/bc)" = "1" ]); then
     if [ "$LAST_ACTION" != "low" ] && [ "$LAST_ACTION" != "critical" ]; then
-      if [ -n "${confirmSshActivityCommand}" ] && ! ${confirmSshActivityCommand}; then
-        echo "SSH activity detected, deferring battery auto-suspend"
+      if ! ssh_prompt_allows_suspend; then
         exit 0
       fi
       exit_unless_discharging

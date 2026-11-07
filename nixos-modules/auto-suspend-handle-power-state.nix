@@ -3,6 +3,7 @@
   dismissNotificationsScript,
   stateDir ? "/var/lib/auto-suspend",
   powerStateFile ? "/run/auto-suspend/power-state",
+  sshPromptUnit ? "",
 }:
 
 pkgs.writeShellScript "handle-auto-suspend-power-state" ''
@@ -39,7 +40,11 @@ pkgs.writeShellScript "handle-auto-suspend-power-state" ''
 
   # Cancel a check that uses an older discharging snapshot.
   ${pkgs.systemd}/bin/systemctl stop auto-suspend-check.service
+  ssh_prompt_unit=${pkgs.lib.escapeShellArg sshPromptUnit}
+  if [ -n "$ssh_prompt_unit" ]; then
+    ${pkgs.systemd}/bin/systemctl stop "$ssh_prompt_unit" || true
+  fi
   ${dismissNotificationsScript}
-  ${pkgs.coreutils}/bin/rm -f "$state_dir/last-action" "$state_dir/notified-levels"
+  ${pkgs.coreutils}/bin/rm -f "$state_dir/last-action" "$state_dir/notified-levels" "$state_dir/ssh-prompt"
   echo "Battery is $state; cancelled discharge actions and dismissed warnings"
 ''
