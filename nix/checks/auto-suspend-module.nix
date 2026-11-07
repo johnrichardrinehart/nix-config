@@ -44,7 +44,18 @@ let
     printf 'systemctl %s\n' "$*" >> "$TEST_LOG"
     if [ "$1" = "is-active" ]; then
       [ "''${TEST_UNIT_ACTIVE:-0}" = 1 ]
+      exit
     fi
+    if [ "$1" = "$TEST_SLEEP_IN_PROGRESS_VERB" ]; then
+      echo "Call to $1 failed: Action suspend-then-hibernate already in progress, refusing requested $1 operation." >&2
+      exit 1
+    fi
+    case " $TEST_FAILING_VERBS " in
+      *" $1 "*)
+        echo "Call to $1 failed: Sleep verb not supported" >&2
+        exit 1
+        ;;
+    esac
   '';
   testPkgs = pkgs // {
     upower = mockUpower;
@@ -112,6 +123,7 @@ pkgs.runCommand "auto-suspend-module" { } ''
     rm -f "$AUTO_SUSPEND_POWER_STATE_FILE" "$TEST_UPOWER_COUNTER"
     : > "$TEST_LOG"
     unset TEST_PERCENT TEST_UNIT_ACTIVE
+    export TEST_FAILING_VERBS="" TEST_SLEEP_IN_PROGRESS_VERB=""
   }
 
   reset_test
@@ -210,7 +222,7 @@ pkgs.runCommand "auto-suspend-module" { } ''
   ${checkBatteryScript} | grep -F 'Draining 6.6'
   grep -Fx 'systemctl suspend-then-hibernate' "$TEST_LOG"
   grep -q '^notify Low Battery Battery draining at' "$TEST_LOG"
-  test "$(cat "$AUTO_SUSPEND_STATE_DIR/last-action")" = low
+  grep -q '^low [0-9]\+$' "$AUTO_SUSPEND_STATE_DIR/last-action"
 
   # 40% -> 29% in 60 s is 11%/min, about 2.2 min left: critical, no prompt.
   reset_test
@@ -219,7 +231,7 @@ pkgs.runCommand "auto-suspend-module" { } ''
   echo "$(( $(date +%s) - 60 )) 40" > "$AUTO_SUSPEND_RUNTIME_DIR/discharge-samples"
   ${checkBatteryWithPromptScript}
   grep -Fx 'systemctl stop --no-block auto-suspend-ssh-prompt.service' "$TEST_LOG"
-  test "$(cat "$AUTO_SUSPEND_STATE_DIR/last-action")" = critical
+  grep -q '^critical [0-9]\+$' "$AUTO_SUSPEND_STATE_DIR/last-action"
 
   # Samples under 45 s old, or older than a sleep gap, give no estimate.
   for age in 10 400; do
@@ -232,6 +244,58 @@ pkgs.runCommand "auto-suspend-module" { } ''
   done
   # The stale sample was dropped; the current one was kept.
   test "$(wc -l < "$AUTO_SUSPEND_RUNTIME_DIR/discharge-samples")" = 1
+
+  # Low: a failed suspend-then-hibernate falls back to hibernate, not suspend.
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_PERCENT=19 TEST_FAILING_VERBS=suspend-then-hibernate
+  ${checkBatteryScript}
+  grep -Fx 'systemctl hibernate' "$TEST_LOG"
+  refute grep -Fx 'systemctl suspend' "$TEST_LOG"
+  grep -q '^low [0-9]\+$' "$AUTO_SUSPEND_STATE_DIR/last-action"
+
+  # A sleep already in progress counts as success: no fallback.
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_PERCENT=19 TEST_SLEEP_IN_PROGRESS_VERB=suspend-then-hibernate
+  ${checkBatteryScript} | grep -Fx 'A sleep operation is already in progress'
+  refute grep -Fx -e 'systemctl hibernate' -e 'systemctl suspend' "$TEST_LOG"
+
+  # Plain suspend is the last resort, for hosts that cannot hibernate.
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_PERCENT=9 TEST_FAILING_VERBS="hibernate suspend-then-hibernate"
+  ${checkBatteryScript}
+  grep -Fx 'systemctl suspend' "$TEST_LOG"
+
+  # Critical hibernates directly.
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_PERCENT=9
+  ${checkBatteryScript}
+  grep -Fx 'systemctl hibernate' "$TEST_LOG"
+  refute grep -Fx 'systemctl suspend-then-hibernate' "$TEST_LOG"
+
+  # A check during which the system slept does not act.
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_PERCENT=9
+  mkdir -p "$AUTO_SUSPEND_RUNTIME_DIR"
+  echo $(( $(date +%s) + 5 )) > "$AUTO_SUSPEND_RUNTIME_DIR/last-sleep"
+  ${checkBatteryScript} | grep -F 'System slept during this check'
+  refute grep -qx 'systemctl \(suspend\|suspend-then-hibernate\|hibernate\)' "$TEST_LOG"
+
+  # After a critical action, a resumed system gets criticalRepeatSeconds...
+  reset_test
+  export TEST_POWER_MODE=discharging TEST_PERCENT=9
+  mkdir -p "$AUTO_SUSPEND_RUNTIME_DIR"
+  now=$(date +%s)
+  echo "critical $((now - 3600))" > "$AUTO_SUSPEND_STATE_DIR/last-action"
+  echo $((now - 30)) > "$AUTO_SUSPEND_RUNTIME_DIR/last-resume"
+  ${checkBatteryScript}
+  refute grep -qx 'systemctl \(suspend\|suspend-then-hibernate\|hibernate\)' "$TEST_LOG"
+
+  # ...then the critical action repeats, also for the old one-word format.
+  echo $((now - 600)) > "$AUTO_SUSPEND_RUNTIME_DIR/last-resume"
+  echo critical > "$AUTO_SUSPEND_STATE_DIR/last-action"
+  : > "$TEST_LOG"
+  ${checkBatteryScript}
+  grep -Fx 'systemctl hibernate' "$TEST_LOG"
 
   # A second check skips while another holds the lock.
   reset_test

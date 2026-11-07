@@ -141,8 +141,22 @@ let
     inherit pkgs;
     inherit (cfg) lowLevel criticalLevel notificationLevels;
     inherit dismissNotificationsScript sendNotificationScript sshPromptUnit;
-    inherit (cfg) sshActivityDeferSeconds predictive;
+    inherit (cfg) sshActivityDeferSeconds predictive criticalRepeatSeconds;
   };
+
+  # Checks compare these stamps with their start time, so a check frozen by
+  # sleep never acts on its pre-sleep battery snapshot.
+  markSleepScript = pkgs.writeShellScript "auto-suspend-mark-sleep" ''
+    ${pkgs.coreutils}/bin/mkdir -p /run/auto-suspend
+    ${pkgs.coreutils}/bin/date +%s > /run/auto-suspend/last-sleep
+  '';
+  markResumeScript = pkgs.writeShellScript "auto-suspend-mark-resume" ''
+    ${pkgs.coreutils}/bin/mkdir -p /run/auto-suspend
+    ${pkgs.coreutils}/bin/date +%s > /run/auto-suspend/last-resume
+    # A drain rate across sleep means nothing.
+    ${pkgs.coreutils}/bin/rm -f /run/auto-suspend/discharge-samples
+    ${dismissNotificationsScript}
+  '';
 in
 {
   options.dev.johnrinehart.auto-suspend = {
@@ -219,6 +233,15 @@ in
           45 s of samples; gaps over 5 min (sleep) restart the window.
         '';
       };
+    };
+
+    criticalRepeatSeconds = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 180;
+      description = ''
+        After the critical action, how long a resumed system may run at
+        critical charge before it hibernates again. Gives time to plug in.
+      '';
     };
 
     eventCheckIntervalSeconds = lib.mkOption {
@@ -316,22 +339,25 @@ in
       serviceConfig = {
         Type = "simple";
         RuntimeDirectory = "auto-suspend";
+        # Discharge samples and sleep stamps outlive monitor restarts.
+        RuntimeDirectoryPreserve = "yes";
         ExecStart = "${powerMonitorScript}";
         Restart = "always";
         RestartSec = "5s";
       };
     };
 
-    # Keep the warning visible during sleep entry, then dismiss it after resume.
+    # Record sleep and resume for the checks. Keep the warning visible during
+    # sleep entry, then dismiss it after resume.
     systemd.services.auto-suspend-notification = {
-      description = "Dismiss auto-suspend battery warnings after resume";
+      description = "Mark sleep and resume for auto-suspend; dismiss battery warnings after resume";
       wantedBy = [ "sleep.target" ];
       partOf = [ "sleep.target" ];
       before = [ "sleep.target" ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.coreutils}/bin/true";
-        ExecStop = "${dismissNotificationsScript}";
+        ExecStart = "${markSleepScript}";
+        ExecStop = "${markResumeScript}";
         RemainAfterExit = true;
       };
     };

@@ -9,6 +9,9 @@
   sshPromptUnit ? "",
   sshActivityDeferSeconds ? 600,
   sshPromptResultMaxAgeSeconds ? 300,
+  # After a critical action, how long a resumed system may run at critical
+  # charge before the critical action repeats.
+  criticalRepeatSeconds ? 180,
   dismissNotificationsScript,
   sendNotificationScript,
   stateDir ? "/var/lib/auto-suspend",
@@ -42,15 +45,38 @@ pkgs.writeShellScript "check-battery" ''
     exit 0
   fi
 
-  # Function to suspend with fallback
-  do_suspend() {
-    if ${pkgs.systemd}/bin/systemctl suspend-then-hibernate; then
-      echo "Successfully initiated suspend-then-hibernate"
-    else
-      echo "suspend-then-hibernate failed, falling back to suspend"
-      ${pkgs.systemd}/bin/systemctl suspend
+  # logind refuses a request while another sleep is in progress. That sleep
+  # already does what we asked, so the refusal counts as success.
+  request_sleep() {
+    local verb=$1 output
+    if output=$(${pkgs.systemd}/bin/systemctl "$verb" 2>&1); then
+      echo "Successfully initiated $verb"
+      return 0
     fi
+    [ -z "$output" ] || echo "$output"
+    case "$output" in
+      *"already in progress"*)
+        echo "A sleep operation is already in progress"
+        return 0
+        ;;
+    esac
+    return 1
   }
+
+  # Tries each verb in order. Plain suspend comes last: it never hibernates,
+  # so it is only for hosts that cannot hibernate at all.
+  do_sleep() {
+    local verb
+    for verb in "$@"; do
+      if request_sleep "$verb"; then
+        return 0
+      fi
+      echo "$verb failed"
+    done
+    return 1
+  }
+
+  CHECK_STARTED=$(${pkgs.coreutils}/bin/date +%s)
 
   # Get battery percentage using upower
   BATTERY_PATH=$(${pkgs.upower}/bin/upower -e | ${pkgs.gnugrep}/bin/grep -i battery | ${pkgs.coreutils}/bin/head -n1)
@@ -129,6 +155,23 @@ pkgs.writeShellScript "check-battery" ''
       ${pkgs.gawk}/bin/awk '{print $2}'
   }
 
+  # The battery snapshot is only valid if the system did not sleep since
+  # this check started; the check after resume decides again.
+  exit_if_slept() {
+    local marker stamp
+    for marker in "$RUNTIME_DIR/last-sleep" "$RUNTIME_DIR/last-resume"; do
+      [ -f "$marker" ] || continue
+      stamp=$(${pkgs.coreutils}/bin/cat "$marker")
+      case "$stamp" in
+        "" | *[!0-9]*) continue ;;
+      esac
+      if [ "$stamp" -ge "$CHECK_STARTED" ]; then
+        echo "System slept during this check; the next check decides with fresh data"
+        exit 0
+      fi
+    done
+  }
+
   exit_unless_discharging() {
     local latest_state
     latest_state=$(current_state)
@@ -203,10 +246,22 @@ pkgs.writeShellScript "check-battery" ''
   }
 
   # Read last action from state file
+  # Format: "<low|critical> <epoch>"; older files hold only the level.
   LAST_ACTION=""
+  LAST_ACTION_TIME=0
   if [ -f "$STATE_FILE" ]; then
-    LAST_ACTION=$(${pkgs.coreutils}/bin/cat "$STATE_FILE")
+    read -r LAST_ACTION LAST_ACTION_TIME < "$STATE_FILE" || true
   fi
+  case "$LAST_ACTION_TIME" in
+    "" | *[!0-9]*) LAST_ACTION_TIME=0 ;;
+  esac
+  LAST_RESUME=0
+  if [ -f "$RUNTIME_DIR/last-resume" ]; then
+    LAST_RESUME=$(${pkgs.coreutils}/bin/cat "$RUNTIME_DIR/last-resume")
+  fi
+  case "$LAST_RESUME" in
+    "" | *[!0-9]*) LAST_RESUME=0 ;;
+  esac
 
   echo "Battery at $PERCENTAGE% ($ENERGY Wh of $ENERGY_FULL Wh), capacity-level: $CAPACITY_LEVEL, state: $STATE, last action: $LAST_ACTION"
   echo "Thresholds: low=${toString lowLevel}% ($LOW_ENERGY_THRESHOLD Wh), critical=${toString criticalLevel}% ($CRITICAL_ENERGY_THRESHOLD Wh)"
@@ -244,9 +299,9 @@ pkgs.writeShellScript "check-battery" ''
     if [ "$PERCENTAGE" -le ${toString criticalLevel} ]; then
       urgency="critical"
       if [ "$LAST_ACTION" = "critical" ]; then
-        message="Battery critically low at $PERCENTAGE%! System will power off soon."
+        message="Battery critically low at $PERCENTAGE%! System will hibernate again in a few minutes unless plugged in."
       else
-        message="Battery critically low at $PERCENTAGE%! System will suspend-then-hibernate immediately."
+        message="Battery critically low at $PERCENTAGE%! System will hibernate immediately."
       fi
     elif [ "$PERCENTAGE" -le ${toString lowLevel} ]; then
       urgency="low"
@@ -279,21 +334,30 @@ pkgs.writeShellScript "check-battery" ''
     CRITICAL_BY_LEVEL=1
   fi
   if [ "$CRITICAL_BY_LEVEL" = 1 ] || [ "$PREDICTED_CRITICAL" = 1 ]; then
-    if [ "$LAST_ACTION" != "critical" ]; then
-      # Critical never waits for SSH sessions.
-      stop_ssh_prompt
-      exit_unless_discharging
-      if [ "$CRITICAL_BY_LEVEL" = 1 ]; then
-        echo "Battery critical (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $CRITICAL_ENERGY_THRESHOLD Wh [${toString criticalLevel}%]), attempting suspend-then-hibernate"
-      else
-        echo "Battery draining at $DRAIN_PER_MIN%/min, about $MINUTES_LEFT min left, attempting suspend-then-hibernate"
-        notify_fast_drain
-      fi
-      echo "critical" > "$STATE_FILE"
-      do_suspend
-    else
-      echo "Already suspended at critical level, skipping"
+    # After a critical action, a resumed system gets criticalRepeatSeconds
+    # to be plugged in; then the action repeats.
+    since=$LAST_ACTION_TIME
+    if [ "$LAST_RESUME" -gt "$since" ]; then
+      since=$LAST_RESUME
     fi
+    if [ "$LAST_ACTION" = "critical" ] && [ $((NOW - since)) -lt ${toString criticalRepeatSeconds} ]; then
+      echo "Critical action ran or system resumed $((NOW - since))s ago; repeating after ${toString criticalRepeatSeconds}s"
+      exit 0
+    fi
+
+    # Critical never waits for SSH sessions.
+    stop_ssh_prompt
+    exit_unless_discharging
+    exit_if_slept
+    if [ "$CRITICAL_BY_LEVEL" = 1 ]; then
+      echo "Battery critical (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $CRITICAL_ENERGY_THRESHOLD Wh [${toString criticalLevel}%]), hibernating"
+    else
+      echo "Battery draining at $DRAIN_PER_MIN%/min, about $MINUTES_LEFT min left, hibernating"
+      notify_fast_drain
+    fi
+    printf 'critical %s\n' "$NOW" > "$STATE_FILE"
+    # Write the image now, while charge remains.
+    do_sleep hibernate suspend-then-hibernate suspend
     exit 0
   fi
 
@@ -309,15 +373,18 @@ pkgs.writeShellScript "check-battery" ''
         exit 0
       fi
       exit_unless_discharging
+      exit_if_slept
       if [ "$LOW_BY_LEVEL" = 1 ]; then
         echo "Battery low (capacity-level=$CAPACITY_LEVEL or $ENERGY Wh < $LOW_ENERGY_THRESHOLD Wh [${toString lowLevel}%]), attempting suspend-then-hibernate"
       else
         echo "Battery draining at $DRAIN_PER_MIN%/min, about $MINUTES_LEFT min left, attempting suspend-then-hibernate"
         notify_fast_drain
       fi
-      echo "low" > "$STATE_FILE"
-      do_suspend
+      printf 'low %s\n' "$NOW" > "$STATE_FILE"
+      do_sleep suspend-then-hibernate hibernate suspend
     else
+      # The user woke the system after the low action; the critical action
+      # still applies.
       echo "Already suspended at low level, skipping"
     fi
     exit 0
