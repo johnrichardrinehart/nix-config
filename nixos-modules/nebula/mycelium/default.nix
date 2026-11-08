@@ -206,9 +206,24 @@ in
           staticHostMap.${lighthouse} = [ cfg.lighthouse.endpoint ];
           listen.port = 0;
           relays = [ lighthouse ];
-          settings.punchy = {
-            punch = true;
-            respond = true;
+          settings = {
+            punchy = {
+              punch = true;
+              respond = true;
+            };
+            # A laptop's tunnel to the lighthouse/relay is replaced whenever it sleeps or changes networks, and
+            # relayed tunnels left idle across that lose their relay. Dropping idle tunnels means the next use builds a
+            # fresh one instead of reviving a dead one.
+            tunnels = {
+              drop_inactive = true;
+              inactivity_timeout = "5m";
+            };
+            # Seconds. Dead tunnel detection takes about connection_alive_interval + pending_deletion_interval, during
+            # which a dead tunnel black holes traffic (defaults 5 + 10).
+            timers = {
+              connection_alive_interval = 2;
+              pending_deletion_interval = 3;
+            };
           };
           # The lighthouse lacks the peer group and cannot initiate peer connections.
           firewall.inbound = peerRules cfg.firewall.inbound;

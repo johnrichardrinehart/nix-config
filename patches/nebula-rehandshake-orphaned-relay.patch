@@ -1,0 +1,219 @@
+From 1de66c1da92e195fd3d6ec2ee478696dc26b3012 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Sun, 8 Nov 2026 08:44:46 -0500
+Subject: [PATCH] Re-handshake relayed tunnels that lost their relay
+
+When the tunnel to a relay is replaced while a tunnel relayed through it
+sits idle, migrateRelayUsed skips the idle relay, so the relayed tunnel's
+relay entry disappears with the old relay hostinfo. Every send on that
+tunnel then fails to find a relay and drops the packet without starting a
+handshake. Traffic disappears until dead tunnel detection removes the
+tunnel, connection_alive_interval + pending_deletion_interval later (about
+15 s with the defaults), and TCP only notices on its next retransmit. A
+laptop hits this after every sleep or network change that replaces its
+lighthouse/relay tunnel.
+
+When a tunnel has no direct remote and no established relay, drop it
+locally and handshake again right away, caching the data packet that found
+the problem so it goes out once the new tunnel is up. Lighthouse state is
+kept so the new handshake can use the known relays without waiting for a
+query. Close tunnel messages never trigger a replacement.
+---
+ e2e/relay_orphan_test.go | 94 ++++++++++++++++++++++++++++++++++++++++
+ inside.go                | 72 +++++++++++++++++++++++++++++-
+ 2 files changed, 164 insertions(+), 2 deletions(-)
+ create mode 100644 e2e/relay_orphan_test.go
+
+diff --git a/e2e/relay_orphan_test.go b/e2e/relay_orphan_test.go
+new file mode 100644
+index 0000000..3ee3165
+--- /dev/null
++++ b/e2e/relay_orphan_test.go
+@@ -0,0 +1,94 @@
++//go:build e2e_testing
++
++package e2e
++
++import (
++	"net/netip"
++	"testing"
++	"time"
++
++	"github.com/slackhq/nebula/cert"
++	"github.com/slackhq/nebula/cert_test"
++	"github.com/slackhq/nebula/e2e/router"
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++)
++
++// TestOrphanedRelayRecoversImmediately covers a relayed tunnel whose tunnel to the relay was replaced while the
++// relayed tunnel sat idle, which is what a laptop sees after it sleeps or changes networks: the lighthouse/relay
++// tunnel goes dead and gets handshaked again. An idle relay is not migrated to the replacement relay hostinfo, so the
++// relayed tunnel has nothing to send through. The next packet has to rebuild the tunnel and arrive within a handshake,
++// not after connection_alive_interval + pending_deletion_interval of dead tunnel detection.
++func TestOrphanedRelayRecoversImmediately(t *testing.T) {
++	t.Parallel()
++	ca, _, caKey, _ := cert_test.NewTestCaCert(cert.Version1, cert.Curve_CURVE25519, time.Now(), time.Now().Add(10*time.Minute), nil, nil, []string{})
++	myControl, myVpnIpNet, _, _ := newSimpleServer(cert.Version1, ca, caKey, "me     ", "10.128.0.1/24", m{"relay": m{"use_relays": true}})
++	relayControl, relayVpnIpNet, relayUdpAddr, _ := newSimpleServer(cert.Version1, ca, caKey, "relay  ", "10.128.0.128/24", m{"relay": m{"am_relay": true}})
++	theirControl, theirVpnIpNet, theirUdpAddr, _ := newSimpleServer(cert.Version1, ca, caKey, "them   ", "10.128.0.2/24", m{"relay": m{"use_relays": true}})
++
++	myVpnIp := myVpnIpNet[0].Addr()
++	relayVpnIp := relayVpnIpNet[0].Addr()
++	theirVpnIp := theirVpnIpNet[0].Addr()
++
++	// Teach me how to get to the relay and that they can be reached via the relay
++	myControl.InjectLightHouseAddr(relayVpnIp, relayUdpAddr)
++	myControl.InjectRelays(theirVpnIp, []netip.Addr{relayVpnIp})
++	relayControl.InjectLightHouseAddr(theirVpnIp, theirUdpAddr)
++
++	r := router.NewR(t, myControl, relayControl, theirControl)
++	defer r.RenderFlow()
++
++	myControl.Start()
++	relayControl.Start()
++	theirControl.Start()
++
++	r.Log("Build the relayed tunnel from me to them")
++	myControl.InjectTunPacket(BuildTunUDPPacket(theirVpnIp, 80, myVpnIp, 80, []byte("Hi from me")))
++	p := r.RouteForAllUntilTxTun(theirControl)
++	assertUdpPacket(t, []byte("Hi from me"), p, myVpnIp, theirVpnIp, 80, 80)
++	orphan := myControl.GetHostInfoByVpnAddr(theirVpnIp, false)
++	require.NotNil(t, orphan)
++
++	r.Log("Replace my tunnel to the relay while the relayed tunnel is idle")
++	require.True(t, myControl.CloseTunnel(relayVpnIp, true))
++	// Closing forgets the relay's underlay address, which a real lighthouse/relay keeps in static_host_map
++	myControl.InjectLightHouseAddr(relayVpnIp, relayUdpAddr)
++	// I initiate, like a laptop coming back: the relay still holds the old tunnel and would send into the void.
++	myControl.InjectTunPacket(BuildTunUDPPacket(relayVpnIp, 80, myVpnIp, 80, []byte("Hi relay")))
++	p = r.RouteForAllUntilTxTun(relayControl)
++	assertUdpPacket(t, []byte("Hi relay"), p, myVpnIp, relayVpnIp, 80, 80)
++	assertTunnel(t, myVpnIp, relayVpnIp, myControl, relayControl, r)
++	stale := myControl.GetHostInfoByVpnAddr(theirVpnIp, false)
++	require.NotNil(t, stale, "the relayed tunnel should still be in my hostmap")
++	require.Equal(t, orphan.LocalIndex, stale.LocalIndex, "the relayed tunnel should not have been touched yet")
++	r.RenderHostmaps("relayed tunnel lost its relay", myControl, relayControl, theirControl)
++
++	r.Log("Send to them again, it must arrive without waiting for dead tunnel detection")
++	start := time.Now()
++	myControl.InjectTunPacket(BuildTunUDPPacket(theirVpnIp, 80, myVpnIp, 80, []byte("Hi again")))
++
++	delivered := make(chan []byte, 1)
++	go func() { delivered <- r.RouteForAllUntilTxTun(theirControl) }()
++
++	select {
++	case p = <-delivered:
++	case <-time.After(5 * time.Second):
++		t.Fatal("packet over the orphaned relayed tunnel was not delivered")
++	}
++	elapsed := time.Since(start)
++	assertUdpPacket(t, []byte("Hi again"), p, myVpnIp, theirVpnIp, 80, 80)
++	assert.Less(t, elapsed, time.Second, "recovery should take one handshake")
++	t.Logf("recovered in %v", elapsed)
++
++	replacement := myControl.GetHostInfoByVpnAddr(theirVpnIp, false)
++	require.NotNil(t, replacement)
++	assert.NotEqual(t, orphan.LocalIndex, replacement.LocalIndex, "the orphaned tunnel should have been replaced")
++
++	r.Log("Assert the replacement tunnel works both ways")
++	assertTunnel(t, myVpnIp, theirVpnIp, myControl, theirControl, r)
++	r.RenderHostmaps("final hostmaps", myControl, relayControl, theirControl)
++
++	myControl.Stop()
++	relayControl.Stop()
++	theirControl.Stop()
++}
+diff --git a/inside.go b/inside.go
+index b50e1e6..0fb9f82 100644
+--- a/inside.go
++++ b/inside.go
+@@ -194,7 +194,29 @@ func (f *Interface) sendInsideMessage(hostinfo *HostInfo, pkt tio.Packet, nb []b
+ 			break
+ 		}
+ 		if relayHostInfo == nil || relay == nil {
+-			//failure already logged
++			// Failure already logged. Nothing can leave on this tunnel anymore, so handshake again and hold the
++			// packet until the new tunnel is up.
++			nh := f.rehandshakeUnroutable(hostinfo, func(hh *HandshakeHostInfo) {
++				err := tio.SegmentSuperpacket(pkt, func(seg []byte) error {
++					hh.cachePacket(f.l, header.Message, 0, seg, f.sendMessageNow, f.cachedPacketMetrics)
++					return nil
++				})
++				if err != nil {
++					hostinfo.logger(f.l).Error("Failed to segment superpacket for handshake cache", "error", err)
++				}
++			})
++			if nh != nil {
++				// Another routine already replaced the tunnel. sendMessageNow repeats the outbound firewall check
++				// against the new hostinfo, which may carry a different certificate.
++				out := make([]byte, mtu)
++				err := tio.SegmentSuperpacket(pkt, func(seg []byte) error {
++					f.sendMessageNow(header.Message, 0, nh, seg, nb, out)
++					return nil
++				})
++				if err != nil {
++					nh.logger(f.l).Error("Failed to segment superpacket for send", "error", err)
++				}
++			}
+ 			return
+ 		}
+ 
+@@ -625,7 +647,53 @@ func (f *Interface) sendNoMetrics(t header.MessageType, st header.MessageSubType
+ 				continue
+ 			}
+ 			f.SendVia(relayHostInfo, relay, out, nb, fullOut[:header.Len+len(out)], true, q)
+-			break
++			return
++		}
++
++		// A tunnel that is being closed needs no replacement.
++		if t == header.CloseTunnel {
++			return
++		}
++
++		// Only plain data is worth holding for the new tunnel. Control traffic (lighthouse updates, test packets,
++		// relay requests) is regenerated by its owner once the tunnel is back.
++		var cacheCb func(*HandshakeHostInfo)
++		if t == header.Message && st == header.MessageNone {
++			cacheCb = func(hh *HandshakeHostInfo) {
++				hh.cachePacket(f.l, t, st, p, f.sendMessageNow, f.cachedPacketMetrics)
++			}
++		}
++
++		if nh := f.rehandshakeUnroutable(hostinfo, cacheCb); nh != nil && cacheCb != nil {
++			// Another routine already replaced the tunnel, send through it with a fresh firewall check
++			f.sendMessageNow(t, st, nh, p, nb, fullOut)
+ 		}
+ 	}
+ }
++
++// rehandshakeUnroutable replaces a tunnel that has neither a direct remote nor an established relay to send through.
++//
++// A relayed tunnel lands here when the tunnel to its relay was replaced or torn down while the relayed tunnel sat
++// idle: connectionManager.migrateRelayUsed only carries relays that saw traffic over to the new relay hostinfo, so the
++// relay entry this tunnel depends on is gone. Nothing sent on hostinfo can arrive anymore, yet dead tunnel detection
++// would keep it around for connection_alive_interval + pending_deletion_interval while every packet disappears.
++//
++// Drop the tunnel locally and handshake again right away. Unlike closeTunnel this keeps what the lighthouse taught us
++// about the peer, including which relays reach it, so the new handshake can start through a relay immediately
++// instead of waiting on a lighthouse reply. cacheCb, when set, holds the packet that found the problem so it goes
++// out as soon as the new tunnel is up. If another routine already replaced the tunnel, the replacement is returned
++// so the caller can send through it instead.
++func (f *Interface) rehandshakeUnroutable(hostinfo *HostInfo, cacheCb func(*HandshakeHostInfo)) *HostInfo {
++	if len(hostinfo.vpnAddrs) == 0 {
++		return nil
++	}
++
++	f.hostMap.DeleteHostInfo(hostinfo)
++	nh, ready := f.handshakeManager.GetOrHandshake(hostinfo.vpnAddrs[0], cacheCb)
++	if ready && nh != hostinfo {
++		return nh
++	}
++
++	hostinfo.logger(f.l).Info("Tunnel has no usable remote or relay, handshaking again")
++	return nil
++}
+-- 
+2.56.0
+

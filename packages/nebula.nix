@@ -5,7 +5,7 @@
 }:
 
 (nebula.override { buildGoModule = buildGo127Module; }).overrideAttrs (
-  finalAttrs: _old: {
+  finalAttrs: old: {
     # 1.11.0 stops leaking debug-console sessions that end with an `exec`
     # request (slackhq/nebula#1640). On 1.10.3 each `ssh … <command>` leaked
     # ~37 KiB, and the registry's console polling OOMed the lighthouse.
@@ -19,5 +19,10 @@
     };
 
     vendorHash = "sha256-tmNpGNjMY5PtJO/DU+eoZy2Miqu2VzBTiHKThVCDVZs=";
+
+    # A relayed tunnel that sat idle while its relay tunnel was replaced (sleep,
+    # network change) loses its relay, and nebula drops its traffic until dead
+    # tunnel detection, ~15-20 s. Re-handshake on the first send instead (~0.4 s).
+    patches = (old.patches or [ ]) ++ [ ../patches/nebula-rehandshake-orphaned-relay.patch ];
   }
 )
