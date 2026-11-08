@@ -150,6 +150,10 @@ in
         extra-trusted-public-keys = builtins.attrValues cfg.substitute.caches;
         netrc-file = config.sops.templates.nix-netrc.path;
       };
+
+      # Runs the latest static client from the public fuzzybear3965/neocache
+      # cache, whose key the default `caches` above trust.
+      environment.systemPackages = [ pkgs.dev.johnrinehart.neocache-client ];
     })
 
     (lib.mkIf cfg.push.enable {
