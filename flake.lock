@@ -486,11 +486,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1793469515,
-        "narHash": "sha256-0jwFBt628UtowdxSEttysivzl/LoWsC97dKmmKftpKc=",
+        "lastModified": 1794072665,
+        "narHash": "sha256-EcCR9PqUjjFqV0dt5x+efl2sFcBrFuSHVssJekwtbhM=",
         "owner": "rockorager",
         "repo": "monstar",
-        "rev": "406c48eb938a065997bf5378457d7ca24fbfcea5",
+        "rev": "c7269a638d68b2dde542e286c2c1f4ed7a5a7f57",
         "type": "github"
       },
       "original": {

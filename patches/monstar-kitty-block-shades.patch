@@ -1,7 +1,7 @@
-From 29b3a5ebbd29bef2e1a936df611351c827227051 Mon Sep 17 00:00:00 2001
+From 6a498b1410182232dd13be391e42a8b5a47ce502 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 09:22:06 -0400
-Subject: [PATCH 3/3] sprite: add kitty block shade patterns
+Subject: [PATCH 3/4] sprite: add kitty block shade patterns
 
 ---
  src/App.zig               |  1 +
@@ -12,10 +12,10 @@ Subject: [PATCH 3/3] sprite: add kitty block shade patterns
  5 files changed, 119 insertions(+), 6 deletions(-)
 
 diff --git a/src/App.zig b/src/App.zig
-index 1117cd3..6b4fb57 100644
+index dfa8010..800e2c1 100644
 --- a/src/App.zig
 +++ b/src/App.zig
-@@ -506,6 +506,7 @@ fn fontOptions(config: Config) Font.Options {
+@@ -523,6 +523,7 @@ fn fontOptions(config: Config) Font.Options {
          .weight = config.font_weight,
          .synthetic_italic = config.synthetic_italic,
          .synthetic_italic_weight = config.synthetic_italic_weight,
@@ -24,7 +24,7 @@ index 1117cd3..6b4fb57 100644
  }
  
 diff --git a/src/Config.zig b/src/Config.zig
-index 4b499f5..175d1e5 100644
+index 06d4471..cb51883 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
 @@ -104,6 +104,10 @@ pub const MetricAdjustments = struct {
@@ -46,7 +46,7 @@ index 4b499f5..175d1e5 100644
  /// Minimum window padding in logical pixels. One configured value applies to
  /// both sides; two values are left/right for X and top/bottom for Y.
  window_padding_x: WindowPadding = .{},
-@@ -305,6 +310,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+@@ -408,6 +413,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
          self.metric_adjustments.overline_thickness = try parseMetricModifier(value);
      } else if (std.mem.eql(u8, key, "adjust-cursor-thickness")) {
          self.metric_adjustments.cursor_thickness = try parseMetricModifier(value);
@@ -55,7 +55,7 @@ index 4b499f5..175d1e5 100644
      } else if (std.mem.eql(u8, key, "window-padding-x")) {
          self.window_padding_x = try parseWindowPadding(value);
      } else if (std.mem.eql(u8, key, "window-padding-y")) {
-@@ -699,6 +706,7 @@ test "defaults" {
+@@ -810,6 +817,7 @@ test "defaults" {
      try std.testing.expect(!config.synthetic_italic);
      try std.testing.expectEqual(SyntheticItalicWeight.regular, config.synthetic_italic_weight);
      try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
@@ -63,7 +63,7 @@ index 4b499f5..175d1e5 100644
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
      try std.testing.expectEqual(@as(?Command, null), config.command);
-@@ -756,6 +764,7 @@ test "parse config" {
+@@ -870,6 +878,7 @@ test "parse config" {
          \\synthetic-italic = true
          \\synthetic-italic-weight = bold
          \\font-size = 14.5
@@ -71,7 +71,7 @@ index 4b499f5..175d1e5 100644
          \\window-padding-x = 4
          \\window-padding-y = 6, 10
          \\command = /usr/bin/fish --login
-@@ -795,6 +804,7 @@ test "parse config" {
+@@ -911,6 +920,7 @@ test "parse config" {
      try std.testing.expectEqual(SyntheticItalicWeight.bold, config.synthetic_italic_weight);
      // invalid re-assignment keeps the previous valid value
      try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
@@ -80,18 +80,18 @@ index 4b499f5..175d1e5 100644
      try std.testing.expectEqual(WindowPadding{ .first = 6, .second = 10 }, config.window_padding_y);
      try std.testing.expectEqualStrings("/usr/bin/fish --login", config.command.?.shell);
 diff --git a/src/Font.zig b/src/Font.zig
-index e6d2e6d..bbbeaaa 100644
+index 0eca44c..780681e 100644
 --- a/src/Font.zig
 +++ b/src/Font.zig
-@@ -128,6 +128,7 @@ pub const Options = struct {
+@@ -129,6 +129,7 @@ pub const Options = struct {
      weight: Config.FontWeight = .default,
      synthetic_italic: bool = false,
      synthetic_italic_weight: Config.SyntheticItalicWeight = .regular,
 +    block_shade_style: Config.BlockShadeStyle = .default,
  };
  
- /// Immutable Fontconfig results. Rasterizers need independent FreeType,
-@@ -1231,7 +1232,14 @@ pub fn spriteGlyph(
+ /// Fontconfig results shared by every rasterizer at one size. Rasterizers
+@@ -1272,7 +1273,14 @@ pub fn spriteGlyph(
      if (gop.found_existing) return gop.value_ptr;
      errdefer _ = self.sprite_glyphs.remove(key);
  
@@ -199,7 +199,7 @@ index c7cab49..6a3bebb 100644
      const alloc = std.testing.allocator;
      inline for (comptime std.enums.values(Decoration)) |decoration| {
 diff --git a/src/sprite/draw/block.zig b/src/sprite/draw/block.zig
-index 1086b56..3c2dad5 100644
+index 1086b56..d3a022a 100644
 --- a/src/sprite/draw/block.zig
 +++ b/src/sprite/draw/block.zig
 @@ -155,6 +155,81 @@ pub fn fullBlockShade(
@@ -248,7 +248,7 @@ index 1086b56..3c2dad5 100644
 +                    else if (column % 2 == 1) 0 else 70
 +                else if ((column % 2 == 1) == invert) 120 else 30;
 +                for (0..square_width) |dx|
-+                    canvas.pixel(@intCast(column * square_width + @as(u32, @intCast(dx)) + extra_x), @intCast(row * square_height + previous_extra_y), @enumFromInt(alpha));
++                    canvas.pixel(@intCast(column * square_width + @as(u32, @intCast(dx)) + extra_x), @intCast(row * square_height + previous_extra_y), @fromBackingInt(@intCast(alpha)));
 +            }
 +
 +            if (has_extra_column) {
@@ -258,11 +258,11 @@ index 1086b56..3c2dad5 100644
 +                    else if (row % 2 == 1) 0 else 70
 +                else if ((row % 2 == 1) == invert) 120 else 30;
 +                for (0..square_height) |dy|
-+                    canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + @as(u32, @intCast(dy)) + extra_y), @enumFromInt(alpha));
++                    canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + @as(u32, @intCast(dy)) + extra_y), @fromBackingInt(@intCast(alpha)));
 +            }
 +
 +            if (has_extra_row and has_extra_column)
-+                canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + previous_extra_y), @enumFromInt(50));
++                canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + previous_extra_y), @fromBackingInt(@intCast(50)));
 +
 +            const blank = invert != ((row % 2 != column % 2) or (light and row % 2 == 1));
 +            if (!blank) canvas.box(
@@ -286,4 +286,5 @@ index 1086b56..3c2dad5 100644
      metrics: font.Metrics,
 -- 
 2.56.0
+
 

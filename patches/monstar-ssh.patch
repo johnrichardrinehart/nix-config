@@ -1,7 +1,7 @@
-From 1ea0b42feb32762c5fb32a0950fa1b5806659b0e Mon Sep 17 00:00:00 2001
+From 69f8f4dc646217537db41e063dc703a25e05a428 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 20:11:58 -0400
-Subject: [PATCH] ssh: install terminfo before remote login
+Subject: [PATCH 4/4] ssh: install terminfo before remote login
 
 ---
  README.md      |   9 +++
@@ -12,7 +12,7 @@ Subject: [PATCH] ssh: install terminfo before remote login
  create mode 100644 src/Ssh.zig
 
 diff --git a/README.md b/README.md
-index eef1e88..d32aa50 100644
+index 2b2221d..8a8ab8f 100644
 --- a/README.md
 +++ b/README.md
 @@ -59,6 +59,15 @@ Pass `--` to run a shell expression:
@@ -32,7 +32,7 @@ index eef1e88..d32aa50 100644
  configuration overrides with command-line options:
  
 diff --git a/dist/monstar.1 b/dist/monstar.1
-index 9ce5a25..3550bc7 100644
+index 97bfa5a..a6bb1c4 100644
 --- a/dist/monstar.1
 +++ b/dist/monstar.1
 @@ -15,6 +15,10 @@ monstar \- a small Wayland terminal emulator
@@ -46,7 +46,7 @@ index 9ce5a25..3550bc7 100644
  .SH DESCRIPTION
  .B monstar
  is a Wayland terminal emulator written in Zig and built on Ghostty's terminal
-@@ -136,11 +140,16 @@ Monstar uses Ghostty's
+@@ -139,11 +143,16 @@ Monstar uses Ghostty's
  terminal core and installs its own
  .B monstar
  terminfo entry.
@@ -67,7 +67,7 @@ index 9ce5a25..3550bc7 100644
  .I $XDG_CONFIG_HOME/monstar/config
 diff --git a/src/Ssh.zig b/src/Ssh.zig
 new file mode 100644
-index 0000000..82df8dc
+index 0000000..e698782
 --- /dev/null
 +++ b/src/Ssh.zig
 @@ -0,0 +1,157 @@
@@ -186,7 +186,7 @@ index 0000000..82df8dc
 +fn exitCode(term: std.process.Child.Term) u8 {
 +    return switch (term) {
 +        .exited => |code| code,
-+        .signal => |signal| 128 +% @as(u8, @truncate(@intFromEnum(signal))),
++        .signal => |signal| 128 +% @as(u8, @truncate(@backingInt(signal))),
 +        .stopped, .unknown => 1,
 +    };
 +}
@@ -229,7 +229,7 @@ index 0000000..82df8dc
 +    try std.testing.expectError(error.InvalidCli, parseArgs(&args));
 +}
 diff --git a/src/main.zig b/src/main.zig
-index cce279e..52582c6 100644
+index 1e08e17..4b5040b 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -12,6 +12,7 @@ const Link = @import("Link.zig");
@@ -240,7 +240,7 @@ index cce279e..52582c6 100644
  const Window = @import("Window.zig");
  
  const log = std.log.scoped(.main);
-@@ -31,6 +32,11 @@ pub fn main(init: std.process.Init) !void {
+@@ -88,6 +89,11 @@ pub fn main(init: std.process.Init) !void {
              unreachable;
          },
          .help => return printUsage(init),
@@ -252,16 +252,16 @@ index cce279e..52582c6 100644
          .version => return printVersion(init),
      }
  
-@@ -40,7 +46,7 @@ pub fn main(init: std.process.Init) !void {
+@@ -97,7 +103,7 @@ pub fn main(init: std.process.Init) !void {
      };
  }
  
--const CliAction = enum { run, bench, help, version };
-+const CliAction = enum { run, bench, help, ssh, version };
+-const CliAction = enum { run, bench, vk_parity, help, version };
++const CliAction = enum { run, bench, vk_parity, help, ssh, version };
  
  const CommandMode = enum { shell, exec };
  
-@@ -82,6 +88,11 @@ const CliParser = struct {
+@@ -142,6 +148,11 @@ const CliParser = struct {
              } else if (std.mem.eql(u8, arg, "--version")) {
                  self.cli.action = .version;
                  return self.cli;
@@ -273,7 +273,7 @@ index cce279e..52582c6 100644
              } else if (std.mem.eql(u8, arg, "--")) {
                  if (self.index + 1 >= self.args.len) return error.InvalidCli;
                  self.setCommand(.shell, self.index + 1);
-@@ -227,6 +238,7 @@ fn printUsage(init: std.process.Init) !void {
+@@ -287,6 +298,7 @@ fn printUsage(init: std.process.Init) !void {
      try writer.interface.writeAll(
          \\usage: monstar [options]
          \\       monstar [options] -e command [args...]
@@ -281,7 +281,7 @@ index cce279e..52582c6 100644
          \\       monstar [options] -- command...
          \\
          \\Options:
-@@ -243,6 +255,7 @@ fn printUsage(init: std.process.Init) !void {
+@@ -303,6 +315,7 @@ fn printUsage(init: std.process.Init) !void {
          \\  -o key=value                       Override a config key
          \\  -e command [args...]               Execute command directly
          \\  -- command...                      Run command through /bin/sh -c
@@ -289,7 +289,7 @@ index cce279e..52582c6 100644
          \\
      );
  }
-@@ -262,6 +275,14 @@ fn invalidCli(init: std.process.Init) noreturn {
+@@ -322,6 +335,14 @@ fn invalidCli(init: std.process.Init) noreturn {
      std.process.exit(2);
  }
  
@@ -304,7 +304,7 @@ index cce279e..52582c6 100644
  /// GUI mode: run a live terminal session in a window.
  fn gui(init: std.process.Init, cli: CliOptions) !void {
      const arena = init.arena.allocator();
-@@ -722,6 +743,18 @@ test "parse CLI reserves bare words for future subcommands" {
+@@ -793,6 +814,18 @@ test "parse CLI reserves bare words for future subcommands" {
      try std.testing.expectError(error.InvalidCli, parseCli(arena_state.allocator(), &args));
  }
  

@@ -1,0 +1,106 @@
+From 00cbf03497aafb40f2db251fb592a30553794b85 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Sun, 8 Nov 2026 09:16:46 -0500
+Subject: [PATCH] terminal/kitty: keep placeholder source rects inside the
+ image
+
+renderPlacement() rounds the origin and the size of a virtual
+placement's source rectangle separately. When the rectangle ends at the
+image's right or bottom edge, the two roundings can put the far edge
+one pixel past the image. A 2243x680 image in a 106x16 cell grid with
+8x16 cells gets y = 637.5 and height = 42.5 for its last row, which
+round to 43 + 638 = 681 rows. Adjacent placeholder rows also overlap
+by a pixel because each row rounds its own height.
+
+Consumers that copy the source pixels on the CPU index past the image
+data. Monstar aborts with an out-of-bounds panic when omp shows a
+pasted screenshot with Unicode placeholders.
+
+Round the edges of the rectangle instead and take the size as their
+difference, clamped to the image. Rows now share their edges, so they
+tile the image exactly and never extend past it.
+---
+ src/terminal/kitty/graphics_unicode.zig | 59 +++++++++++++++++++++++--
+ 1 file changed, 55 insertions(+), 4 deletions(-)
+
+diff --git a/src/terminal/kitty/graphics_unicode.zig b/src/terminal/kitty/graphics_unicode.zig
+index 8b59ee8c1..20610b8e4 100644
+--- a/src/terminal/kitty/graphics_unicode.zig
++++ b/src/terminal/kitty/graphics_unicode.zig
+@@ -254,14 +254,23 @@ pub const Placement = struct {
+         //     p_dest,
+         // });
+ 
++        // Round the edges of the source rectangle, not its origin and
++        // size separately. Rounding both can put the far edge one pixel
++        // past the image (42.5 + 637.5 rounds to 43 + 638 = 681 rows of
++        // a 680-row image), and adjacent placeholder rows would overlap.
++        const source_x0 = @min(@round(img_scale_source.x), img_width_f64);
++        const source_y0 = @min(@round(img_scale_source.y), img_height_f64);
++        const source_x1 = @min(@round(img_scale_source.x + img_scale_source.width), img_width_f64);
++        const source_y1 = @min(@round(img_scale_source.y + img_scale_source.height), img_height_f64);
++
+         return .{
+             .top_left = self.pin,
+             .offset_x = @intFromFloat(@round(p_dest.x_offset)),
+             .offset_y = @intFromFloat(@round(p_dest.y_offset)),
+-            .source_x = @intFromFloat(@round(img_scale_source.x)),
+-            .source_y = @intFromFloat(@round(img_scale_source.y)),
+-            .source_width = @intFromFloat(@round(img_scale_source.width)),
+-            .source_height = @intFromFloat(@round(img_scale_source.height)),
++            .source_x = @intFromFloat(source_x0),
++            .source_y = @intFromFloat(source_y0),
++            .source_width = @intFromFloat(source_x1 - source_x0),
++            .source_height = @intFromFloat(source_y1 - source_y0),
+             .dest_width = @intFromFloat(@round(p_dest.width)),
+             .dest_height = @intFromFloat(@round(p_dest.height)),
+         };
+@@ -1018,3 +1027,45 @@ test "unicode render placement: dog 1x1" {
+         try testing.expectEqual(22, rp.dest_height);
+     }
+ }
++
++test "unicode render placement: rows tile within the image" {
++    const alloc = testing.allocator;
++    const io = testing.io;
++    const cell_width = 8;
++    const cell_height = 16;
++
++    var t = try terminal.Terminal.init(io, alloc, .{ .cols = 120, .rows = 20 });
++    defer t.deinit(alloc);
++    var s: ImageStorage = .{};
++    defer s.deinit(alloc, t.screens.active);
++
++    // The unrounded source rectangle of the last row is y = 637.5 and
++    // height = 42.5, which rounds past the bottom of the image if the
++    // origin and size are rounded separately.
++    const image: Image = .{ .id = 1, .width = 2243, .height = 680 };
++    try s.addImage(io, alloc, t.screens.active, image);
++    try s.addPlacement(io, alloc, t.screens.active, 1, 0, .{
++        .location = .{ .virtual = {} },
++        .columns = 106,
++        .rows = 16,
++    });
++
++    var next_y: u32 = 0;
++    for (0..16) |row| {
++        const p: Placement = .{
++            .pin = t.screens.active.cursor.page_pin.*,
++            .image_id = 1,
++            .placement_id = 0,
++            .col = 0,
++            .row = @intCast(row),
++            .width = 106,
++            .height = 1,
++        };
++        const rp = try p.renderPlacement(&s.placeholderTarget(1, 0).?.placement, &image, cell_width, cell_height);
++        try testing.expectEqual(0, rp.source_x);
++        try testing.expectEqual(image.width, rp.source_width);
++        try testing.expectEqual(next_y, rp.source_y);
++        next_y = rp.source_y + rp.source_height;
++    }
++    try testing.expectEqual(image.height, next_y);
++}
+-- 
+2.56.0
+
