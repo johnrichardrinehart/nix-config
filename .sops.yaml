@@ -1,6 +1,7 @@
 ---
 keys:
   - &framework age1g4e49re2f34y0a2u2k69mumhy6cvv39ck6u4kmaahjtv0emh358s8fq67e
+  - &thinkie age1yp4xpy849zmr0fzf7ekgsc5tsetx7qeert37jrvcelxxce5fuvhsenq2q2
 creation_rules:
   - path_regex: secrets/share-webdav\.yaml$
     key_groups:
@@ -14,6 +15,11 @@ creation_rules:
     key_groups:
       - age:
           - *framework
+  - path_regex: secrets/nebula-thinkie\.yaml$
+    key_groups:
+      - age:
+          - *framework
+          - *thinkie
   - path_regex: secrets/framework\.yaml$
     key_groups:
       - age:

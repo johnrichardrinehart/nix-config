@@ -5,6 +5,8 @@
   ...
 }:
 {
+  imports = [ ./nebula.nix ];
+
   nixpkgs.hostPlatform = "x86_64-linux";
   system.stateVersion = "24.05";
 
@@ -17,8 +19,7 @@
   # generations. nixpkgs installs the bcachefs module with its debug info:
   # 13.6 MiB compressed in each initrd, 1.2 MiB when stripped.
   boot.bcachefs.modulePackage =
-    (config.boot.kernelPackages.callPackage config.boot.bcachefs.package.kernelModule { })
-    .overrideAttrs
+    (config.boot.kernelPackages.callPackage config.boot.bcachefs.package.kernelModule { }).overrideAttrs
       (old: {
         makeFlags = old.makeFlags ++ [ "INSTALL_MOD_STRIP=1" ];
       });

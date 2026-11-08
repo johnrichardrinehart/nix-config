@@ -754,6 +754,9 @@ It accepts ICMP and TCP 22 from peers. It sends ICMP, HTTPS, and SSH on TCP
 It sends DNS and HTTPS to the lighthouse. It answers punch notifications and
 uses the lighthouse, also a Nebula relay, when a direct tunnel fails.
 
+`thinkpad_w510` (`thinkie`, `10.77.0.8/24`) uses the module defaults. It
+accepts ICMP and TCP 22 from peers and sends ICMP and SSH on TCP 22 to peers.
+
 The module routes `mycelium.nebula.johnrinehart.dev` and `mycelium.internal`
 to the lighthouse. Each peer is available as `<peer>.mycelium.internal`.
 Enabled Mycelium hosts trust the module's public TLS CA by default.
@@ -832,8 +835,11 @@ The host appears in the registry, DNS, and dashboard as soon as it connects.
 `secrets/nebula-framework.yaml` contains the public CA certificate and
 `framie`'s signed certificate and private key. Both files use the Framework
 SSH host key as their only age recipient. The former administrator age
-identity cannot decrypt either file. sops-nix installs only the Framework
-node files under `/run/secrets` for Nebula: `dev.johnrinehart.mycelium.sopsFile`
+identity cannot decrypt either file.
+`secrets/nebula-thinkie.yaml` holds the same keys for `thinkie`. Its age
+recipients are the Framework and Thinkie SSH host keys, so Framework can
+re-encrypt it and Thinkie can decrypt it at activation.
+sops-nix installs each host's node files under `/run/secrets` for Nebula: `dev.johnrinehart.mycelium.sopsFile`
 names a sops file with the keys `nebula-ca`, `nebula-cert` and `nebula-key`, and
 the module installs them as `0440 root:nebula-mycelium` and uses them. Never copy
 the CA signing key to the lighthouse or mount it in the Nebula service. The
