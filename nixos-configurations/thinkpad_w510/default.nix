@@ -5,7 +5,10 @@
   ...
 }:
 {
-  imports = [ ./nebula.nix ];
+  imports = [
+    ./nebula.nix
+    ./neocache.nix
+  ];
 
   nixpkgs.hostPlatform = "x86_64-linux";
   system.stateVersion = "24.05";
