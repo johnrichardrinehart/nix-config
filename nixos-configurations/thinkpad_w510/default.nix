@@ -15,8 +15,8 @@
     enable = true;
     device = "/dev/sda";
   };
-  # /boot is a 100 MiB partition for the kernel and the initrds of two
-  # generations. nixpkgs installs the bcachefs module with its debug info:
+  # /boot is a 2 GiB ext4 partition; GRUB (BIOS, core in sda1) reads it
+  # directly. nixpkgs installs the bcachefs module with its debug info:
   # 13.6 MiB compressed in each initrd, 1.2 MiB when stripped.
   boot.bcachefs.modulePackage =
     (config.boot.kernelPackages.callPackage config.boot.bcachefs.package.kernelModule { }).overrideAttrs
@@ -79,12 +79,8 @@
     };
 
     "/boot" = lib.mkForce {
-      device = "/dev/disk/by-uuid/84EE-E35C";
-      fsType = "vfat";
-      options = [
-        "fmask=0022"
-        "dmask=0022"
-      ];
+      device = "/dev/disk/by-uuid/6aa0a06c-5ef2-4111-a30c-162ae10ee1a9";
+      fsType = "ext4";
     };
   };
 
