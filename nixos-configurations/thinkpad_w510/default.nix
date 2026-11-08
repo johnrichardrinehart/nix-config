@@ -55,6 +55,24 @@
         device = "/dev/v4l/by-id/usb-Chicony_Electronics_Co.__Ltd._Integrated_Camera-video-index0";
         inputFormat = "mjpeg";
       };
+      # The 1600x900 panel is the hardware ceiling; scale 0.8 gives a
+      # 2000x1125 logical desktop. Tighter gaps reclaim space; the ring is
+      # thinned from the shared 10. niri rejects a second `layout` node in
+      # one file but merges included files, so only these keys override
+      # the shared niri.kdl.
+      niri.extraConfig = ''
+        include "${pkgs.writeText "thinkie-niri.kdl" ''
+          output "LVDS-1" {
+              scale 0.8
+          }
+          layout {
+              gaps 6
+              focus-ring {
+                  width 7
+              }
+          }
+        ''}"
+      '';
     };
   };
 
