@@ -28,3 +28,4 @@ creation_rules:
     key_groups:
       - age:
           - *framework
+          - *thinkie
