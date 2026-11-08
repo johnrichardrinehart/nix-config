@@ -4,12 +4,13 @@
   lib,
   nix,
   nodejs,
+  pi-optmem,
   python3,
   writeShellApplication,
 }:
 let
   pluginSet = {
-    inherit context-mode;
+    inherit context-mode pi-optmem;
   };
   pluginPath = plugin: "${plugin}/lib/node_modules/${lib.getName plugin}";
   pluginRuntimeInputs =

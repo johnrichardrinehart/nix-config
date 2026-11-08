@@ -94,6 +94,7 @@ assert !(builtins.elem "claude-code-nix" (packageNames piOnly));
 assert builtins.elem "omp" (packageNames ompOnly);
 assert builtins.elem "python3" (map lib.getName (findOmpPackage ompOnly).runtimeInputs);
 assert builtins.elem "context-mode" (map lib.getName (findOmpPackage ompOnly).plugins);
+assert builtins.elem "pi-optmem" (map lib.getName (findOmpPackage ompOnly).plugins);
 assert
   map lib.getName (findOmpPackage ompOnly).pluginRuntimeInputs == [
     "bun"

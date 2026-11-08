@@ -98,8 +98,11 @@ in
       inputs.self.packages.aarch64-darwin.mbp-apple-silicon-qemu-vm.spicy
       # The same floating wrapper the NixOS machines install
       # (nixosModules agentTools.omp): it `nix run`s llm-agents.nix's omp,
-      # rechecked hourly, with the context-mode extension.
-      (inputs.self.packages.aarch64-darwin.omp.withPlugins (p: [ p.context-mode ]))
+      # rechecked hourly, with the context-mode and OptMem extensions.
+      (inputs.self.packages.aarch64-darwin.omp.withPlugins (p: [
+        p.context-mode
+        p.pi-optmem
+      ]))
     ];
 
     home.file.".omp/agent/skills/nix-config-refresh".source =

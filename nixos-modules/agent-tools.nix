@@ -94,8 +94,11 @@ in
 
       package = lib.mkOption {
         type = lib.types.package;
-        default = pkgs.dev.johnrinehart.omp.withPlugins (plugins: [ plugins.context-mode ]);
-        defaultText = lib.literalExpression "pkgs.dev.johnrinehart.omp.withPlugins (plugins: [ plugins.context-mode ])";
+        default = pkgs.dev.johnrinehart.omp.withPlugins (plugins: [
+          plugins.context-mode
+          plugins.pi-optmem
+        ]);
+        defaultText = lib.literalExpression "pkgs.dev.johnrinehart.omp.withPlugins (plugins: [ plugins.context-mode plugins.pi-optmem ])";
         description = ''
           OMP package installed system-wide. Home Manager points agent-deck's
           built-in `omp` tool at this package so both launch the same binary.

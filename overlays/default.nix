@@ -122,7 +122,9 @@ inputs: {
           inherit (johnPkgs) codex-cli-nix;
           inherit (johnPkgs) oh-my-codex;
         };
-        omp.context-mode = johnPkgs.context-mode;
+        omp = {
+          inherit (johnPkgs) context-mode pi-optmem;
+        };
         on-idle.idleTimeoutSeconds = 5 * 60;
         onnxruntime-openvino.openvino = johnPkgs.openvino;
         repo-manager = {
