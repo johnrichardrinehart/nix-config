@@ -92,6 +92,11 @@ in
         (lib.getExe pcsclite)
         ccidDrivers
         readerConf
+        # pcscd ends each client thread with pthread_exit(), and glibc opens
+        # libgcc_s.so.1 for the unwind with dlopen(), only from the libgcc
+        # directory it was built to trust. Without the file pcscd aborts
+        # after every client and socket activation starts it again.
+        "${pkgs.glibc.libgcc}/lib/libgcc_s.so.1"
       ];
 
       contents = {
