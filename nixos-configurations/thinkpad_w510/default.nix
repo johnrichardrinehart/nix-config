@@ -119,6 +119,10 @@
       "pkcs11-uri=auto"
       "token-timeout=15s"
     ];
+    # Pass TRIM through dm-crypt. bcachefs discards freed buckets itself and
+    # the weekly fstrim timer runs too. The X25-M ignores TRIM until its
+    # firmware is 2CV102HA or newer (it ships with 2CV102G9).
+    allowDiscards = true;
   };
 
   services.upower.enable = true;
