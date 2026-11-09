@@ -84,6 +84,9 @@
   # The BIOS loads microcode revision 0x5 into the i7 Q 720; microcode-intel
   # has revision 0xa for it.
   hardware.cpu.intel.updateMicrocode = true;
+  # Speed over security on this machine: skip the Spectre/MDS/etc.
+  # mitigations the new microcode would otherwise let the kernel enable.
+  boot.kernelParams = [ "mitigations=off" ];
 
   networking.hostName = "thinkie";
   # iwd handles Wi-Fi. dhcpcd handles the wired port.
