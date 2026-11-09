@@ -36,6 +36,7 @@
     # s3_mount.enable = false;
     # gocryptfs.enable = false;
     profiles.laptop.enable = true;
+    kernel.latest.enable = true;
     initrdPkcs11.enable = true;
     network = {
       enable = true;
