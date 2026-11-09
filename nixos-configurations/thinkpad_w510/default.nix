@@ -81,6 +81,9 @@
 
   # The Intel Centrino Wi-Fi card (iwlwifi) needs its firmware files.
   hardware.enableRedistributableFirmware = true;
+  # The BIOS loads microcode revision 0x5 into the i7 Q 720; microcode-intel
+  # has revision 0xa for it.
+  hardware.cpu.intel.updateMicrocode = true;
 
   networking.hostName = "thinkie";
   # iwd handles Wi-Fi. dhcpcd handles the wired port.
