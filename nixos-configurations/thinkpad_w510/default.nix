@@ -121,6 +121,26 @@
     SystemMaxUse=500M
   '';
 
+  # Keep the store trimmed, one core at a time: a full-speed
+  # `nix-store --optimise` overheated the W510 into a critical thermal
+  # shutdown (97 C). nixpkgs already runs nix-optimise at idle priority.
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 14d";
+    persistent = true;
+  };
+  nix.optimise = {
+    automatic = true;
+    dates = [ "weekly" ];
+  };
+  systemd.services.nix-gc.serviceConfig = {
+    CPUQuota = "100%";
+    Nice = 19;
+    IOSchedulingClass = "idle";
+  };
+  systemd.services.nix-optimise.serviceConfig.CPUQuota = "100%";
+
   boot.initrd.luks.devices."dm-0" = {
     device = lib.mkForce "/dev/disk/by-uuid/002adea0-5c10-45a8-bc8a-701a0d71577b";
     # Unlock with the PIVKey or the passphrase. Keyslot 1 holds the card's
