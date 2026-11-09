@@ -1,5 +1,4 @@
 {
-  inputs,
   config,
   lib,
   pkgs,
@@ -79,12 +78,12 @@ let
 in
 {
   options.dev.johnrinehart.neocache = {
-    # neocache CI publishes the static client to the public
-    # fuzzybear3965/neocache cache.
+    # Resolves the current static client, which neocache CI publishes to the
+    # public fuzzybear3965/neocache cache, through app.neocache.io at start-up.
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.neocache.packages.${pkgs.stdenv.hostPlatform.system}.neocache-client-static;
-      defaultText = lib.literalExpression "inputs.neocache.packages.\${system}.neocache-client-static";
+      default = pkgs.dev.johnrinehart.neocache-client;
+      defaultText = lib.literalExpression "pkgs.dev.johnrinehart.neocache-client";
     };
 
     server = lib.mkOption {
