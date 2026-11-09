@@ -102,7 +102,12 @@
       # A new bcachefs version upgrades the on-disk format on the first mount
       # and checks the whole file system. That takes longer than the default
       # 90 s mount timeout, which kills the mount and fails the boot.
-      options = [ "x-systemd.mount-timeout=infinity" ];
+      # The 160 GB SSD fills up: reconcile recompresses written data with
+      # zstd in the background. The option is also set in the superblock.
+      options = [
+        "x-systemd.mount-timeout=infinity"
+        "background_compression=zstd"
+      ];
     };
 
     "/boot" = lib.mkForce {
@@ -110,6 +115,11 @@
       fsType = "ext4";
     };
   };
+
+  # Keep the journal from eating the small SSD.
+  services.journald.extraConfig = ''
+    SystemMaxUse=500M
+  '';
 
   boot.initrd.luks.devices."dm-0" = {
     device = lib.mkForce "/dev/disk/by-uuid/002adea0-5c10-45a8-bc8a-701a0d71577b";
