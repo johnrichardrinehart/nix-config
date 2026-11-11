@@ -369,6 +369,22 @@ in
       run rm -f "$HOME/.cache/oh-my-posh/"init.*.zsh
     '';
 
+    # hypridle reads its config only at startup. On a system switch,
+    # switch-to-configuration restarts the hypridle user unit while
+    # home-manager-john.service relinks hypridle.conf, so hypridle can start
+    # on the old config. Restart it once the new config is linked.
+    home.activation.restartHypridle =
+      lib.mkIf osConfig.dev.johnrinehart.desktop.greetd_niri.hypridle.enable
+        (
+          lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+            conf=home-files/.config/hypr/hypridle.conf
+            if [ -z "''${oldGenPath:-}" ] \
+              || [ "$(readlink -f "$oldGenPath/$conf")" != "$(readlink -f "$newGenPath/$conf")" ]; then
+              run ${pkgs.systemd}/bin/systemctl --user try-restart hypridle.service || true
+            fi
+          ''
+        );
+
     programs.tmux =
       lib.mkIf
         (
