@@ -30,38 +30,18 @@ writeShellScriptBin "confirm-ssh-activity-before-suspend" ''
       '
     }
 
-    idle_to_seconds() {
-      case "$1" in
-        ""|".")
-          echo 0
-          ;;
-        old)
-          echo $((prompt_timeout + 1))
-          ;;
-        *:*)
-          IFS=: read -r hours minutes <<EOF
-  $1
-  EOF
-          echo $((10#$hours * 3600 + 10#$minutes * 60))
-          ;;
-        *)
-          echo $((10#$1 * 60))
-          ;;
-      esac
-    }
-
-    session_idle_seconds() {
-      local tty_name=$1
-      local idle_field
-      idle_field=$(${coreutils}/bin/who -u | ${gawk}/bin/awk -v tty_name="$tty_name" '$2 == tty_name { print $5; found=1; exit } END { if (!found) print "old" }')
-      idle_to_seconds "$idle_field"
+    # Last input time (epoch seconds) of the session's tty. `who -u` derives
+    # its idle column from the same atime but rounds to whole minutes, which
+    # hides activity in a session that never goes a full minute without input.
+    session_last_input() {
+      ${coreutils}/bin/stat -c %X "/dev/$1" 2>/dev/null || echo 0
     }
 
     snapshot_sessions() {
       local tty_name
       list_ssh_ttys | while IFS= read -r tty_name; do
         [ -n "$tty_name" ] || continue
-        ${coreutils}/bin/printf '%s\t%s\n' "$tty_name" "$(session_idle_seconds "$tty_name")"
+        ${coreutils}/bin/printf '%s\t%s\n' "$tty_name" "$(session_last_input "$tty_name")"
       done
     }
 
@@ -79,7 +59,7 @@ writeShellScriptBin "confirm-ssh-activity-before-suspend" ''
       local message=$2
       local tty_name
 
-      while IFS=$'\t' read -r tty_name _idle_seconds; do
+      while IFS=$'\t' read -r tty_name _last_input; do
         [ -n "$tty_name" ] || continue
         write_tty_message "$tty_name" "$message"
       done < "$snapshot_file"
@@ -88,17 +68,17 @@ writeShellScriptBin "confirm-ssh-activity-before-suspend" ''
     activity_detected() {
       local previous_file=$1
       local current_file=$2
-      local tty_name idle_seconds previous_idle
+      local tty_name last_input previous_input
 
-      while IFS=$'\t' read -r tty_name idle_seconds; do
+      while IFS=$'\t' read -r tty_name last_input; do
         [ -n "$tty_name" ] || continue
 
-        previous_idle=$(${gawk}/bin/awk -F '\t' -v tty_name="$tty_name" '
+        previous_input=$(${gawk}/bin/awk -F '\t' -v tty_name="$tty_name" '
           $1 == tty_name { print $2; found=1; exit }
           END { if (!found) print "missing" }
         ' "$previous_file")
 
-        if [ "$previous_idle" = "missing" ] || [ "$idle_seconds" -lt "$previous_idle" ]; then
+        if [ "$previous_input" = "missing" ] || [ "$last_input" -ne "$previous_input" ]; then
           return 0
         fi
       done < "$current_file"
