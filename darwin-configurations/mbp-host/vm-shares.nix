@@ -178,11 +178,17 @@ in
             rm -f /etc/exports
             changed=1
           fi
-          if /sbin/nfsd status 2>/dev/null | grep -q 'is running'; then
+          job=${config.launchd.labelPrefix}.vm-shares-nfsd
+          # Only an nfsd that is not this job's counts as left over. Stopping
+          # this job's own daemon on every switch made launchd respawn it
+          # without the kernel exports `nfsd stop` had dropped, and the guest
+          # got "access denied" until the next kickstart.
+          job_pid=$(launchctl print system/$job 2>/dev/null | awk '$1 == "pid" { print $3; exit }')
+          running_pid=$(cat /var/run/nfsd.pid 2>/dev/null || true)
+          if /sbin/nfsd status 2>/dev/null | grep -q 'is running' \
+            && [[ -z "$job_pid" || "$running_pid" != "$job_pid" ]]; then
             /sbin/nfsd stop >/dev/null 2>&1 || true
           fi
-
-          job=${config.launchd.labelPrefix}.vm-shares-nfsd
           if ! launchctl print system/$job >/dev/null 2>&1; then
             launchctl bootstrap system /Library/LaunchDaemons/$job.plist
           elif (( changed )); then
@@ -191,15 +197,17 @@ in
           # Wait, bounded, for the daemon to be up; a spawn that never
           # succeeds (a launch-constraint refusal, say) must fail this
           # activation, not hang it.
-          up=0
-          for (( i=0; i<10; i++ )); do
-            if [[ $(/sbin/nfsd status 2>/dev/null) == *'is running'* ]]; then
-              up=1
-              break
-            fi
-            sleep 1
-          done
-          if (( ! up )); then
+          wait_for_nfsd() {
+            local i
+            for (( i=0; i<10; i++ )); do
+              if [[ $(/sbin/nfsd status 2>/dev/null) == *'is running'* ]]; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+          if ! wait_for_nfsd; then
             echo "error: $job did not start; run: launchctl print system/$job" >&2
             exit 1
           fi
@@ -214,6 +222,42 @@ in
               exit 1
             fi
             printf 'warning (harmless): %s\n' "$report" >&2
+          fi
+
+          # A running nfsd that lists the exports can still refuse to mount
+          # them ("access denied") when its kernel exports are gone. Mount each
+          # share the way the guest does, over the loopback, and restart the
+          # daemon until it serves them.
+          probe_mounts() {
+            local dir ok=0
+            dir=$(mktemp -d)
+            ${lib.concatMapStrings (share: ''
+              if /sbin/mount_nfs -o vers=3,tcp,port=2049,mountport=${toString mountdPort},soft,retrycnt=0,deadtimeout=10,nobrowse${
+                lib.optionalString (share.mode == "ro") ",rdonly"
+              } 127.0.0.1:${lib.escapeShellArg share.host} "$dir" 2>/dev/null; then
+                /sbin/umount "$dir" 2>/dev/null || /sbin/umount -f "$dir" 2>/dev/null || true
+              else
+                echo "nfsd refused to mount "${lib.escapeShellArg share.host} >&2
+                ok=1
+              fi
+            '') hostShares}
+            rmdir "$dir" 2>/dev/null || true
+            return "$ok"
+          }
+          served=0
+          for (( attempt=1; attempt<=3; attempt++ )); do
+            if probe_mounts; then
+              served=1
+              break
+            fi
+            echo "restarting $job (attempt $attempt)" >&2
+            launchctl kickstart -k system/$job
+            wait_for_nfsd || true
+            sleep 2
+          done
+          if (( ! served )); then
+            echo "error: nfsd does not serve the VM host shares; run: launchctl print system/$job" >&2
+            exit 1
           fi
         ''
     );
