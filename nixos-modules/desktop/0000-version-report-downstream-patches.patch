@@ -1,4 +1,4 @@
-From f62757b4ea1bc17bedc45df6a95f4542d9b369b6 Mon Sep 17 00:00:00 2001
+From e9cff6a816a5318793703528def37cc02377f849 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 15 Oct 2026 13:37:06 -0400
 Subject: [PATCH] version: report downstream patches

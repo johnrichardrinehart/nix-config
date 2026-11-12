@@ -1,4 +1,4 @@
-From fa46caccf53c3472b9b6c2458ba203d914e07599 Mon Sep 17 00:00:00 2001
+From bec8821deb13fd67d5e3241880a4bca3571c7b35 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Fri, 9 Oct 2026 21:47:56 -0400
 Subject: [PATCH] input: support per-device keyboard settings
@@ -153,7 +153,7 @@ index 9d2c0014..0bcbe46f 100644
      pub xkb: Option<Xkb>,
      #[knuffel(child, unwrap(argument))]
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index 367ebeea..bdd627ba 100644
+index a978d161..f7b6fb24 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
 @@ -663,6 +663,49 @@ mod tests {
@@ -215,10 +215,10 @@ index 367ebeea..bdd627ba 100644
                      off: false,
                      tap: true,
 diff --git a/src/dbus/freedesktop_a11y.rs b/src/dbus/freedesktop_a11y.rs
-index eba19533..d104022b 100644
+index 74cb7da2..00077c9f 100644
 --- a/src/dbus/freedesktop_a11y.rs
 +++ b/src/dbus/freedesktop_a11y.rs
-@@ -647,8 +647,8 @@ impl State {
+@@ -652,8 +652,8 @@ impl State {
              (mods, keysym, unichar)
          });
  
@@ -230,10 +230,10 @@ index eba19533..d104022b 100644
  
          let Some(manager) = &self.niri.a11y_manager else {
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index 63c61787..91745dfc 100644
+index b2f7fd58..56818674 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
-@@ -275,6 +275,10 @@ impl State {
+@@ -298,6 +298,10 @@ impl State {
              InputEvent::DeviceRemoved { device } => {
                  self.niri.touch.remove(device);
                  self.niri.tablets.remove(device);
@@ -244,7 +244,7 @@ index 63c61787..91745dfc 100644
                  self.niri.devices.remove(device);
              }
              _ => (),
-@@ -443,6 +447,7 @@ impl State {
+@@ -466,6 +470,7 @@ impl State {
          // Restore the real keymap if required (the virtual keyboard uses its own one).
          if virtual_keyboard.is_none() {
              self.restore_configured_keymap();
@@ -252,7 +252,7 @@ index 63c61787..91745dfc 100644
          }
  
          // Keys from a virtual keyboard are tracked separately from the physical
-@@ -760,6 +765,42 @@ impl State {
+@@ -782,6 +787,42 @@ impl State {
          }
      }
  
@@ -295,7 +295,7 @@ index 63c61787..91745dfc 100644
      fn start_key_repeat(&mut self, bind: Bind) {
          if !bind.repeat {
              return;
-@@ -770,9 +811,7 @@ impl State {
+@@ -792,9 +833,7 @@ impl State {
              self.niri.event_loop.remove(token);
          }
  
@@ -307,10 +307,10 @@ index 63c61787..91745dfc 100644
          if repeat_rate == 0 {
              return;
 diff --git a/src/niri.rs b/src/niri.rs
-index 2705d6db..91494e42 100644
+index f0394fce..b33329b2 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
-@@ -289,6 +289,9 @@ pub struct Niri {
+@@ -292,6 +292,9 @@ pub struct Niri {
      /// Runtime toggle for touchpad disabled state (combined with config.touchpad.off).
      pub touchpad_disabled_by_toggle: bool,
  
@@ -320,7 +320,7 @@ index 2705d6db..91494e42 100644
      pub devices: HashSet<input::Device>,
      pub tablets: HashMap<input::Device, TabletData>,
      pub touch: HashSet<input::Device>,
-@@ -1526,7 +1529,7 @@ impl State {
+@@ -1531,7 +1534,7 @@ impl State {
                  }
              }
  
@@ -329,7 +329,7 @@ index 2705d6db..91494e42 100644
                  let current_layout = keyboard.with_xkb_state(self, |context| {
                      let xkb = context.xkb().lock().unwrap();
                      xkb.active_layout()
-@@ -1593,16 +1596,39 @@ impl State {
+@@ -1598,16 +1601,39 @@ impl State {
          }
      }
  
@@ -371,7 +371,7 @@ index 2705d6db..91494e42 100644
      }
  
      /// Returns the keyboard state to restore after replacing the seat's keymap (which resets it).
-@@ -1688,31 +1714,51 @@ impl State {
+@@ -1693,31 +1719,51 @@ impl State {
          }
      }
  
@@ -440,7 +440,7 @@ index 2705d6db..91494e42 100644
      }
  
      pub fn reload_config(&mut self, config: Result<Config, ()>) {
-@@ -1762,7 +1808,7 @@ impl State {
+@@ -1767,7 +1813,7 @@ impl State {
  
          *CHILD_ENV.write().unwrap() = mem::take(&mut config.environment);
  
@@ -449,7 +449,7 @@ index 2705d6db..91494e42 100644
          let mut libinput_config_changed = false;
          let mut output_config_changed = false;
          let mut preserved_output_config = None;
-@@ -1787,20 +1833,13 @@ impl State {
+@@ -1792,20 +1838,13 @@ impl State {
                  .set_host_cursor_visible(config.debug.nested_show_host_cursor);
          }
  
@@ -476,7 +476,7 @@ index 2705d6db..91494e42 100644
          }
  
          if config.input.touchpad != old_config.input.touchpad
-@@ -1926,9 +1965,9 @@ impl State {
+@@ -1931,9 +1970,9 @@ impl State {
          // Release the borrow.
          drop(old_config);
  
@@ -489,7 +489,7 @@ index 2705d6db..91494e42 100644
          }
  
          if libinput_config_changed {
-@@ -2513,12 +2552,9 @@ impl State {
+@@ -2554,12 +2593,9 @@ impl State {
          trace!("locale1 xkb settings changed: {xkb:?}");
          let xkb = self.niri.xkb_from_locale1.insert(xkb);
  
@@ -505,7 +505,7 @@ index 2705d6db..91494e42 100644
          }
  
          let xkb = xkb.clone();
-@@ -2565,6 +2601,7 @@ impl Niri {
+@@ -2606,6 +2642,7 @@ impl Niri {
          let display_handle = display.handle();
          let config_ = config.borrow();
          let config_file_output_config = config_.outputs.clone();
@@ -513,7 +513,7 @@ index 2705d6db..91494e42 100644
  
          let mut animation_clock = Clock::default();
  
-@@ -2850,6 +2887,9 @@ impl Niri {
+@@ -2894,6 +2931,9 @@ impl Niri {
              is_lid_closed: false,
              touchpad_disabled_by_toggle: false,
  

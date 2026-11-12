@@ -1,44 +1,72 @@
-From 83dffc122ffa36c1260351e7b4b6ab367beabb55 Mon Sep 17 00:00:00 2001
+From 93f0dcee011d4aad9bbddf84fb3c05b4a2b83713 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Wed, 21 Oct 2026 22:15:27 -0400
 Subject: [PATCH] niri: pin smithay master and the drm-extras fork
 
-Niri main already pins smithay to the Smithay master tip. The late-CRTC
-mapping fix for smithay-drm-extras is not in Smithay yet
-(Smithay/smithay#2125).
+Pin smithay to the newest Smithay master commit that niri still builds
+against, which may be ahead of the revision that niri main pins. Smithay
+d0c12bc2 ("xdg-decoration: Proper destroy handling & Version 2 support")
+adds a required XdgDecorationHandler method that niri does not implement
+yet, so stop at its parent, 8fd9fe0c.
 
-Take smithay-drm-extras from the fork branch that carries the late-CRTC
-mapping fix, rebased onto the same Smithay master tip.
+The late-CRTC mapping fix for smithay-drm-extras is not in Smithay yet
+(Smithay/smithay#2125). Take smithay-drm-extras from the fork branch that
+carries it; the crate does not depend on smithay, so the fork can follow
+Smithay master independently.
 ---
- Cargo.lock | 2 +-
- Cargo.toml | 4 ++--
- 2 files changed, 3 insertions(+), 3 deletions(-)
+ Cargo.lock | 6 +++---
+ Cargo.toml | 6 +++---
+ 2 files changed, 6 insertions(+), 6 deletions(-)
 
 diff --git a/Cargo.lock b/Cargo.lock
-index 5a0e00c5..8fb81cd3 100644
+index 5a0e00c5..4e2eeb41 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
+@@ -3258,7 +3258,7 @@ checksum = "e8e2fb0f499abb4d162f2bedad68f5ef91a1682b5a03596ddb67efd37768d100"
+ [[package]]
+ name = "smithay"
+ version = "0.7.0"
+-source = "git+https://github.com/Smithay/smithay.git?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca"
++source = "git+https://github.com/Smithay/smithay.git?rev=8fd9fe0c74e5c13a1fc9b6797d3960c8381bda55#8fd9fe0c74e5c13a1fc9b6797d3960c8381bda55"
+ dependencies = [
+  "aliasable",
+  "appendlist",
 @@ -3335,7 +3335,7 @@ dependencies = [
  [[package]]
  name = "smithay-drm-extras"
  version = "0.1.0"
 -source = "git+https://github.com/Smithay/smithay.git?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca"
-+source = "git+https://github.com/johnrichardrinehart/smithay.git?rev=234408fcbb49ca3485d5147bf1e7d2aa8fe41daf#234408fcbb49ca3485d5147bf1e7d2aa8fe41daf"
++source = "git+https://github.com/johnrichardrinehart/smithay.git?rev=b45b243be27b1e5c29899f8b5d69171052d0afcb#b45b243be27b1e5c29899f8b5d69171052d0afcb"
  dependencies = [
   "drm",
   "libdisplay-info",
+@@ -3450,7 +3450,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+ dependencies = [
+  "fastrand",
+- "getrandom 0.4.3",
++ "getrandom 0.3.4",
+  "once_cell",
+  "rustix 1.1.4",
+  "windows-sys 0.61.2",
 diff --git a/Cargo.toml b/Cargo.toml
-index 3146c659..fbc6a43e 100644
+index 3146c659..3258a52f 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -33,8 +33,8 @@ default-features = false
+@@ -28,13 +28,13 @@ tracy-client = { version = "0.18.5", default-features = false }
+ [workspace.dependencies.smithay]
+ # version = "0.4.1"
+ git = "https://github.com/Smithay/smithay.git"
+-rev = "65aa86fa5236e41775c313408102a5d5c2d1e2ca"
++rev = "8fd9fe0c74e5c13a1fc9b6797d3960c8381bda55"
+ default-features = false
  
  [workspace.dependencies.smithay-drm-extras]
  # version = "0.1.0"
 -git = "https://github.com/Smithay/smithay.git"
 -rev = "65aa86fa5236e41775c313408102a5d5c2d1e2ca"
 +git = "https://github.com/johnrichardrinehart/smithay.git"
-+rev = "234408fcbb49ca3485d5147bf1e7d2aa8fe41daf"
++rev = "b45b243be27b1e5c29899f8b5d69171052d0afcb"
  # path = "../smithay/smithay-drm-extras"
  
  [package]

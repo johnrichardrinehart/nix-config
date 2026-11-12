@@ -1,4 +1,4 @@
-From 753dab97f795180c8b79c38df5242c54ff708496 Mon Sep 17 00:00:00 2001
+From 581664d98f9606668a81ea2442b7160e1e8b0831 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Fri, 10 Jul 2026 13:43:58 -0400
 Subject: [PATCH] Let each Overview action narrow its output scope
@@ -22,8 +22,9 @@ Not-tested: Packaged build and live three-output interaction after this revision
  src/input/mod.rs         | 18 ++++----
  src/layout/mod.rs        | 93 +++++++++++++++++++++++++++++-----------
  src/layout/tests.rs      | 37 +++++++++++++++-
+ src/tests/layer_shell.rs |  2 +-
  src/ui/hotkey_overlay.rs | 10 ++---
- 8 files changed, 175 insertions(+), 48 deletions(-)
+ 9 files changed, 176 insertions(+), 49 deletions(-)
 
 diff --git a/docs/wiki/Overview.md b/docs/wiki/Overview.md
 index f9bb94a3..b60794bf 100644
@@ -49,10 +50,10 @@ index f9bb94a3..b60794bf 100644
  
  - Mouse: left click and drag windows to move them, right click and drag to scroll workspaces left/right, scroll to switch workspaces (no holding Mod required).
 diff --git a/niri-config/src/binds.rs b/niri-config/src/binds.rs
-index fff4817f..7aa9ab75 100644
+index e4701e52..a105240b 100644
 --- a/niri-config/src/binds.rs
 +++ b/niri-config/src/binds.rs
-@@ -496,8 +496,8 @@ pub enum Action {
+@@ -514,8 +514,8 @@ pub enum Action {
      ClearDynamicCastTarget,
      #[knuffel(skip)]
      StopCast(u64),
@@ -63,7 +64,7 @@ index fff4817f..7aa9ab75 100644
      CloseOverview,
      #[knuffel(skip)]
      ToggleWindowUrgent(u64),
-@@ -837,8 +837,8 @@ impl From<niri_ipc::Action> for Action {
+@@ -887,8 +887,8 @@ impl From<niri_ipc::Action> for Action {
              }
              niri_ipc::Action::ClearDynamicCastTarget {} => Self::ClearDynamicCastTarget,
              niri_ipc::Action::StopCast { session_id } => Self::StopCast(session_id),
@@ -75,7 +76,7 @@ index fff4817f..7aa9ab75 100644
              niri_ipc::Action::ToggleWindowUrgent { id } => Self::ToggleWindowUrgent(id),
              niri_ipc::Action::SetWindowUrgent { id } => Self::SetWindowUrgent(id),
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index fad654b3..367ebeea 100644
+index 37e8f8d3..a978d161 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
 @@ -646,6 +646,23 @@ mod tests {
@@ -120,7 +121,7 @@ index fad654b3..367ebeea 100644
              }
          ));
      }
-@@ -2797,7 +2814,9 @@ mod tests {
+@@ -2798,7 +2815,9 @@ mod tests {
                              ),
                          },
                          action: Release(
@@ -132,10 +133,10 @@ index fad654b3..367ebeea 100644
                          repeat: false,
                          pass_through: None,
 diff --git a/niri-ipc/src/lib.rs b/niri-ipc/src/lib.rs
-index c3711924..e51b7345 100644
+index 545c365d..298fc0ad 100644
 --- a/niri-ipc/src/lib.rs
 +++ b/niri-ipc/src/lib.rs
-@@ -931,9 +931,25 @@ pub enum Action {
+@@ -1000,9 +1000,25 @@ pub enum Action {
          session_id: u64,
      },
      /// Toggle (open/close) the Overview.
@@ -164,10 +165,10 @@ index c3711924..e51b7345 100644
      CloseOverview {},
      /// Toggle urgent status of a window.
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index b8518e96..63c61787 100644
+index 7e3a8d12..b2f7fd58 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
-@@ -2484,12 +2484,12 @@ impl State {
+@@ -2605,12 +2605,12 @@ impl State {
              Action::StopCast(session_id) => {
                  self.niri.stop_cast(CastSessionId::from(session_id));
              }
@@ -184,7 +185,7 @@ index b8518e96..63c61787 100644
                      self.niri.queue_redraw_all();
                  }
              }
-@@ -2850,7 +2850,7 @@ impl State {
+@@ -3001,7 +3001,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -193,7 +194,7 @@ index b8518e96..63c61787 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -2941,7 +2941,7 @@ impl State {
+@@ -3092,7 +3092,7 @@ impl State {
                      .with_grab(|_, grab| grab_allows_hot_corner(grab))
                      .unwrap_or(true)
              {
@@ -202,7 +203,7 @@ index b8518e96..63c61787 100644
              }
              self.niri.pointer_inside_hot_corner = true;
          }
-@@ -5655,8 +5655,8 @@ fn hardcoded_overview_binds<'a>() -> impl Iterator<Item = &'a Bind> + Clone {
+@@ -5880,8 +5880,8 @@ fn hardcoded_overview_binds<'a>() -> impl Iterator<Item = &'a Bind> + Clone {
      }
  
      const BINDS: &[Bind] = &[
@@ -213,7 +214,7 @@ index b8518e96..63c61787 100644
          bind(Keysym::Left, Action::FocusColumnLeft, true),
          bind(Keysym::Right, Action::FocusColumnRight, true),
          bind(Keysym::Up, Action::FocusWindowOrWorkspaceUp, true),
-@@ -5843,7 +5843,7 @@ mod tests {
+@@ -6075,7 +6075,7 @@ mod tests {
              bind(
                  Trigger::Keysym(Keysym::Super_L),
                  Modifiers::empty(),
@@ -223,7 +224,7 @@ index b8518e96..63c61787 100644
          ]);
  
 diff --git a/src/layout/mod.rs b/src/layout/mod.rs
-index 8575a1af..8f418ff6 100644
+index 13594c7b..d4956dc8 100644
 --- a/src/layout/mod.rs
 +++ b/src/layout/mod.rs
 @@ -371,6 +371,8 @@ pub struct Layout<W: LayoutElement> {
@@ -352,7 +353,7 @@ index 8575a1af..8f418ff6 100644
                  mon.update_render_elements(is_active);
              }
          }
-@@ -3767,6 +3784,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -3792,6 +3809,7 @@ impl<W: LayoutElement> Layout<W> {
  
      pub fn overview_gesture_begin(&mut self) {
          self.overview_open = true;
@@ -360,7 +361,7 @@ index 8575a1af..8f418ff6 100644
  
          let value = self.overview_progress.take().map_or(0., |p| p.value());
          let gesture = OverviewGesture {
-@@ -4629,18 +4647,45 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4654,18 +4672,45 @@ impl<W: LayoutElement> Layout<W> {
      }
  
      pub fn set_monitors_overview_state(&mut self) {
@@ -411,7 +412,7 @@ index 8575a1af..8f418ff6 100644
  
          let from = self.overview_progress.take().map_or(0., |p| p.value());
          let to = if self.overview_open { 1. } else { 0. };
-@@ -4656,12 +4701,12 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4681,12 +4726,12 @@ impl<W: LayoutElement> Layout<W> {
          self.set_monitors_overview_state();
      }
  
@@ -426,7 +427,7 @@ index 8575a1af..8f418ff6 100644
          true
      }
  
-@@ -4670,7 +4715,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4695,7 +4740,7 @@ impl<W: LayoutElement> Layout<W> {
              return false;
          }
  
@@ -435,7 +436,7 @@ index 8575a1af..8f418ff6 100644
          true
      }
  
-@@ -4679,7 +4724,7 @@ impl<W: LayoutElement> Layout<W> {
+@@ -4704,7 +4749,7 @@ impl<W: LayoutElement> Layout<W> {
          if let Some(mon) = self.active_monitor() {
              mon.activate_workspace_with_anim_config(ws_idx, Some(config));
          }
@@ -499,6 +500,19 @@ index a2da4ce5..04c4cbe5 100644
  #[test]
  fn workspace_render_geo_at_fractional_scale() {
      let ops = [
+diff --git a/src/tests/layer_shell.rs b/src/tests/layer_shell.rs
+index 8f817402..5ed014ca 100644
+--- a/src/tests/layer_shell.rs
++++ b/src/tests/layer_shell.rs
+@@ -397,7 +397,7 @@ fn focus_on_type_in_overview() {
+     let id = f.add_client();
+ 
+     // Open the overview.
+-    f.niri().layout.toggle_overview();
++    f.niri().layout.toggle_overview(true);
+ 
+     // Spawn a None->OnDemand layer surface (no automatic keyboard focus).
+     let layer = f.client(id).create_layer(None, Layer::Overlay, "");
 diff --git a/src/ui/hotkey_overlay.rs b/src/ui/hotkey_overlay.rs
 index 0b92e474..5b4d8fb1 100644
 --- a/src/ui/hotkey_overlay.rs
