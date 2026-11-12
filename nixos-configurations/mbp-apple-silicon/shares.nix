@@ -187,6 +187,81 @@ let
     '';
   };
 
+  # A hard mount waits forever on a connection that will not come back: when
+  # the Mac's nfsd or the launcher's relay restarts, the client can keep
+  # retransmitting on the dead connection instead of opening a new one, and
+  # everything that touches the mount (even `ls` in its parent) hangs. Probe
+  # each of the Mac's shares; when one does not answer but the Mac's nfsd
+  # does answer a fresh connection, the mount is stuck rather than the Mac
+  # down, so detach it and mount it again. Shares that should be mounted but
+  # are not (a mount the Mac refused, say) are retried as well.
+  watchHostShares = pkgs.writeShellApplication {
+    name = "vm-watch-host-shares";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+      pkgs.rpcbind
+      pkgs.systemd
+      pkgs.util-linux
+    ];
+    text = ''
+      # A deliberate `systemctl stop` is not something to undo.
+      state=$(systemctl show -P ActiveState vm-host-shares.service)
+      if [[ "$state" != active && "$state" != failed ]]; then
+        exit 0
+      fi
+
+      manifest="${manifestMount}/manifest.json"
+      [[ -e "$manifest" ]] || exit 0
+      nfs_port=$(jq -r '.host_nfs.nfs_port // empty' "$manifest")
+      [[ "$nfs_port" =~ ^[0-9]+$ ]] || exit 0
+
+      # statfs always asks the server. Run it in the background and never
+      # wait on it: a process stuck on a hard mount may not die at once.
+      answers() {
+        local pid i
+        stat -f -- "$1" >/dev/null 2>&1 &
+        pid=$!
+        for (( i=0; i<10; i++ )); do
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"
+            return
+          fi
+          sleep 1
+        done
+        kill -KILL "$pid" 2>/dev/null || true
+        return 1
+      }
+
+      stuck=0
+      while read -r target source; do
+        [[ "$source" == ${hostAddress}:* ]] || continue
+        answers "$target" && continue
+        if ! timeout 5 rpcinfo -T tcp -n "$nfs_port" ${hostAddress} nfs 3 >/dev/null 2>&1; then
+          echo "$target does not answer, and neither does the host's nfsd; leaving it until it does"
+          continue
+        fi
+        echo "$target is stuck or stale though the host's nfsd answers; detaching it"
+        umount -f -l "$target" || true
+        stuck=1
+      done < <(findmnt -rn -t nfs -o TARGET,SOURCE)
+
+      missing=0
+      while read -r guest; do
+        [[ -n "$guest" ]] || continue
+        mountpoint -q "$guest" || missing=1
+      done < <(jq -r '.host_shares // [] | .[].guest' "$manifest")
+
+      if (( stuck || missing )); then
+        if [[ "$state" == failed ]]; then
+          systemctl restart vm-host-shares.service
+        else
+          ${lib.getExe mountHostShares}
+        fi
+      fi
+    '';
+  };
+
   exportShares = pkgs.writeShellApplication {
     name = "vm-export-shares";
     runtimeInputs = [
@@ -336,6 +411,27 @@ in
       ExecStart = lib.getExe mountHostShares;
       ExecStop = lib.getExe unmountHostShares;
       TimeoutStartSec = "90s";
+    };
+  };
+
+  systemd.services.vm-host-shares-watchdog = {
+    description = "Remount host NFS shares that hang or went missing";
+    after = [ "vm-host-shares.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = lib.getExe watchHostShares;
+      # Each stuck share costs at most 15 s of probing; remounting retries
+      # for at most 30 s a share.
+      TimeoutStartSec = "5min";
+    };
+  };
+
+  systemd.timers.vm-host-shares-watchdog = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2min";
+      OnUnitInactiveSec = "30s";
+      AccuracySec = "5s";
     };
   };
 }
