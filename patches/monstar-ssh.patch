@@ -1,4 +1,4 @@
-From 69f8f4dc646217537db41e063dc703a25e05a428 Mon Sep 17 00:00:00 2001
+From f34fa63ba951125f0e701d1ac4d161bbe31879fb Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 20:11:58 -0400
 Subject: [PATCH 4/4] ssh: install terminfo before remote login
@@ -12,7 +12,7 @@ Subject: [PATCH 4/4] ssh: install terminfo before remote login
  create mode 100644 src/Ssh.zig
 
 diff --git a/README.md b/README.md
-index 2b2221d..8a8ab8f 100644
+index 947545b..8cc2d8c 100644
 --- a/README.md
 +++ b/README.md
 @@ -59,6 +59,15 @@ Pass `--` to run a shell expression:

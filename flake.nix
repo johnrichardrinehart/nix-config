@@ -155,8 +155,8 @@
       ];
 
       bootstrapIso = aarch64DarwinPkgs.fetchurl {
-        url = "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1107793.1d060086d60c/nixos-minimal-26.11pre1107793.1d060086d60c-aarch64-linux.iso";
-        hash = "sha256-gW1Soqz7vnRTlnM5oGWaY5b5RjPbS/aneSENKXZ/YH0=";
+        url = "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1117658.d4f25a3e5620/nixos-minimal-26.11pre1117658.d4f25a3e5620-aarch64-linux.iso";
+        hash = "sha256-g/Q82NSM5nQc2of6oPbRhrPVbr6bAH0AKe5BfMRUljI=";
       };
       guestFlake = "path:${self.outPath}";
       installerBoot = aarch64DarwinPkgs.callPackage ./packages/nixos-installer-boot.nix {
