@@ -9,11 +9,14 @@
 #                     it (vm-host-shares.service in the guest).
 #
 # The table becomes ~/guest-vm-fs-mappings.json, which the launcher reads at
-# every start and forwards to the guest in its share manifest. For
-# source = "host" shares this module also runs the Mac's nfsd: /etc/exports
-# and the /etc/nfs.conf settings below, rewritten on every activation. The
-# guest reaches nfsd through a relay the launcher runs, which closes each
-# connection properly when the guest closes it; macOS nfsd does not.
+# every start and forwards to the guest in its share manifest. For source =
+# "host" shares this module also runs the Mac's nfsd from its own launchd job,
+# reading an exports file under /var/db rather than /etc/exports: Some system
+# checks treat an /etc/exports with contents as an NFS server to strip out, and
+# it disables the Apple nfsd job it finds running. The /etc/nfs.conf settings
+# below are rewritten on every activation. The guest reaches nfsd through a
+# relay the launcher runs, which closes each connection properly when the guest
+# closes it; macOS nfsd does not.
 { config, lib, ... }:
 let
   inherit (lib) mkOption types;
@@ -21,6 +24,13 @@ let
   user = config.system.primaryUser;
 
   hostShares = lib.filter (share: share.source == "host") cfg;
+
+  # nfsd reads its exports from the path in the `-F` argument (/etc/exports
+  # only when the argument is absent; nfs.conf has no setting for it). The file
+  # lives under /var/db, outside /etc, where some checks looks only for
+  # /etc/exports; it is a plain file because the daemon is sandboxed and a link
+  # into the store is not something to depend on.
+  exportsFile = "/var/db/dev.johnrinehart.vm-shares.exports";
 
   # The guest mounts through QEMU's user-mode network, which delivers its
   # connections to this Mac's loopback from unprivileged ports. The mountd
@@ -83,16 +93,45 @@ in
       }) cfg;
     };
 
-    # /etc/exports and /etc/nfs.conf are written as real files: nfsd reads
-    # them itself and is sandboxed, so a link into the store is not something
-    # to depend on. With no host shares nfsd is turned off again.
+    dev.johnrinehart.provisionMac.summary.vm-shares =
+      "the guest mounts this Mac's host shares through nfsd (${config.launchd.labelPrefix}.vm-shares-nfsd, exports in ${exportsFile}, not /etc/exports; pgrep nfsd sees the daemon)";
+
+    launchd.daemons.vm-shares-nfsd = lib.mkIf (hostShares != [ ]) {
+      serviceConfig = {
+        ProgramArguments = [
+          "/sbin/nfsd"
+          "-F"
+          exportsFile
+        ];
+        KeepAlive.PathState = {
+          ${exportsFile} = true;
+        };
+        RunAtLoad = true;
+      };
+    };
+
     system.activationScripts.postActivation.text = lib.mkAfter (
       if hostShares == [ ] then
         ''
-          if [[ -s /etc/exports ]] && grep -q 'vm-shares.nix' /etc/exports; then
+          if [[ -s ${exportsFile} ]]; then
             echo "no VM host shares; stopping nfsd" >&2
-            : >/etc/exports
-            /sbin/nfsd disable || true
+            launchctl bootout system/${config.launchd.labelPrefix}.vm-shares-nfsd 2>/dev/null || true
+            # A KeepAlive restart could race the removal; wait until the
+            # daemon is actually gone before taking its exports file away.
+            down=0
+            for (( i=0; i<10; i++ )); do
+              if [[ $(/sbin/nfsd status 2>/dev/null) != *'is running'* ]]; then
+                down=1
+                break
+              fi
+              sleep 1
+            done
+            (( down )) || echo "warning: nfsd still running; its exports file stays" >&2
+            (( down )) && rm -f ${exportsFile}
+          fi
+          if [[ -e /etc/exports ]]; then
+            echo "removing leftover /etc/exports" >&2
+            rm -f /etc/exports
           fi
         ''
       else
@@ -120,8 +159,8 @@ in
           } >"$exports"
 
           changed=0
-          if ! cmp -s "$exports" /etc/exports; then
-            install -m 0644 "$exports" /etc/exports
+          if ! cmp -s "$exports" ${exportsFile}; then
+            install -m 0644 "$exports" ${exportsFile}
             changed=1
           fi
           rm -f "$exports"
@@ -129,20 +168,49 @@ in
             printf '%s' ${lib.escapeShellArg nfsConf} >/etc/nfs.conf
             changed=1
           fi
+          # An /etc/exports left by an older switch would start the Apple nfsd
+          # job; take it away. One /var/run/nfsd.pid exists for every
+          # /sbin/nfsd: an instance left over would block ours at the pidfile
+          # and keep serving whatever it read last. Stop one only when it is
+          # running; `nfsd stop` also tells the kernel to drop all exports, and
+          # ours are re-exported by this same activation.
+          if [[ -e /etc/exports ]]; then
+            rm -f /etc/exports
+            changed=1
+          fi
+          if /sbin/nfsd status 2>/dev/null | grep -q 'is running'; then
+            /sbin/nfsd stop >/dev/null 2>&1 || true
+          fi
 
-          if ! /sbin/nfsd status | grep -q 'is running'; then
-            /sbin/nfsd enable
+          job=${config.launchd.labelPrefix}.vm-shares-nfsd
+          if ! launchctl print system/$job >/dev/null 2>&1; then
+            launchctl bootstrap system /Library/LaunchDaemons/$job.plist
           elif (( changed )); then
-            /sbin/nfsd restart
+            launchctl kickstart -k system/$job &
+          fi
+          # Wait, bounded, for the daemon to be up; a spawn that never
+          # succeeds (a launch-constraint refusal, say) must fail this
+          # activation, not hang it.
+          up=0
+          for (( i=0; i<10; i++ )); do
+            if [[ $(/sbin/nfsd status 2>/dev/null) == *'is running'* ]]; then
+              up=1
+              break
+            fi
+            sleep 1
+          done
+          if (( ! up )); then
+            echo "error: $job did not start; run: launchctl print system/$job" >&2
+            exit 1
           fi
           # checkexports also asks whether the nfsd daemon's sandbox could
           # read each path, and says no for directories in a home folder. The
           # kernel NFS server does the serving and is not bound by that, so
           # those lines are only warnings; any other complaint is fatal.
-          if ! report=$(/sbin/nfsd checkexports 2>&1); then
+          if ! report=$(/sbin/nfsd -F ${exportsFile} checkexports 2>&1); then
             if grep -v -e 'sandbox_check failed' -e "can't verify exports permissions" <<<"$report" | grep -q .; then
               printf '%s\n' "$report" >&2
-              echo "error: nfsd rejected /etc/exports" >&2
+              echo "error: nfsd rejected ${exportsFile}" >&2
               exit 1
             fi
             printf 'warning (harmless): %s\n' "$report" >&2

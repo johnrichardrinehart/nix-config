@@ -122,12 +122,14 @@ removal by hand.
 
 The VM share table (`dev.johnrinehart.mbp-host.vmShares`, in
 `darwin-configurations/mbp-host/vm-shares.nix`) lists directories shared with
-the guest over NFSv3, each exported by the side its data lives on:
-`source = "guest"` (the default) is exported by the guest and mounted here by
-the launcher; `source = "host"` is exported by this Mac's nfsd, which
-`provision-mac` configures (`/etc/exports`, `/etc/nfs.conf`, mountd pinned to
-20048), and mounted by the guest's `vm-host-shares.service`. The guest reaches
-that nfsd through a socat relay the launcher runs on `MBP_APPLE_VM_HOST_NFS_PORT`
+the guest over NFSv3, each exported by the side its data lives on: `source =
+"guest"` (the default) is exported by the guest and mounted here by the
+launcher; `source = "host"` is exported by this Mac's nfsd, which
+`provision-mac` configures (`/etc/nfs.conf`, mountd pinned to 20048, exports in
+`/var/db/dev.johnrinehart.vm-shares.exports` served by its own launchd job
+rather than in `/etc/exports`, which some 3rd party system checks may skip),
+and mounted by the guest's `vm-host-shares.service`. The guest reaches that
+nfsd through a socat relay the launcher runs on `MBP_APPLE_VM_HOST_NFS_PORT`
 (2227), because macOS nfsd never closes its end of a connection the client
 closes first, and the guest's hard mount would wait on that connection forever.
 The table becomes `~/guest-vm-fs-mappings.json`, which the launcher reads at
