@@ -68,6 +68,37 @@
   };
 
   powerManagement.cpuFreqGovernor = lib.mkDefault "powersave";
+
+  # The PixArt touchpad (PIXA3854) sometimes wakes in its boot "mouse mode":
+  # pointer and tap work, but no multitouch, so two-finger scroll and gestures
+  # die. Rebinding i2c_hid_acpi re-sends the HID Input Mode report.
+  # (Not powerManagement.resumeCommands: hibernate-resume-optimization
+  # force-overrides post-resume.service's ExecStart, so those never run.)
+  systemd.services.touchpad-multitouch-resume =
+    let
+      sleepTargets = [
+        "suspend.target"
+        "hibernate.target"
+        "hybrid-sleep.target"
+        "suspend-then-hibernate.target"
+      ];
+    in
+    {
+      description = "Rebind PIXA3854 touchpad to restore multitouch mode after resume";
+      after = sleepTargets;
+      wantedBy = sleepTargets;
+      serviceConfig.Type = "oneshot";
+      script = ''
+        tp=i2c-PIXA3854:00
+        drv=/sys/bus/i2c/drivers/i2c_hid_acpi
+        if [ -e "$drv/$tp" ]; then
+          echo -n "$tp" > "$drv/unbind" || true
+          sleep 0.5
+          echo -n "$tp" > "$drv/bind" || true
+        fi
+      '';
+    };
+
   hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
 
   # Instrument the complete USB-C -> Thunderbolt/USB4 -> DP tunnel -> MST ->
