@@ -6,7 +6,7 @@
   runtimeShellPackage,
 }:
 let
-  gitVersion = "2.56.0";
+  gitVersion = "2.56.1";
 in
 git.overrideAttrs (old: {
   pname = "git-local-namespace";
@@ -14,7 +14,7 @@ git.overrideAttrs (old: {
 
   src = fetchurl {
     url = "https://www.kernel.org/pub/software/scm/git/git-${gitVersion}.tar.xz";
-    hash = "sha256-JsVsKWs4wGlbJvqV9HXx0BcE0tOOc0ZcowsLL13HidM=";
+    hash = "sha256-8LC/iSZLm9LhxkA2PnUpZDmJ2nYoFgBHPFB0XNNKYH8=";
   };
 
   # Git 2.56.0 contains nixpkgs' darwin-unicode-filename-fix.patch (upstream

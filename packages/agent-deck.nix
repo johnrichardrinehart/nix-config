@@ -11,16 +11,16 @@
 }:
 buildGo126Module rec {
   pname = "agent-deck";
-  version = "1.16.36";
+  version = "1.16.38";
 
   src = fetchFromGitHub {
     owner = "asheshgoplani";
     repo = "agent-deck";
     rev = "v${version}";
-    hash = "sha256-D6PF5KWhiTwI+1M4XiT6KFv0+uO2PrdSWm9cjdSQofg=";
+    hash = "sha256-fvJaRcWtaFKdFbyPJOYKU95gerpeWL819Ol0e8Y7c8k=";
   };
 
-  vendorHash = "sha256-yNCm//ZOTAIxUUm4yEPobbNw0dD01huAth6B9xvBaiE=";
+  vendorHash = "sha256-8d56v5csbdGaQku2LR7Twy2fKoXBVPKN9KPHdsithjg=";
   patches = [
     # Keep the full leak test when the inherited Nix build environment is too
     # large for tmux's command buffer.
@@ -51,10 +51,12 @@ buildGo126Module rec {
     # Keep the rest of the package tests enabled while skipping sandbox-sensitive
     # remote-execution, interactive TUI timing, fake-codex and fake-claude pane
     # process, full-suite tmux reconciliation races, PATH-restricted model
-    # probes, and `#!/bin/bash` stub-script checks. The heartbeat behavior is
+    # probes, and `#!/bin/bash` stub-script checks. The Azure provider tests
+    # exec the embedded `#!/usr/bin/env bash` provider script, which the
+    # sandbox cannot run. The heartbeat behavior is
     # exercised separately as a focused package check. Issue2921's fake-claude
     # fixture skips without python3 and the parent test then fails.
-    "-skip=TestRemoteCommandParity|TestRemoteSuccessfulMutationParity|TestCloseSessionWindow_KillsExtraWindow|TestLogCgroupIsolationDecision_WiredIntoBootstrap/tui_startup_emits_line|TestPerf_ColdStart_(Help|Version)|TestStatusStale_CLI_CandidateViewAndMutatesNothing|TestIssue2388_CapabilitiesCarryProbe|TestCodexAcceptanceGuardAcceptsFreshComposerThread|TestIssue2394_HydratePrefersLiveThreadOverGuessedPaneIdentity|TestIssue2400_ArchiveKeepsLiveCodexIdentity|TestIssue2396_FirstTurnOutputIsBoundToItsConversation|TestIssue2549_(SendAdoptsRotatedLiveThread|PeerOwnedLiveThreadIsNotAdopted|SubagentLiveThreadIsNotAdopted)|TestSessionSendSocketWaitPeerReply|TestLaunchSubagentScript_(AppendsFanoutHintOnlyWithoutIdentityBlock|FanoutHintNoDuplicate)|TestConductorHeartbeatTickCLIReadsInboxAndRules|TestIssue2921ClaudeLikeFakeIsGoneWhenItsCleanupReturns"
+    "-skip=TestRemoteCommandParity|TestRemoteSuccessfulMutationParity|TestCloseSessionWindow_KillsExtraWindow|TestLogCgroupIsolationDecision_WiredIntoBootstrap/tui_startup_emits_line|TestPerf_ColdStart_(Help|Version)|TestStatusStale_CLI_CandidateViewAndMutatesNothing|TestIssue2388_CapabilitiesCarryProbe|TestCodexAcceptanceGuardAcceptsFreshComposerThread|TestIssue2394_HydratePrefersLiveThreadOverGuessedPaneIdentity|TestIssue2400_ArchiveKeepsLiveCodexIdentity|TestIssue2396_FirstTurnOutputIsBoundToItsConversation|TestIssue2549_(SendAdoptsRotatedLiveThread|PeerOwnedLiveThreadIsNotAdopted|SubagentLiveThreadIsNotAdopted)|TestSessionSendSocketWaitPeerReply|TestLaunchSubagentScript_(AppendsFanoutHintOnlyWithoutIdentityBlock|FanoutHintNoDuplicate)|TestConductorHeartbeatTickCLIReadsInboxAndRules|TestIssue2921ClaudeLikeFakeIsGoneWhenItsCleanupReturns|TestProviderConnectAzure_"
     # The cmd/agent-deck tests start real tmux servers and run longer than the
     # default 10-minute go test timeout on the Nix builders.
     "-timeout=30m"
