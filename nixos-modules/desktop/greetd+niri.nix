@@ -425,6 +425,25 @@ in
       };
     };
 
+    # Polkit asks the session's authentication agent for the password of an
+    # action that needs one (KeePassXC quick unlock, for example). Niri has
+    # no agent of its own, and without one each such request fails with "No
+    # polkit authentication agent was available".
+    systemd.user.services.polkit-gnome-authentication-agent = {
+      description = "Polkit authentication agent";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      after = [
+        "niri.service"
+        "graphical-session.target"
+      ];
+      serviceConfig = {
+        ExecStart = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+        Restart = "on-failure";
+        RestartSec = "1s";
+      };
+    };
+
     systemd.user.services.niri-display-mode-watch = lib.mkIf cfg.niri.displayModeWatch.enable {
       description = "Keep niri display mode recoverable after output disconnects";
       wantedBy = [ "graphical-session.target" ];
