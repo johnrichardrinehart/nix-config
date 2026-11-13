@@ -57,6 +57,11 @@ in
     # the swap file.
     "zswap.enabled=1"
     "zswap.compressor=lz4"
+    # The image lives on the LUKS root, which appears only once it is
+    # unlocked. For a location from HibernateLocation, stage 1 waits just
+    # 2 minutes for that device and then boots without resuming; this makes
+    # it wait for the unlock however long it takes.
+    "resumeflags=x-systemd.device-timeout=infinity"
   ];
   dev.johnrinehart.system.suspendVerb = "suspend-then-hibernate";
   services.logind.settings.Login = {
