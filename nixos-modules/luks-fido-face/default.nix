@@ -195,11 +195,12 @@ in
           description = "Unlock ${cfg.volume} with a face and a YubiKey";
           wantedBy = [ "cryptsetup.target" ];
           after = [ "systemd-udev-trigger.service" ];
-          # Gone before resuming from hibernation and before stage 2.
-          conflicts = [
-            "systemd-hibernate-resume.service"
-            "initrd-switch-root.target"
-          ];
+          # Gone before stage 2. Not a Conflicts= with
+          # systemd-hibernate-resume.service: both are started by the boot
+          # transaction, and systemd settles the conflict by dropping the
+          # resume job, so every hibernate booted cold. The resume service
+          # stops this one itself (below).
+          conflicts = [ "initrd-switch-root.target" ];
           before = [
             "systemd-hibernate-resume.service"
             "initrd-switch-root.target"
@@ -212,6 +213,12 @@ in
             StandardError = "journal";
           };
         };
+
+        # Gone before resuming from hibernation. Stop jobs run before start
+        # jobs, so this waits for the unlocker to exit.
+        services.systemd-hibernate-resume.serviceConfig.ExecStartPre = [
+          "-${config.boot.initrd.systemd.package}/bin/systemctl stop luks-fido-face.service"
+        ];
       };
     };
   };
