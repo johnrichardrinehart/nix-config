@@ -9,9 +9,11 @@
 # once, for the partition list, which records each build's cdhash.
 #
 # The database lives on this Mac, so it stays reachable while the VM is down.
-# Its directory is shared with the guest at the same path (vm-shares.nix),
-# so the guest's secretspec (nixos-modules/secretspec.nix) reads the same
-# database and manifest.
+# With `shareWithGuest`, its directory is shared with the guest at the same
+# path (vm-shares.nix), so the guest's secretspec
+# (nixos-modules/secretspec.nix) reads the same database and manifest.
+# Without it, the guest needs its own copy, for example one that shared-sync
+# keeps in step (sharedSync.plainDirs).
 {
   config,
   lib,
@@ -25,9 +27,20 @@ let
   home = config.users.users.${user}.home;
 in
 {
-  options.dev.johnrinehart.mbp-host.secretspec = import ../../lib/secretspec-keepass-options.nix {
-    inherit lib;
-  };
+  options.dev.johnrinehart.mbp-host.secretspec =
+    import ../../lib/secretspec-keepass-options.nix {
+      inherit lib;
+    }
+    // {
+      shareWithGuest = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Share the directory of the database with the guest at the same path,
+          over NFS (a `source = "host"` entry in vmShares).
+        '';
+      };
+    };
 
   config = {
     dev.johnrinehart.mbp-host.signedCopies.secretspec = {
@@ -37,7 +50,7 @@ in
       path = "${home}/.local/bin/secretspec";
     };
 
-    dev.johnrinehart.mbp-host.vmShares = lib.mkIf (cfg.database != null) [
+    dev.johnrinehart.mbp-host.vmShares = lib.mkIf (cfg.database != null && cfg.shareWithGuest) [
       {
         host = "${home}/${dirOf cfg.database}";
         guest = "/home/${user}/${dirOf cfg.database}";

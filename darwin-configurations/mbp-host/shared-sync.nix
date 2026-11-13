@@ -1,5 +1,5 @@
-# ~/shared kept in step with an encrypted Proton Drive directory by a launchd
-# agent (packages/shared-sync). Linux machines run the same daemon as a
+# ~/shared kept in step with an encrypted Proton Drive directory, and
+# `plainDirs` with plain ones, by a launchd agent (packages/shared-sync). Linux machines run the same daemon as a
 # systemd user unit (nixos-modules/shared-sync.nix).
 {
   config,
@@ -14,11 +14,24 @@ let
     # The signed copy, whose signature the keychain item for the KeePassXC
     # master password trusts.
     secretspec = config.dev.johnrinehart.mbp-host.signedCopies.secretspec.path;
+    inherit (cfg) plainDirs;
   };
 in
 {
   options.dev.johnrinehart.mbp-host.sharedSync = {
     enable = lib.mkEnableOption "syncing ~/shared with a Proton Drive (shared-sync)";
+
+    plainDirs = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [ "keepass" ];
+      description = ''
+        Directories, relative to the home directory, that sync with the
+        directory of the same name in the root of the Proton Drive, without
+        rclone crypt. Use them only for files that have their own
+        encryption, for example a KeePassXC database.
+      '';
+    };
 
     links = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -47,8 +60,9 @@ in
           find "$HOME/.local/state/shared-sync/last-sync" -mmin -10 2>/dev/null | grep -q .
         '';
         instructions = ''
-          The shared-sync launchd agent syncs ~/shared, and it has not completed a
-          sync in the last 10 minutes. It needs PROTON_USERNAME, PROTON_PASSWORD,
+          The shared-sync launchd agent syncs ${
+            lib.concatMapStringsSep " and " (dir: "~/${dir}") ([ "shared" ] ++ cfg.plainDirs)
+          }, and it has not completed a sync in the last 10 minutes. It needs PROTON_USERNAME, PROTON_PASSWORD,
           PROTON_TOTP_SECRET and DIR_SHARED_RCLONE_PASSWORD in the `shared-sync`
           scope of ~/secretspec.toml (run `secretspec set <KEY> --reason "..."`
           from ~). Its log is /tmp/shared-sync.log; it tries again after 30 s.

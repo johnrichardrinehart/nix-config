@@ -142,21 +142,27 @@ manifest, both relative to the home directory.
 The module writes `~/.config/secretspec/config.toml` with a default `keepass` provider and one provider for each entry of `aliases`.
 `~/secretspec.toml` links to the manifest, so edits change it without a rebuild.
 The master password is in the keyring of each machine, one item for all projects (`keyringItem`).
-On the Mac, the directory of the database is a `source = "host"` share, so the guest reads the same database while the Mac keeps it.
+On the Mac, `shareWithGuest` (on by default) makes the directory of the database a `source = "host"` share, so the guest reads the same database while the Mac keeps it.
+Turn it off when each machine syncs its own copy with `shared-sync` (`plainDirs`, below).
 On NixOS, `manifestLinks` puts a relative `secretspec.toml` link into other directories, for example `~/code`, where secretspec finds a manifest first.
 
 `shared-sync` (`packages/shared-sync`) keeps `~/shared` in step with one encrypted directory in a Proton Drive
 (`dev.johnrinehart.mbp-host.sharedSync`; on NixOS, `dev.johnrinehart.sharedSync`).
+It also keeps each directory in `plainDirs` in step with the directory of the same name in the root of the Proton Drive.
 It does these steps:
 
 1. It reads `PROTON_USERNAME`, `PROTON_PASSWORD`, `PROTON_TOTP_SECRET` and
    `DIR_SHARED_RCLONE_PASSWORD` through the `shared-sync` scope of `~/secretspec.toml`.
 2. It defines two rclone remotes from these values: `proton` (Proton Drive) and
    `shared` (an rclone crypt remote over `proton:shared-rclone-crypt`).
-3. It runs `rclone bisync ~/shared shared:` 3 s after local changes stop, and 30 s
-   after each run. A change reaches Proton Drive in about 10 s, and another machine in about 45 s.
+3. It runs `rclone bisync ~/shared shared:`, and `rclone bisync ~/<dir> proton:<dir>` for each
+   directory in `plainDirs`, 3 s after local changes stop, and 30 s after each run.
+   A change reaches Proton Drive in about 10 s, and another machine in about 45 s.
 
-Proton Drive holds only rclone crypt ciphertext (XSalsa20-Poly1305 for data, AES-256-EME for names).
+Proton Drive holds only rclone crypt ciphertext of `~/shared` (XSalsa20-Poly1305 for data, AES-256-EME for names).
+It holds the files of a plain directory as they are, so put only files with their own encryption there.
+The daemon makes each plain directory mode `0700`, and the files that it writes there mode `0600`.
+It does not sync a directory that is a mount point, because the machine that has its data syncs it.
 `shared-sync ARGS...` runs `rclone ARGS...` with the same remotes, for example `shared-sync lsf shared:`.
 On the Mac a launchd agent runs it with `fswatch`; the log is `/tmp/shared-sync.log`.
 If no sync completed in the last 10 minutes, `provision-mac` shows a manual step.
@@ -179,6 +185,11 @@ Conflicts and deletions:
   copies the missing and newer files in both directions and deletes nothing.
 
 Keep the KeePassXC database out of `~/shared`, because the credentials that sync `~/shared` are in it.
+Put it in a plain directory, for example `plainDirs = [ "keepass" ]`.
+The daemon reads its credentials from the local copy of the database, so a new machine needs that copy before its first sync.
+To get it, download the files of the plain directory with the Proton Drive web app or desktop app.
+Each sync of a plain directory keeps its own bisync listings and replaced files in `~/.local/state/shared-sync`, in `bisync-<dir>` and `replaced-<dir>`.
+When two machines change a database at the same time, merge the replaced copy with KeePassXC (Database > Merge From Database).
 
 Git on the Mac uses the personal key for all of github.com (`github.personalSshKey`).
 `dev.johnrinehart.mbp-host.github.ownerIdentities` (Home Manager) adds other GitHub accounts, each with its own key.

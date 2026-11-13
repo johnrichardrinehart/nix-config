@@ -2,11 +2,13 @@
 # has no `kdbx:` provider), optionally backed by one KeePassXC database
 # (lib/secretspec-keepass-config.nix).
 #
-# The mbp-apple-silicon guest reads the Mac's database: the Mac shares the
-# directory that holds it (darwin-configurations/mbp-host/secretspec.nix),
-# and vm-host-shares.service mounts it at the same path. The master password
-# comes from gnome-keyring over the Secret Service, which a desktop login
-# unlocks.
+# The mbp-apple-silicon guest can read the Mac's database: with
+# `shareWithGuest` the Mac shares the directory that holds it
+# (darwin-configurations/mbp-host/secretspec.nix), and
+# vm-host-shares.service mounts it at the same path. Otherwise each machine
+# has its own copy, for example one that shared-sync keeps in step
+# (sharedSync.plainDirs). The master password comes from gnome-keyring over
+# the Secret Service, which a desktop login unlocks.
 {
   config,
   lib,
