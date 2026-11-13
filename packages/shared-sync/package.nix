@@ -172,10 +172,13 @@ let
       # Local files that a sync deletes or overwrites stay in the backup
       # directory for 30 days. Remote ones go to the Proton Drive trash.
       dirs=() remotes=() works=() backups=()
-      for d in ${bashArray "dir"}; do dirs+=("$HOME/$d"); done
+      # Arrays, not word lists: with only ~/shared, a loop over one
+      # constant word fails ShellCheck (SC2043).
+      local_dirs=(${bashArray "dir"}) local_works=(${bashArray "work"}) local_backups=(${bashArray "backup"})
+      for d in "''${local_dirs[@]}"; do dirs+=("$HOME/$d"); done
       remotes=(${bashArray "remote"})
-      for w in ${bashArray "work"}; do works+=("$state/$w"); done
-      for b in ${bashArray "backup"}; do backups+=("$state/$b"); done
+      for w in "''${local_works[@]}"; do works+=("$state/$w"); done
+      for b in "''${local_backups[@]}"; do backups+=("$state/$b"); done
       privates=(${bashBools "private"})
 
       for i in "''${!dirs[@]}"; do
