@@ -71,6 +71,7 @@
     ./external-display-recovery.nix
     ./external-display-telemetry.nix
     ./filepicker.nix
+    ./niri-resume-reset-outputs.nix
     ./firmware/framework-ec.nix
     ./fonts.nix
     ./git-meld.nix

@@ -29,6 +29,10 @@
   # members (nixos-modules/tmux-root-shell.nix).
   dev.johnrinehart.tmux.rootShell.enable = true;
 
+  # The U2520D behind the U3225QE's DP-out stays in standby after hibernate
+  # until its output is turned off and on again.
+  dev.johnrinehart.niri.resumeResetOutputs.enable = true;
+
   # As on framie: iwd for Wi-Fi (impala), dhcpcd for wired interfaces.
   dev.johnrinehart.network = {
     enable = true;
