@@ -23,6 +23,13 @@
     # A relayed tunnel that sat idle while its relay tunnel was replaced (sleep,
     # network change) loses its relay, and nebula drops its traffic until dead
     # tunnel detection, ~15-20 s. Re-handshake on the first send instead (~0.4 s).
-    patches = (old.patches or [ ]) ++ [ ../patches/nebula-rehandshake-orphaned-relay.patch ];
+    patches = (old.patches or [ ]) ++ [
+      ../patches/nebula-rehandshake-orphaned-relay.patch
+      # On macOS a sendto can fail with EAGAIN or ENOBUFS for a while, for example
+      # while the EndpointSecurity send check is throttled (slackhq/nebula#1901).
+      # 1.12 drops the datagram at once, so no handshake reply got out. Wait up
+      # to 10 ms for the socket before dropping.
+      ../patches/nebula-darwin-retry-stalled-send.patch
+    ];
   }
 )
