@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Mon, 16 Nov 2026 11:56:12 -0500
+Subject: [PATCH] wifi: mt76: mt7925: reload the firmware before mac80211
+ resumes from hibernation
+
+On hibernation restore the chip has lost its firmware, so the restore
+callback queues a full reset to reload it and returns at once. mac80211
+then resumes the wiphy, a child of the PCI device, and calls .start. The
+reset worker and mt7925_start() take the same dev->mutex; when .start
+wins, it sends SET_DOMAIN_INFO to a chip without firmware, the command
+times out, ieee80211_reconfig() reports "Hardware became unavailable
+upon resume" and cfg80211 closes the interface. The reset then reloads
+the firmware, but the interface stays down until userspace brings it up.
+
+Wait for the reset on restore before returning, so the wiphy resumes
+against running firmware. Bound the wait at 2 seconds (the reload takes
+about 350 ms) so a chip that never comes back cannot stall the system
+resume through the reset worker's retries, and log an error when the
+bound is hit. The reset cannot already be running here: suspend flushes
+it and mt792x_reset() refuses to queue it while suspended.
+---
+ .../net/wireless/mediatek/mt76/mt7925/init.c   |  1 +
+ .../net/wireless/mediatek/mt76/mt7925/mac.c    | 13 ++++++++++---
+ .../net/wireless/mediatek/mt76/mt7925/pci.c    | 18 +++++++++++++++++-
+ drivers/net/wireless/mediatek/mt76/mt792x.h    |  1 +
+ 4 files changed, 29 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7925/init.c b/drivers/net/wireless/mediatek/mt76/mt7925/init.c
+index cd22fcc021b..411521e0773 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7925/init.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7925/init.c
+@@ -269,6 +269,7 @@ int mt7925_register_device(struct mt792x_dev *dev)
+ 	skb_queue_head_init(&dev->coredump.msg_list);
+ 
+ 	INIT_WORK(&dev->reset_work, mt7925_mac_reset_work);
++	init_completion(&dev->reset_done);
+ 	INIT_WORK(&dev->init_work, mt7925_init_work);
+ 
+ 	INIT_WORK(&dev->phy.roc_work, mt7925_roc_work);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7925/mac.c b/drivers/net/wireless/mediatek/mt76/mt7925/mac.c
+index 3b82c9de26c..2a20b21a61e 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7925/mac.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7925/mac.c
+@@ -1509,10 +1509,8 @@ mt7925_vif_connect_iter(void *priv, u8 *mac,
+ }
+ 
+ /* system error recovery */
+-void mt7925_mac_reset_work(struct work_struct *work)
++static void __mt7925_mac_reset_work(struct mt792x_dev *dev)
+ {
+-	struct mt792x_dev *dev = container_of(work, struct mt792x_dev,
+-					      reset_work);
+ 	struct ieee80211_hw *hw = mt76_hw(dev);
+ 	struct mt76_connac_pm *pm = &dev->pm;
+ 	int i, ret;
+@@ -1570,6 +1568,15 @@ out:
+ 	mt7925_regd_change(&dev->phy, "00");
+ }
+ 
++void mt7925_mac_reset_work(struct work_struct *work)
++{
++	struct mt792x_dev *dev = container_of(work, struct mt792x_dev,
++					      reset_work);
++
++	__mt7925_mac_reset_work(dev);
++	complete_all(&dev->reset_done);
++}
++
+ void mt7925_coredump_work(struct work_struct *work)
+ {
+ 	struct mt792x_dev *dev;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7925/pci.c b/drivers/net/wireless/mediatek/mt76/mt7925/pci.c
+index d5095362afe..a05637e0ffa 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7925/pci.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7925/pci.c
+@@ -820,6 +820,8 @@ restore_suspend:
+ 	return err;
+ }
+ 
++#define MT7925_RESTORE_RESET_TIMEOUT	(2 * HZ)
++
+ static int _mt7925_pci_resume(struct device *device, bool restore)
+ {
+ 	struct pci_dev *pdev = to_pci_dev(device);
+@@ -880,8 +882,22 @@ static int _mt7925_pci_resume(struct device *device, bool restore)
+ failed:
+ 	pm->suspended = false;
+ 
+-	if (err < 0 || restore)
++	if (restore) {
++		/* The chip lost its firmware. Let the reset reload it before
++		 * mac80211 resumes (the wiphy is our child) and calls .start,
++		 * which would otherwise race the reset for dev->mutex and
++		 * send commands to a chip without firmware.
++		 */
++		reinit_completion(&dev->reset_done);
++		mt792x_reset(&dev->mt76);
++		if (!wait_for_completion_timeout(&dev->reset_done,
++						 MT7925_RESTORE_RESET_TIMEOUT))
++			dev_err(mdev->dev,
++				"firmware reload not done %u ms after restore, resuming anyway\n",
++				jiffies_to_msecs(MT7925_RESTORE_RESET_TIMEOUT));
++	} else if (err < 0) {
+ 		mt792x_reset(&dev->mt76);
++	}
+ 
+ 	return err;
+ }
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x.h b/drivers/net/wireless/mediatek/mt76/mt792x.h
+index 9efc251cb74..d501fc1a4bf 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x.h
++++ b/drivers/net/wireless/mediatek/mt76/mt792x.h
+@@ -302,6 +302,7 @@ struct mt792x_dev {
+ 	struct mt792x_phy phy;
+ 
+ 	struct work_struct reset_work;
++	struct completion reset_done;
+ 	bool hw_full_reset:1;
+ 	bool hw_init_done:1;
+ 	bool fw_assert:1;
+-- 
+2.56.1
+
