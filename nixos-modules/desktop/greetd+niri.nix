@@ -704,6 +704,9 @@ in
               url = "https://github.com/hyprwm/hyprlock/commit/afdf00b9b857f14e8f7f1d15039bde9ba05b7043.patch?full_index=1";
               hash = "sha256-7m62eG3WeWj0+0cFXrzJa4Dz5RegHBOEcFtRQ3EYi0M=";
             })
+            # A monitor that comes back while hyprlock exits after the
+            # unlock crashed it (null session lock).
+            ./hyprlock-no-lock-surface-after-unlock.patch
           ];
         });
       })
