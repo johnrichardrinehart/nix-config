@@ -19,12 +19,6 @@
 let
   cfg = config.dev.johnrinehart.desktop.lockBeforeSleep;
   niriCfg = config.dev.johnrinehart.desktop.greetd_niri;
-  sleepTargets = [
-    "suspend.target"
-    "hibernate.target"
-    "hybrid-sleep.target"
-    "suspend-then-hibernate.target"
-  ];
   lockAndWait = pkgs.writeShellScript "lock-before-sleep" ''
     set -u
     PATH=${
@@ -82,8 +76,11 @@ in
   config = lib.mkIf cfg.enable {
     systemd.services.lock-before-sleep = {
       description = "Lock the screen and wait for the lock before sleep";
-      before = sleepTargets;
-      wantedBy = sleepTargets;
+      # sleep.target, not suspend.target and friends: systemd-suspend.service
+      # and the other sleep services run After=sleep.target, while
+      # suspend.target is reached only once they are done, i.e. after resume.
+      before = [ "sleep.target" ];
+      wantedBy = [ "sleep.target" ];
       unitConfig.DefaultDependencies = false;
       serviceConfig = {
         Type = "oneshot";
