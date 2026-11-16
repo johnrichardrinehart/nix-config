@@ -3,6 +3,12 @@
 # resume although the link is trained and the stream is in sync; neither the
 # kernel nor niri can tell. Turning the output off and on again releases and
 # reallocates its MST payload, and the monitor wakes for the new stream.
+#
+# Then it checks every output niri has enabled against the kernel: after a
+# hibernate resume the internal panel once came back with its DRM connector
+# disabled while niri still drove it, so every page flip failed and the
+# panel stayed dark (and niri aborted the session lock it could not show).
+# Any such output is turned off and on again too.
 {
   config,
   lib,
@@ -49,6 +55,24 @@ let
         ${niri} msg output "$output" off || status=1
         sleep ${toString cfg.offSeconds}
         ${niri} msg output "$output" on || status=1
+      done
+
+      # Outputs niri drives but whose DRM connector the kernel has disabled.
+      if ! enabled=$(${niri} msg --json outputs | ${jq} -r '
+            .[] | select(.current_mode != null) | .name'); then
+        echo "$socket: niri msg outputs failed" >&2
+        status=1
+        continue
+      fi
+      for output in $enabled; do
+        for connector in /sys/class/drm/card*-"$output"/enabled; do
+          if [[ $(<"$connector") == disabled ]]; then
+            echo "$socket: $output is disabled in the kernel ($connector); resetting it"
+            ${niri} msg output "$output" off || status=1
+            sleep ${toString cfg.offSeconds}
+            ${niri} msg output "$output" on || status=1
+          fi
+        done
       done
     done
     exit "$status"

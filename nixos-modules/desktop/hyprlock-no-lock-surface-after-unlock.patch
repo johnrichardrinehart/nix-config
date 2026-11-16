@@ -1,10 +1,28 @@
-hyprlock: do not create a lock surface after the unlock
+hyprlock: do not create or render lock surfaces after the unlock
 
 releaseSessionLock() drops the session lock but leaves m_lockAquired set,
 so an output that appears while hyprlock exits (a monitor turned off and on
 again after resume) takes the "lock acquired" path and dereferences the null
-lock in CSessionLockSurface: SIGSEGV in sendGetLockSurface.
+lock: SIGSEGV in sendGetLockSurface. And a surface whose output global was
+removed still got frame callbacks and rendered for the erased output:
+SIGSEGV in CRenderer::getOrCreateWidgetsFor.
 
+diff --git a/src/core/LockSurface.cpp b/src/core/LockSurface.cpp
+--- a/src/core/LockSurface.cpp
++++ b/src/core/LockSurface.cpp
+@@ -133,6 +133,12 @@
+ }
+ 
+ void CSessionLockSurface::render() {
++    // After the unlock, or once the output is gone (its global was removed),
++    // there is nothing to draw on; rendering would dereference the dead
++    // output in CRenderer::getOrCreateWidgetsFor.
++    if (g_pHyprlock->isTerminating() || m_outputRef.expired())
++        return;
++
+     if (frameCallback || !readyForFrame) {
+         needsFrame = true;
+         return;
 diff --git a/src/core/Output.cpp b/src/core/Output.cpp
 --- a/src/core/Output.cpp
 +++ b/src/core/Output.cpp
