@@ -72,6 +72,7 @@
     ./external-display-recovery.nix
     ./external-display-telemetry.nix
     ./filepicker.nix
+    ./lock-before-sleep.nix
     ./niri-resume-reset-outputs.nix
     ./firmware/framework-ec.nix
     ./fonts.nix
