@@ -34,6 +34,9 @@ inputs: {
         ) packageFiles
         // lib.mapAttrs (name: _: packageRoot + "/${name}") packageDirs;
       packageArgs = {
+        amdgpu = {
+          inherit (final.linuxPackages_latest) kernel kernelModuleMakeFlags;
+        };
         brightness-sync.brightness-notify = johnPkgs.brightness-notify;
         clipboard-store-notify.cliphist = johnPkgs.cliphist-master;
         clipboard-watch.clipboard-store-notify = johnPkgs.clipboard-store-notify;

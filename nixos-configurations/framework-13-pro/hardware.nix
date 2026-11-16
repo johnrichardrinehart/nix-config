@@ -37,10 +37,15 @@
     options cfg80211 ieee80211_regdom="US"
   '';
 
-  # MT7925 driver fixes, built out of tree against this kernel so a change
-  # needs no kernel rebuild (packages/mt76).
+  # MT7925 and amdgpu driver fixes, built out of tree against this kernel
+  # so a change needs no kernel rebuild (packages/mt76, packages/amdgpu).
+  # amdgpu: release leaked DP MST payloads, which otherwise leave the
+  # USB4-docked monitors in standby after a failed resume until reboot.
   boot.extraModulePackages = [
     (pkgs.dev.johnrinehart.mt76.override {
+      inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
+    })
+    (pkgs.dev.johnrinehart.amdgpu.override {
       inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
     })
   ];
