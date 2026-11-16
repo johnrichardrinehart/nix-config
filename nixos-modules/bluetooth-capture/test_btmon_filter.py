@@ -114,7 +114,8 @@ def main():
     for required in ("Encryption Change", "Status: Success", "[redacted]"):
         if required not in filtered:
             failures.append(f"filtered output lacks {required!r}")
-    if "ACL Data" in filtered:
+    # The ATT decoding inside the data block; its header differs by version.
+    if "Handle Value Notification" in filtered:
         failures.append("filtered output keeps an ACL data block")
 
     if failures:

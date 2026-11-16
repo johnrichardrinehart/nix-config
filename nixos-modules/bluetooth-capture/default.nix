@@ -16,13 +16,13 @@ let
         nativeBuildInputs = [ pkgs.python3 ];
       }
       ''
-        python3 ${./test_btmon_filter.py} ${pkgs.bluez}/bin/btmon ${./btmon_filter.py}
+        python3 ${./test_btmon_filter.py} ${config.hardware.bluetooth.package}/bin/btmon ${./btmon_filter.py}
         install -Dm444 ${./btmon_filter.py} $out/lib/btmon_filter.py
       '';
 
   capture = pkgs.writeShellScript "bluetooth-capture" ''
     set -o pipefail
-    ${pkgs.coreutils}/bin/stdbuf -oL ${pkgs.bluez}/bin/btmon --date --columns=250 --color=never \
+    ${pkgs.coreutils}/bin/stdbuf -oL ${config.hardware.bluetooth.package}/bin/btmon --date --columns=250 --color=never \
       | ${pkgs.python3}/bin/python3 ${btmonFilter}/lib/btmon_filter.py --output-dir ${directory}
   '';
 in

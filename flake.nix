@@ -106,6 +106,8 @@
           inputs = moduleInputs;
           inherit lib;
         };
+        # Part of `default`; needs overlays.default.
+        bluez = ./nixos-modules/bluez.nix;
         mycelium = ./nixos-modules/nebula/mycelium;
         nebula = ./nixos-modules/nebula;
         # Not part of `default`: it replaces the root filesystem with RAM.

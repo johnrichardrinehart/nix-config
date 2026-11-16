@@ -330,13 +330,13 @@ in
             Type = "oneshot";
             ExecStart = pkgs.writeShellScript "bluetooth-resume-defer" ''
               # Briefly power off bluetooth to stop reconnection attempts
-              ${pkgs.bluez}/bin/bluetoothctl power off 2>/dev/null || true
+              ${config.hardware.bluetooth.package}/bin/bluetoothctl power off 2>/dev/null || true
 
               # Wait for user session to stabilize
               ${pkgs.coreutils}/bin/sleep ${toString cfg.deferBluetooth.delaySeconds}
 
               # Re-enable bluetooth
-              ${pkgs.bluez}/bin/bluetoothctl power on 2>/dev/null || true
+              ${config.hardware.bluetooth.package}/bin/bluetoothctl power on 2>/dev/null || true
             '';
           };
         };

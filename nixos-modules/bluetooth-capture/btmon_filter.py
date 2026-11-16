@@ -16,7 +16,15 @@ import re
 import shutil
 import sys
 
-DATA_BLOCK = re.compile(r"^(?:\S+\[\d+\]: )?[<>] (?:ACL|SCO|ISO) Data\b")
+# BlueZ up to 5.87 labels data packets "ACL Data RX", "SCO Data TX", and so on.
+# 5.88 (25ba1ab49) labels them with the connection type from conn_type_str(),
+# or plain ACL/SCO/ISO when the connection is unknown, e.g. "> LE-ACL: Handle".
+DATA_BLOCK = re.compile(
+    r"^(?:\S+\[\d+\]: )?[<>] (?:"
+    r"(?:ACL|SCO|ISO) Data\b|"
+    r"(?:ACL|SCO|ISO|BR-ACL|LE-ACL|BR-SCO|BR-ESCO|LE-CIS|LE-BIS|unknown): Handle\b"
+    r")"
+)
 BLOCK_START = re.compile(r"^\S")
 
 # Labels from BlueZ monitor/packet.c print_key() and print_hex_field() calls

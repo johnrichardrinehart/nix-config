@@ -12,11 +12,13 @@ in
   imports = [
     (modulesPath + "/virtualisation/digital-ocean-config.nix")
     inputs.disko.nixosModules.disko
+    inputs.self.nixosModules.bluez
     inputs.self.nixosModules.mycelium
     ./disko.nix
   ];
 
   nixpkgs.hostPlatform = "x86_64-linux";
+  nixpkgs.overlays = [ inputs.self.overlays.default ];
   networking = {
     hostName = "nebula-lighthouse";
     useDHCP = true;

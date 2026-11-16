@@ -8,6 +8,7 @@
 {
   imports = [
     ./base.nix
+    inputs.self.nixosModules.bluez
     (modulesPath + "/profiles/minimal.nix")
   ];
 

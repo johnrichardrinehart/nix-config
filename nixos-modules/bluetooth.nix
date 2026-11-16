@@ -6,12 +6,13 @@
 }:
 let
   cfg = config.dev.johnrinehart.bluetooth;
+  bluetoothctl = "${config.hardware.bluetooth.package}/bin/bluetoothctl";
 
   btIdleScript = pkgs.writeShellScript "bt-auto-suspend" ''
     count_file="/run/bt-idle-count"
 
     # Check for connected devices
-    connected=$(${pkgs.bluez}/bin/bluetoothctl devices Connected 2>/dev/null)
+    connected=$(${bluetoothctl} devices Connected 2>/dev/null)
 
     if [ -n "$connected" ]; then
       # Devices connected — reset counter
@@ -20,7 +21,7 @@ let
     fi
 
     # Check if adapter is already powered off
-    powered=$(${pkgs.bluez}/bin/bluetoothctl show 2>/dev/null | grep "Powered: yes")
+    powered=$(${bluetoothctl} show 2>/dev/null | grep "Powered: yes")
     if [ -z "$powered" ]; then
       # Already off, nothing to do
       echo 0 > "$count_file"
@@ -34,7 +35,7 @@ let
 
     # If idle long enough, power off
     if [ "$current" -ge "${toString cfg.autoSuspend.idleMinutes}" ]; then
-      ${pkgs.bluez}/bin/bluetoothctl power off
+      ${bluetoothctl} power off
       echo 0 > "$count_file"
     fi
   '';
