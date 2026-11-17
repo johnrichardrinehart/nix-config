@@ -1,0 +1,108 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Zdenek Kabelac <zkabelac@redhat.com>
+Date: Wed, 21 Oct 2026 16:11:36 +0200
+Subject: [PATCH] drm/amd/display: do not resume cached CRTCs of lost DPIA
+ links
+
+When the USB4 link to a Thunderbolt dock is lost during system suspend,
+the DPIA tunnel feeding the dock's display outputs is gone at resume.
+dm_resume() detects this, but dm_destroy_cached_state() then re-commits
+the pre-suspend atomic state, which still enables the MST connector on
+that dead tunnel:
+
+  thunderbolt 0000:c6:00.5: 0:2: failed to reach state TB_PORT_UP. Ignoring port...
+  thunderbolt 0000:c6:00.5: 0:2: lost during suspend, disconnecting
+  ...
+  [drm] DPIA AUX failed on 0x0(15), error 7
+  [drm] *ERROR* dpcd_set_link_settings:1156: core_link_write_dpcd (DP_LINK_BW_SET) failed
+  [drm] enabling link 4 failed: 15
+  WARNING: .../dc/link/link_dpms.c:1418 at allocate_mst_payload
+  [drm] *ERROR* Failure: unknown encoding format
+
+Enabling the link fails, but link_set_dpms_on_post_enable_link() still
+enables and unblanks the stream, allocate_mst_payload() only warns, and
+dce110_apply_single_controller_ctx_to_hw() discards the set_dpms_on()
+result and returns DC_OK. The commit is thus treated as successful and
+the MST connector stays enabled with a stale payload, without a
+disconnect event. No later hotplug can recover the output: the monitor
+stays dark until reboot.
+
+The detection loop in dm_resume() runs before dm_destroy_cached_state()
+and already knows the tunnel is gone: the DPIA HPD query clears
+hpd_status and link->type becomes dc_connection_none. Use that
+information to keep the CRTCs of such connectors disabled in the cached
+state, so the commit drops their streams instead of programming them on
+a dead link. The output then returns through the ordinary hotplug path
+when the dock is re-enumerated.
+
+Link: https://gitlab.freedesktop.org/drm/amd/-/issues/6012
+Signed-off-by: Zdenek Kabelac <zkabelac@redhat.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c | 47 +++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index 47a0ff2ed035..58ab170b0343 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -1514,6 +1514,51 @@ static int dm_cache_state(struct amdgpu_device *adev)
+ 	return adev->dm.cached_state ? 0 : r;
+ }
+ 
++/*
++ * Returns true if the USB4 DPIA tunnel feeding this connector does not exist
++ * anymore. Called after the resume detection loop, so link->type and
++ * link->hpd_status reflect the current state of the tunnel.
++ */
++static bool dm_dpia_link_is_lost(struct amdgpu_dm_connector *aconnector)
++{
++	struct amdgpu_dm_connector *root = aconnector->mst_root ?
++		aconnector->mst_root : aconnector;
++	struct dc_link *link = root->dc_link;
++
++	if (!link || link->ep_type != DISPLAY_ENDPOINT_USB4_DPIA)
++		return false;
++
++	return link->type == dc_connection_none || !link->hpd_status;
++}
++
++/*
++ * Do not restore a cached (pre-suspend) atomic state that enables a display
++ * whose USB4 DPIA tunnel was lost during suspend. Without this the cached
++ * state is committed on a dead link: MST link training fails, yet the CRTC is
++ * enabled anyway and the connector is never disabled, so no later hotplug can
++ * recover the display until the driver is reloaded.
++ */
++static void dm_disable_lost_dpia_crtcs(struct drm_atomic_commit *state)
++{
++	struct drm_connector *connector;
++	struct drm_connector_state *new_conn_state;
++	struct drm_crtc_state *new_crtc_state;
++	int i;
++
++	for_each_new_connector_in_state(state, connector, new_conn_state, i) {
++		if (!new_conn_state->crtc)
++			continue;
++
++		if (!dm_dpia_link_is_lost(to_amdgpu_dm_connector(connector)))
++			continue;
++
++		new_crtc_state = drm_atomic_get_new_crtc_state(state,
++							       new_conn_state->crtc);
++		if (new_crtc_state)
++			new_crtc_state->active = false;
++	}
++}
++
+ static void dm_destroy_cached_state(struct amdgpu_device *adev)
+ {
+ 	struct amdgpu_display_manager *dm = &adev->dm;
+@@ -1560,6 +1605,8 @@ static void dm_destroy_cached_state(struct amdgpu_device *adev)
+ 		}
+ 	}
+ 
++	dm_disable_lost_dpia_crtcs(dm->cached_state);
++
+ 	drm_atomic_helper_resume(ddev, dm->cached_state);
+ 
+ 	dm->cached_state = NULL;
