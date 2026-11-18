@@ -1,0 +1,54 @@
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Subject: [PATCH] drm/amd/display: skip the MST last-link check for USB4
+ integrated sinks
+
+A USB4 monitor with a built-in MST hub reports its panel as an SST sink
+port on the root branch, and that port's DPCD link settings mirror the
+2-lane USB4 DP tunnel. dm_dp_mst_is_port_support_mode() treats them as a
+physical last link after DSC decode and rejects 4K60 at 8 and 10 bpc.
+create_validate_stream_for_sink() then falls back to 6 bpc, for which
+dc_dsc_get_policy_for_timing() has no policy, so the MST DSC fairness
+pass gives the stream 0 bpp and 0 PBN and the monitor stays dark.
+
+Skip that check for SST sinks directly on the root branch of a USB4 DPIA
+link, as is already done for Synaptics (90CC24) branches.
+
+---
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c	2026-11-06 13:18:30.000000000 -0500
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c	2026-11-18 10:53:21.265577840 -0500
+@@ -1983,6 +1983,25 @@
+ }
+ #endif
+ 
++/*
++ * A monitor with a built-in MST hub (e.g. a USB4/Thunderbolt monitor that
++ * daisy-chains a second display) exposes its own panel as an SST sink port
++ * directly on the root branch. That port's DPCD link settings mirror the
++ * upstream USB4 DP tunnel rather than a physical last link, so they do not
++ * bound the stream after DSC decode. Rejecting the mode there makes the
++ * driver fall back to 6 bpc, where no DSC policy exists, and the stream ends
++ * up with no MST time slots.
++ */
++static bool is_usb4_integrated_mst_sink(struct amdgpu_dm_connector *aconnector)
++{
++	struct drm_dp_mst_port *port = aconnector->mst_output_port;
++
++	return aconnector->dc_link &&
++	       aconnector->dc_link->ep_type == DISPLAY_ENDPOINT_USB4_DPIA &&
++	       port->pdt == DP_PEER_DEVICE_SST_SINK &&
++	       port->parent && !port->parent->port_parent;
++}
++
+ enum dc_status dm_dp_mst_is_port_support_mode(
+ 	struct amdgpu_dm_connector *aconnector,
+ 	struct dc_stream_state *stream)
+@@ -2049,7 +2068,8 @@
+ 
+ 				if (end_link_bw > 0 &&
+ 				    stream_kbps > end_link_bw &&
+-				    aconnector->branch_ieee_oui != DP_BRANCH_DEVICE_ID_90CC24) {
++				    aconnector->branch_ieee_oui != DP_BRANCH_DEVICE_ID_90CC24 &&
++				    !is_usb4_integrated_mst_sink(aconnector)) {
+ 					DRM_DEBUG_DRIVER("MST_DSC dsc decode at last link. "
+ 							 "Mode required bw can't fit into last link\n");
+ 					return DC_FAIL_BANDWIDTH_VALIDATE;
