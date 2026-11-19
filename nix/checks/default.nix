@@ -35,4 +35,5 @@ in
     inherit pkgs;
     firmwareSource = pkgs.dev.johnrinehart.slicemk-firmware.src;
   };
+  sleep-deadman = import ./sleep-deadman.nix { inherit lib pkgs; };
 }

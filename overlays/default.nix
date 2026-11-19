@@ -138,6 +138,9 @@ inputs: {
           inherit (inputs) repo-manager;
           system = final.stdenv.hostPlatform.system;
         };
+        sleep-deadman = {
+          inherit (final.linuxPackages_latest) kernel kernelModuleMakeFlags;
+        };
         slicemk-update.slicemk-firmware = johnPkgs.slicemk-firmware;
         whisper-voice-type = {
           moonshineVoice = johnPkgs.moonshine-voice;

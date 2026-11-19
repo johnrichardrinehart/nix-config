@@ -74,6 +74,7 @@
     ./filepicker.nix
     ./lock-before-sleep.nix
     ./niri-resume-reset-outputs.nix
+    ./sleep-deadman.nix
     ./firmware/framework-ec.nix
     ./fonts.nix
     ./git-meld.nix
