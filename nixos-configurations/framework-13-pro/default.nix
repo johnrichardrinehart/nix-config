@@ -70,6 +70,11 @@ in
     HandleSuspendKey = "suspend-then-hibernate";
   };
 
+  # Since 2026-11-18 some hibernations hang after user space is frozen:
+  # dark screen, no log, no image, a cold boot. Panic and reboot after
+  # 5 minutes instead, with the blocked tasks in pstore.
+  dev.johnrinehart.sleepDeadman.enable = true;
+
   boot.loader.efi.canTouchEfiVariables = true;
 
   # Stage 1 unlocks the LUKS root on the NVMe drive, with a USB keyboard
