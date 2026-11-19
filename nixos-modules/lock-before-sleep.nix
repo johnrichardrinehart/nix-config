@@ -7,9 +7,14 @@
 #
 # This unit runs before sleep.target, so before systemd-sleep freezes the
 # user slice. It asks logind to lock every session (hypridle starts
-# hyprlock), then waits until the running hyprlock logs that the compositor
-# confirmed the lock (ext-session-lock "locked"). After timeoutSeconds it
-# lets the system sleep anyway, so a broken locker cannot keep it awake.
+# hyprlock), then waits until the lock holds. After timeoutSeconds it lets
+# the system sleep anyway, so a broken locker cannot keep it awake.
+#
+# A hyprlock started by hypridle logs to the journal when the compositor
+# confirms its lock (ext-session-lock "locked"). One started by hand, from
+# a terminal, logs to that terminal instead, so its lock is read from
+# niri's journal: the session counts as locked when niri's last lock
+# message is "locking session", logged lockSettleSeconds ago or earlier.
 {
   config,
   lib,
@@ -19,6 +24,8 @@
 let
   cfg = config.dev.johnrinehart.desktop.lockBeforeSleep;
   niriCfg = config.dev.johnrinehart.desktop.greetd_niri;
+  # niri confirms a lock within a frame or two of "locking session".
+  lockSettleSeconds = 2;
   lockAndWait = pkgs.writeShellScript "lock-before-sleep" ''
     set -u
     PATH=${
@@ -31,12 +38,28 @@ let
     }
 
     # True if a running hyprlock has logged that its lock was confirmed.
-    locked() {
+    hyprlockConfirmed() {
       local pid
       for pid in $(pgrep -x hyprlock); do
         journalctl -q --no-pager -o cat _PID="$pid" | grep -q 'onLockLocked called' && return 0
       done
       return 1
+    }
+
+    # True if niri's last lock message this boot is "locking session",
+    # logged at least lockSettleSeconds ago, and a hyprlock is running.
+    niriLocked() {
+      local line usec
+      pgrep -x hyprlock >/dev/null || return 1
+      line=$(journalctl -b -q --no-pager -o short-unix _COMM=niri -g 'locking session' -r -n 1)
+      [[ $line == *"locking session"* && $line != *"unlocking session"* ]] || return 1
+      usec=''${line%% *}          # 1795109750.579277
+      usec=''${usec/./}
+      (( $(date +%s%N) - usec * 1000 >= ${toString lockSettleSeconds} * 1000000000 ))
+    }
+
+    locked() {
+      hyprlockConfirmed || niriLocked
     }
 
     if locked; then
