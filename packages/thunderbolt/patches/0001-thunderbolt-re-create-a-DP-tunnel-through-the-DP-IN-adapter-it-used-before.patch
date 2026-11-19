@@ -1,0 +1,164 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] thunderbolt: re-create a DP tunnel through the DP IN adapter
+ it used before
+
+When a DP tunnel is torn down (on resume the USB4 link to a dock or
+monitor briefly drops) and later re-created, tb_tunnel_dp() picks the
+first free DP IN adapter of the host router. That need not be the one
+the tunnel used before. amdgpu ties each DP IN adapter to its own DPIA
+connector, so the monitor (and any MST chain behind it) then appears on
+another connector: the old topology is torn down after failing AUX
+transfers ("DPIA AUX failed ... error 7"), the outputs get new names and
+the compositor loses their configuration.
+
+Remember the host router DP IN adapter each DP OUT adapter was fed from
+when its tunnel is torn down, and re-create tunnels between such pairs
+first.
+---
+--- a/drivers/thunderbolt/tb.c	2026-11-19 16:35:09.357554763 -0500
++++ b/drivers/thunderbolt/tb.c	2026-11-19 16:35:25.938955159 -0500
+@@ -42,6 +42,7 @@
+ #define TB_ASYM_THRESHOLD	45000
+ 
+ #define MAX_GROUPS		7	/* max Group_ID is 7 */
++#define MAX_DP_PAIRS		4
+ 
+ static unsigned int asym_threshold = TB_ASYM_THRESHOLD;
+ module_param_named(asym_threshold, asym_threshold, uint, 0444);
+@@ -61,12 +62,31 @@
+  *		 runtime resume
+  * @groups: Bandwidth groups used in this domain.
+  */
++/**
++ * struct tb_dp_pair - DP IN adapter last used for a DP OUT adapter
++ * @in: Host router DP IN adapter (%NULL if the slot is free)
++ * @out_route: Route of the router of the DP OUT adapter
++ * @out_port: Port number of the DP OUT adapter
++ *
++ * The graphics driver ties each DP IN adapter of the host router to its
++ * own connector. If a DP tunnel is torn down and re-created through
++ * another DP IN adapter (for instance after resume, when the first free
++ * DP IN adapter is picked), the monitor shows up on another connector
++ * and the whole display configuration is lost.
++ */
++struct tb_dp_pair {
++	struct tb_port *in;
++	u64 out_route;
++	u8 out_port;
++};
++
+ struct tb_cm {
+ 	struct list_head tunnel_list;
+ 	struct list_head dp_resources;
+ 	bool hotplug_active;
+ 	struct delayed_work remove_work;
+ 	struct tb_bandwidth_group groups[MAX_GROUPS];
++	struct tb_dp_pair dp_pairs[MAX_DP_PAIRS];
+ };
+ 
+ static inline struct tb *tcm_to_tb(struct tb_cm *tcm)
+@@ -1721,6 +1741,73 @@
+ 	}
+ }
+ 
++/* Remember which DP IN adapter fed a DP OUT adapter, see struct tb_dp_pair */
++static void tb_remember_dp_pair(struct tb *tb, struct tb_port *in,
++				struct tb_port *out)
++{
++	struct tb_cm *tcm = tb_priv(tb);
++	struct tb_dp_pair *slot = NULL;
++	int i;
++
++	/* Only host router DP IN adapters outlive a resume or replug */
++	if (tb_route(in->sw))
++		return;
++
++	for (i = 0; i < MAX_DP_PAIRS; i++) {
++		struct tb_dp_pair *pair = &tcm->dp_pairs[i];
++
++		if (pair->in && pair->out_route == tb_route(out->sw) &&
++		    pair->out_port == out->port) {
++			slot = pair;
++			break;
++		}
++		if (!slot && !pair->in)
++			slot = pair;
++	}
++	if (!slot) {
++		memmove(&tcm->dp_pairs[0], &tcm->dp_pairs[1],
++			sizeof(tcm->dp_pairs[0]) * (MAX_DP_PAIRS - 1));
++		slot = &tcm->dp_pairs[MAX_DP_PAIRS - 1];
++	}
++
++	slot->in = in;
++	slot->out_route = tb_route(out->sw);
++	slot->out_port = out->port;
++	tb_port_dbg(in, "remembering DP IN for DP OUT %llx:%u\n",
++		    slot->out_route, slot->out_port);
++}
++
++/*
++ * Returns the free DP OUT adapter that @in fed last, if any, so the tunnel
++ * can be re-created through the same DP IN adapter.
++ */
++static struct tb_port *tb_find_previous_dp_out(struct tb *tb,
++					       struct tb_port *in)
++{
++	struct tb_cm *tcm = tb_priv(tb);
++	struct tb_port *port;
++	int i;
++
++	for (i = 0; i < MAX_DP_PAIRS; i++) {
++		struct tb_dp_pair *pair = &tcm->dp_pairs[i];
++
++		if (pair->in != in)
++			continue;
++
++		list_for_each_entry(port, &tcm->dp_resources, list) {
++			if (!tb_port_is_dpout(port) || tb_port_is_enabled(port))
++				continue;
++			if (port->sw == in->sw)
++				continue;
++			if (tb_route(port->sw) == pair->out_route &&
++			    port->port == pair->out_port)
++				return port;
++		}
++	}
++
++	return NULL;
++}
++
+ static void tb_deactivate_and_free_tunnel(struct tb_tunnel *tunnel)
+ {
+ 	struct tb_port *src_port, *dst_port;
+@@ -1738,6 +1825,7 @@
+ 
+ 	switch (tunnel->type) {
+ 	case TB_TUNNEL_DP:
++		tb_remember_dp_pair(tb, src_port, dst_port);
+ 		tb_detach_bandwidth_group(src_port);
+ 		/*
+ 		 * In case of DP tunnel make sure the DP IN resource is
+@@ -2084,6 +2172,22 @@
+ 	 * Find pair of inactive DP IN and DP OUT adapters and then
+ 	 * establish a DP tunnel between them.
+ 	 */
++	/*
++	 * First re-create tunnels between DP IN and DP OUT adapters that
++	 * were paired before, so each monitor stays behind the same DP IN
++	 * adapter (and graphics connector).
++	 */
++	list_for_each_entry(port, &tcm->dp_resources, list) {
++		if (!tb_port_is_dpin(port) || tb_port_is_enabled(port))
++			continue;
++
++		out = tb_find_previous_dp_out(tb, port);
++		if (out) {
++			tb_port_dbg(port, "DP IN re-paired with previous DP OUT\n");
++			tb_tunnel_one_dp(tb, port, out);
++		}
++	}
++
+ 	tb_dbg(tb, "looking for DP IN <-> DP OUT pairs:\n");
+ 
+ 	in = NULL;

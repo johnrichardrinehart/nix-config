@@ -41,11 +41,16 @@
   # so a change needs no kernel rebuild (packages/mt76, packages/amdgpu).
   # amdgpu: release leaked DP MST payloads, which otherwise leave the
   # USB4-docked monitors in standby after a failed resume until reboot.
+  # thunderbolt: re-create a DP tunnel through the DP IN adapter it used
+  # before, so USB4 monitors keep their connector across resume.
   boot.extraModulePackages = [
     (pkgs.dev.johnrinehart.mt76.override {
       inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
     })
     (pkgs.dev.johnrinehart.amdgpu.override {
+      inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
+    })
+    (pkgs.dev.johnrinehart.thunderbolt.override {
       inherit (config.boot.kernelPackages) kernel kernelModuleMakeFlags;
     })
   ];

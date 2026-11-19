@@ -142,6 +142,9 @@ inputs: {
           inherit (final.linuxPackages_latest) kernel kernelModuleMakeFlags;
         };
         slicemk-update.slicemk-firmware = johnPkgs.slicemk-firmware;
+        thunderbolt = {
+          inherit (final.linuxPackages_latest) kernel kernelModuleMakeFlags;
+        };
         whisper-voice-type = {
           moonshineVoice = johnPkgs.moonshine-voice;
           model = johnPkgs.moonshine-models-onnx;
