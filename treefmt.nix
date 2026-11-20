@@ -38,7 +38,13 @@
     ruff-check.enable = true;
     ruff-format.enable = true;
     shellcheck.enable = true;
-    shfmt.enable = true;
+    # treefmt-nix stopped setting shfmt options by default (numtide/treefmt-nix
+    # e6aebd81); keep the two-space, simplifying style the scripts use.
+    shfmt = {
+      enable = true;
+      indent_size = 2;
+      simplify = true;
+    };
     statix = {
       enable = true;
       disabled-lints = [ "W20" ];
