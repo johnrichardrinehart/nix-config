@@ -1,4 +1,4 @@
-From 4af5edb4bf72129b31f4897b90fcfb7417495298 Mon Sep 17 00:00:00 2001
+From 24f875146f1bb554b00b9ef2bc023cfe20fed01b Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Thu, 3 Sep 2026 09:22:06 -0400
 Subject: [PATCH 3/4] sprite: add kitty block shade patterns
@@ -12,7 +12,7 @@ Subject: [PATCH 3/4] sprite: add kitty block shade patterns
  5 files changed, 119 insertions(+), 6 deletions(-)
 
 diff --git a/src/App.zig b/src/App.zig
-index c6da96c..5b1bd7a 100644
+index aefcdda..83d314c 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -532,6 +532,7 @@ fn fontOptions(config: Config) Font.Options {
@@ -24,7 +24,7 @@ index c6da96c..5b1bd7a 100644
  }
  
 diff --git a/src/Config.zig b/src/Config.zig
-index a0d8c03..f5894cc 100644
+index 43198cb..b8a6000 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
 @@ -104,6 +104,10 @@ pub const MetricAdjustments = struct {
@@ -46,7 +46,7 @@ index a0d8c03..f5894cc 100644
  /// Minimum window padding in logical pixels. One configured value applies to
  /// both sides; two values are left/right for X and top/bottom for Y.
  window_padding_x: WindowPadding = .{},
-@@ -448,6 +453,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+@@ -453,6 +458,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
          self.metric_adjustments.overline_thickness = try parseMetricModifier(value);
      } else if (std.mem.eql(u8, key, "adjust-cursor-thickness")) {
          self.metric_adjustments.cursor_thickness = try parseMetricModifier(value);
@@ -55,7 +55,7 @@ index a0d8c03..f5894cc 100644
      } else if (std.mem.eql(u8, key, "window-padding-x")) {
          self.window_padding_x = try parseWindowPadding(value);
      } else if (std.mem.eql(u8, key, "window-padding-y")) {
-@@ -852,6 +859,7 @@ test "defaults" {
+@@ -866,6 +873,7 @@ test "defaults" {
      try std.testing.expect(!config.synthetic_italic);
      try std.testing.expectEqual(SyntheticItalicWeight.regular, config.synthetic_italic_weight);
      try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
@@ -63,7 +63,7 @@ index a0d8c03..f5894cc 100644
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
      try std.testing.expectEqual(@as(?Command, null), config.command);
-@@ -912,6 +920,7 @@ test "parse config" {
+@@ -927,6 +935,7 @@ test "parse config" {
          \\synthetic-italic = true
          \\synthetic-italic-weight = bold
          \\font-size = 14.5
@@ -71,7 +71,7 @@ index a0d8c03..f5894cc 100644
          \\window-padding-x = 4
          \\window-padding-y = 6, 10
          \\command = /usr/bin/fish --login
-@@ -953,6 +962,7 @@ test "parse config" {
+@@ -970,6 +979,7 @@ test "parse config" {
      try std.testing.expectEqual(SyntheticItalicWeight.bold, config.synthetic_italic_weight);
      // invalid re-assignment keeps the previous valid value
      try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
@@ -285,5 +285,5 @@ index 1086b56..d3a022a 100644
  fn quadrant(
      metrics: font.Metrics,
 -- 
-2.56.0
+2.56.1
 

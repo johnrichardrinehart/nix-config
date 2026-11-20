@@ -1,4 +1,4 @@
-From 45ced8c0f517c1477cfd20d0003459eadb058245 Mon Sep 17 00:00:00 2001
+From be74bc78892b4162cebf5da4a1b7cc3c4a8df538 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Wed, 2 Sep 2026 15:25:47 -0400
 Subject: [PATCH 2/4] font: apply synthetic italic transforms
@@ -27,7 +27,7 @@ Run Monstar with `synthetic-italic = true` and a font requiring synthetic italic
  8 files changed, 492 insertions(+), 33 deletions(-)
 
 diff --git a/dist/monstar.5 b/dist/monstar.5
-index 71d8708..52ae322 100644
+index 3f4cead..d25d3e2 100644
 --- a/dist/monstar.5
 +++ b/dist/monstar.5
 @@ -267,6 +267,17 @@ Bold faces continue to request the bold weight.
@@ -49,7 +49,7 @@ index 71d8708..52ae322 100644
  Set the font size.
  Bare values and
 diff --git a/src/App.zig b/src/App.zig
-index b2122b4..c6da96c 100644
+index 859071e..aefcdda 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -527,7 +527,12 @@ fn tmpDirPath(environ: std.process.Environ) []const u8 {
@@ -67,7 +67,7 @@ index b2122b4..c6da96c 100644
  
  pub fn init(
 diff --git a/src/Config.zig b/src/Config.zig
-index b34eaea..a0d8c03 100644
+index e29eb61..43198cb 100644
 --- a/src/Config.zig
 +++ b/src/Config.zig
 @@ -108,10 +108,16 @@ pub const FontWeight = enum {
@@ -87,7 +87,7 @@ index b34eaea..a0d8c03 100644
  /// Bare and `pt` values are typographic points; `px` values are logical
  /// pixels. Both apply the output's fractional scale during rasterization.
  font_size: FontSize = .{ .points = 12 },
-@@ -407,6 +413,15 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
+@@ -412,6 +418,15 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
          self.font_family = try arena.dupeSentinel(u8, value, 0);
      } else if (std.mem.eql(u8, key, "font-weight")) {
          self.font_weight = std.meta.stringToEnum(FontWeight, value) orelse return error.InvalidValue;
@@ -103,7 +103,7 @@ index b34eaea..a0d8c03 100644
      } else if (std.mem.eql(u8, key, "font-size")) {
          self.font_size = try parseFontSize(value);
      } else if (std.mem.eql(u8, key, "font-thicken")) {
-@@ -834,6 +849,8 @@ test "defaults" {
+@@ -848,6 +863,8 @@ test "defaults" {
      try std.testing.expectEqualStrings(default_app_id, config.app_id);
      try std.testing.expectEqualStrings("monospace", config.font_family);
      try std.testing.expectEqual(FontWeight.default, config.font_weight);
@@ -112,7 +112,7 @@ index b34eaea..a0d8c03 100644
      try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
      try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
-@@ -892,6 +909,8 @@ test "parse config" {
+@@ -907,6 +924,8 @@ test "parse config" {
          \\app-id = com.example.scratchpad
          \\font-family = Fira Code
          \\font-weight = medium
@@ -121,7 +121,7 @@ index b34eaea..a0d8c03 100644
          \\font-size = 14.5
          \\window-padding-x = 4
          \\window-padding-y = 6, 10
-@@ -930,6 +949,8 @@ test "parse config" {
+@@ -947,6 +966,8 @@ test "parse config" {
      try std.testing.expectEqualStrings("com.example.scratchpad", config.app_id);
      try std.testing.expectEqualStrings("Fira Code", config.font_family);
      try std.testing.expectEqual(FontWeight.medium, config.font_weight);
@@ -827,5 +827,5 @@ index e323c95..f691eaf 100644
  
      var colors = try config.terminalColors(alloc, .dark);
 -- 
-2.56.0
+2.56.1
 
