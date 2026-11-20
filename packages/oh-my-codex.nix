@@ -9,17 +9,17 @@
 }:
 let
   pname = "oh-my-codex";
-  version = "0.22.6";
-  # Branch dev/hook-runtime-hardening-v0.22.6 of the fork: the fork's runtime
-  # hardening commits rebased onto upstream Yeachan-Heo/oh-my-codex v0.22.6.
+  version = "0.22.11";
+  # Branch dev/hook-runtime-hardening-v0.22.11 of the fork: the fork's runtime
+  # hardening commits rebased onto upstream Yeachan-Heo/oh-my-codex v0.22.11.
   # Upstream closed the matching pull requests (#1383 to #1397) unmerged.
-  rev = "65380a122f8166301f4bb3ee2a38328c2e92fde4";
+  rev = "b2a1fd47af9298102045091d0fb26c352493699f";
 
   src = fetchFromGitHub {
     owner = "johnrichardrinehart";
     repo = "oh-my-codex";
     inherit rev;
-    hash = "sha256-UJzbaeYYsCxsJzSBS1YFzf26W3GuM6oVOf+Rhi5taFE=";
+    hash = "sha256-gUqwTYtJZum+/tMXjCuv9rNgrJC8k7AzwcBBWdDQd50=";
   };
 
   nodePlatform =
@@ -69,7 +69,7 @@ in
 buildNpmPackage {
   inherit pname version src;
 
-  npmDepsHash = "sha256-P6DOXQZXE7pdi5OtMdTa2Mr+Z9DSBVmMtcq28xdk++4=";
+  npmDepsHash = "sha256-sCv11FN0kRzMjXbwe+lym7cyx1Pvotb4KHf5r/rYsfw=";
 
   nativeBuildInputs = [ makeWrapper ];
 

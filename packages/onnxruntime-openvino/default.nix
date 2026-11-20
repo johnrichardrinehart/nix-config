@@ -7,14 +7,14 @@
 }:
 
 let
-  version = "1.31.1";
+  version = "1.32.0";
 
   src = fetchFromGitHub {
     owner = "microsoft";
     repo = "onnxruntime";
     tag = "v${version}";
     fetchSubmodules = true;
-    hash = "sha256-wATnI1v3De6+41fGYWS2458TCUWhBECNw2kBnfajKEo=";
+    hash = "sha256-eZpyDFBVyJapuXTkz0AwHzv3fNj6a7MpYviPIdPINxw=";
   };
 
   # Dependencies that differ from nixpkgs' onnxruntime; see
@@ -23,8 +23,8 @@ let
     name = "onnx-src";
     owner = "onnx";
     repo = "onnx";
-    tag = "v1.22.0";
-    hash = "sha256-gc65t/VN3kdvV9tiFoOk6Sw+OZe4Udgm3VcZPP9gzpE=";
+    tag = "v1.23.2";
+    hash = "sha256-5o8WhE8nQbDWN2gDs+HF1wrXbMqYg5/h0FrF5y1cils=";
   };
 
   # ORT no longer accepts a system cpuinfo: it builds its pinned revision

@@ -11,11 +11,11 @@
 # The npm package bundles all of its dependencies, so it needs no npm install.
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "context-mode";
-  version = "2.1.10";
+  version = "2.2.1";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/context-mode/-/context-mode-${finalAttrs.version}.tgz";
-    hash = "sha256-aHH4MuXKop4R/PpjH//g+HyKjKp3sN7ChZOu91+F5Kw=";
+    hash = "sha256-LoIwmnZFupDyv6R+l4XkwK5g/kfuKhydG/bm9dmGtI4=";
   };
 
   nativeBuildInputs = [ makeWrapper ];

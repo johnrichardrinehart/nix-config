@@ -3,24 +3,37 @@
   bash,
   buildGo126Module,
   coreutils,
+  fetchurl,
+  go_1_26,
   fetchFromGitHub,
   git,
   ncurses,
   openssh,
   tmux,
 }:
-buildGo126Module rec {
+let
+  # agent-deck's go.mod requires Go 1.26.11, which is newer than nixpkgs' go_1_26.
+  # Drop this override once nixpkgs ships go_1_26 >= 1.26.11.
+  go = go_1_26.overrideAttrs (_old: rec {
+    version = "1.26.11";
+    src = fetchurl {
+      url = "https://go.dev/dl/go${version}.src.tar.gz";
+      hash = "sha256-1EEBsP8n7SpMda1GwXucdDWSCeLrLKfJ32y0/baOGWk=";
+    };
+  });
+in
+(buildGo126Module.override { inherit go; }) rec {
   pname = "agent-deck";
-  version = "1.16.38";
+  version = "1.16.39";
 
   src = fetchFromGitHub {
     owner = "asheshgoplani";
     repo = "agent-deck";
     rev = "v${version}";
-    hash = "sha256-fvJaRcWtaFKdFbyPJOYKU95gerpeWL819Ol0e8Y7c8k=";
+    hash = "sha256-WqbT4/4vIIgAvqq9Ikv+2kn1r31m4D8yjYEYzFC5A8U=";
   };
 
-  vendorHash = "sha256-8d56v5csbdGaQku2LR7Twy2fKoXBVPKN9KPHdsithjg=";
+  vendorHash = "sha256-cuiMn9Pd4VQD4KpodLe+Sw+6P+Vou7aCm4NlAmR9Jfc=";
   patches = [
     # Keep the full leak test when the inherited Nix build environment is too
     # large for tmux's command buffer.
