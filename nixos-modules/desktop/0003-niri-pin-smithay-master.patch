@@ -1,25 +1,23 @@
-From 93f0dcee011d4aad9bbddf84fb3c05b4a2b83713 Mon Sep 17 00:00:00 2001
+From 1de287e82a67c5896d8bd3b76f11c936b78c98cf Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Wed, 21 Oct 2026 22:15:27 -0400
 Subject: [PATCH] niri: pin smithay master and the drm-extras fork
 
-Pin smithay to the newest Smithay master commit that niri still builds
-against, which may be ahead of the revision that niri main pins. Smithay
-d0c12bc2 ("xdg-decoration: Proper destroy handling & Version 2 support")
-adds a required XdgDecorationHandler method that niri does not implement
-yet, so stop at its parent, 8fd9fe0c.
+Smithay master has fixes that the pinned Smithay revision lacks. The
+late-CRTC mapping fix for smithay-drm-extras is not in Smithay yet
+(Smithay/smithay#2125).
 
-The late-CRTC mapping fix for smithay-drm-extras is not in Smithay yet
-(Smithay/smithay#2125). Take smithay-drm-extras from the fork branch that
-carries it; the crate does not depend on smithay, so the fork can follow
-Smithay master independently.
+Pin smithay to the Smithay master tip. Take smithay-drm-extras from the
+fork branch that carries the late-CRTC mapping fix.
 ---
- Cargo.lock | 6 +++---
- Cargo.toml | 6 +++---
- 2 files changed, 6 insertions(+), 6 deletions(-)
+ Cargo.lock                       |  4 ++--
+ Cargo.toml                       |  6 +++---
+ src/handlers/virtual_keyboard.rs |  6 +++---
+ src/handlers/xdg_shell.rs        | 16 ++++++++++++++++
+ 4 files changed, 24 insertions(+), 8 deletions(-)
 
 diff --git a/Cargo.lock b/Cargo.lock
-index 5a0e00c5..4e2eeb41 100644
+index 5a0e00c5..577e1b73 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
 @@ -3258,7 +3258,7 @@ checksum = "e8e2fb0f499abb4d162f2bedad68f5ef91a1682b5a03596ddb67efd37768d100"
@@ -27,7 +25,7 @@ index 5a0e00c5..4e2eeb41 100644
  name = "smithay"
  version = "0.7.0"
 -source = "git+https://github.com/Smithay/smithay.git?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca"
-+source = "git+https://github.com/Smithay/smithay.git?rev=8fd9fe0c74e5c13a1fc9b6797d3960c8381bda55#8fd9fe0c74e5c13a1fc9b6797d3960c8381bda55"
++source = "git+https://github.com/Smithay/smithay.git?rev=a38bb709a0400759b6a4fab6129e0f1dd72808c3#a38bb709a0400759b6a4fab6129e0f1dd72808c3"
  dependencies = [
   "aliasable",
   "appendlist",
@@ -36,21 +34,12 @@ index 5a0e00c5..4e2eeb41 100644
  name = "smithay-drm-extras"
  version = "0.1.0"
 -source = "git+https://github.com/Smithay/smithay.git?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca"
-+source = "git+https://github.com/johnrichardrinehart/smithay.git?rev=b45b243be27b1e5c29899f8b5d69171052d0afcb#b45b243be27b1e5c29899f8b5d69171052d0afcb"
++source = "git+https://github.com/johnrichardrinehart/smithay.git?rev=daeff4ead091360c9b7c03e0f3f029364a1f6401#daeff4ead091360c9b7c03e0f3f029364a1f6401"
  dependencies = [
   "drm",
   "libdisplay-info",
-@@ -3450,7 +3450,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
- checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
- dependencies = [
-  "fastrand",
-- "getrandom 0.4.3",
-+ "getrandom 0.3.4",
-  "once_cell",
-  "rustix 1.1.4",
-  "windows-sys 0.61.2",
 diff --git a/Cargo.toml b/Cargo.toml
-index 3146c659..3258a52f 100644
+index 3146c659..b25d7c5c 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -28,13 +28,13 @@ tracy-client = { version = "0.18.5", default-features = false }
@@ -58,7 +47,7 @@ index 3146c659..3258a52f 100644
  # version = "0.4.1"
  git = "https://github.com/Smithay/smithay.git"
 -rev = "65aa86fa5236e41775c313408102a5d5c2d1e2ca"
-+rev = "8fd9fe0c74e5c13a1fc9b6797d3960c8381bda55"
++rev = "a38bb709a0400759b6a4fab6129e0f1dd72808c3"
  default-features = false
  
  [workspace.dependencies.smithay-drm-extras]
@@ -66,10 +55,61 @@ index 3146c659..3258a52f 100644
 -git = "https://github.com/Smithay/smithay.git"
 -rev = "65aa86fa5236e41775c313408102a5d5c2d1e2ca"
 +git = "https://github.com/johnrichardrinehart/smithay.git"
-+rev = "b45b243be27b1e5c29899f8b5d69171052d0afcb"
++rev = "daeff4ead091360c9b7c03e0f3f029364a1f6401"
  # path = "../smithay/smithay-drm-extras"
  
  [package]
+diff --git a/src/handlers/virtual_keyboard.rs b/src/handlers/virtual_keyboard.rs
+index 8757f1e4..0ca1e295 100644
+--- a/src/handlers/virtual_keyboard.rs
++++ b/src/handlers/virtual_keyboard.rs
+@@ -199,8 +199,8 @@ impl State {
+ 
+     /// Switches the seat back from a virtual keyboard's keymap to the configured one, if needed.
+     ///
+-    /// The configured keymap was saved as text before the virtual keyboard's replaced it, so this
+-    /// doesn't re-read the xkb file or recompile the xkb config unnecessarily.
++    /// The configured keymap file was saved before the virtual keyboard replaced it, so this
++    /// doesn't re-read or recompile the xkb config unnecessarily.
+     pub fn restore_configured_keymap(&mut self) {
+         let Some(active) = self.niri.virtual_keyboard_keymap.take() else {
+             return;
+@@ -229,7 +229,7 @@ impl State {
+         self.ipc_keyboard_layouts_changed();
+     }
+ 
+-    /// Returns the configured keymap as XKB_KEYMAP_FORMAT_TEXT_V1.
++    /// Returns the configured Smithay keymap file.
+     fn configured_keymap(&mut self) -> KeymapFile {
+         if let Some(keymap) = &self.niri.configured_keymap {
+             return keymap.clone();
+diff --git a/src/handlers/xdg_shell.rs b/src/handlers/xdg_shell.rs
+index 4e6c4891..42c2b167 100644
+--- a/src/handlers/xdg_shell.rs
++++ b/src/handlers/xdg_shell.rs
+@@ -1016,6 +1016,22 @@ impl XdgDecorationHandler for State {
+         }
+     }
+ 
++    fn decoration_destroyed(&mut self, toplevel: ToplevelSurface) {
++        // The client destroyed its decoration object, so it draws its own decorations again.
++        toplevel.with_pending_state(|state| {
++            state.decoration_mode = None;
++        });
++
++        if toplevel.is_initial_configure_sent() {
++            let surface = toplevel.wl_surface();
++            if let Some((mapped, _)) = self.niri.layout.find_window_and_output_mut(surface) {
++                mapped.set_needs_configure();
++            } else {
++                toplevel.send_configure();
++            }
++        }
++    }
++
+     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+         // If we want CSD, we hide this global altogether.
+         toplevel.with_pending_state(|state| {
 -- 
-2.56.0
+2.56.1
 

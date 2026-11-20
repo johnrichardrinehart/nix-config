@@ -1,4 +1,4 @@
-From bec8821deb13fd67d5e3241880a4bca3571c7b35 Mon Sep 17 00:00:00 2001
+From 82a3d93d96625555a0ac5a7c40600f9091241160 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
 Date: Fri, 9 Oct 2026 21:47:56 -0400
 Subject: [PATCH] input: support per-device keyboard settings
@@ -20,7 +20,7 @@ Cache libinput resolutions and clear them on removal or config reload.
  6 files changed, 234 insertions(+), 56 deletions(-)
 
 diff --git a/docs/wiki/Configuration:-Input.md b/docs/wiki/Configuration:-Input.md
-index af645910..a38d97a9 100644
+index f8289de7..2d02eb78 100644
 --- a/docs/wiki/Configuration:-Input.md
 +++ b/docs/wiki/Configuration:-Input.md
 @@ -2,9 +2,10 @@
@@ -71,7 +71,7 @@ index af645910..a38d97a9 100644
  >
  > <sup>Since: 25.02</sup>
 diff --git a/niri-config/src/input.rs b/niri-config/src/input.rs
-index 9d2c0014..0bcbe46f 100644
+index fd049b21..79e228eb 100644
 --- a/niri-config/src/input.rs
 +++ b/niri-config/src/input.rs
 @@ -17,6 +17,7 @@ use crate::{FloatOrInt, Includes};
@@ -153,7 +153,7 @@ index 9d2c0014..0bcbe46f 100644
      pub xkb: Option<Xkb>,
      #[knuffel(child, unwrap(argument))]
 diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
-index a978d161..f7b6fb24 100644
+index 96334961..a4af6add 100644
 --- a/niri-config/src/lib.rs
 +++ b/niri-config/src/lib.rs
 @@ -663,6 +663,49 @@ mod tests {
@@ -230,7 +230,7 @@ index 74cb7da2..00077c9f 100644
  
          let Some(manager) = &self.niri.a11y_manager else {
 diff --git a/src/input/mod.rs b/src/input/mod.rs
-index b2f7fd58..56818674 100644
+index 857f841f..4f76b9c5 100644
 --- a/src/input/mod.rs
 +++ b/src/input/mod.rs
 @@ -298,6 +298,10 @@ impl State {
@@ -307,7 +307,7 @@ index b2f7fd58..56818674 100644
          if repeat_rate == 0 {
              return;
 diff --git a/src/niri.rs b/src/niri.rs
-index f0394fce..b33329b2 100644
+index 1bb35d29..414efd2f 100644
 --- a/src/niri.rs
 +++ b/src/niri.rs
 @@ -292,6 +292,9 @@ pub struct Niri {
@@ -524,5 +524,5 @@ index f0394fce..b33329b2 100644
              tablets: HashMap::new(),
              touch: HashSet::new(),
 -- 
-2.56.0
+2.56.1
 

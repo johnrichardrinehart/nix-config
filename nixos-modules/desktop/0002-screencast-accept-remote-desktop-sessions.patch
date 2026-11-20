@@ -1,4 +1,4 @@
-From 0e96d1ab330652a3fdafbfcd94e3f73b7a4aa1d1 Mon Sep 17 00:00:00 2001
+From 360597ef8ef95322a88d3d539ae149bce53189ed Mon Sep 17 00:00:00 2001
 From: John Rinehart <john@johnrinehart.com>
 Date: Thu, 15 Oct 2026 13:37:06 -0400
 Subject: [PATCH] dbus: accept remote desktop screencast sessions
@@ -11,10 +11,10 @@ session instead of rejecting the standard association property.
  1 file changed, 1 insertion(+), 7 deletions(-)
 
 diff --git a/src/dbus/mutter_screen_cast.rs b/src/dbus/mutter_screen_cast.rs
-index 194c9724..4b93e231 100644
+index b1414676..4a4ba81d 100644
 --- a/src/dbus/mutter_screen_cast.rs
 +++ b/src/dbus/mutter_screen_cast.rs
-@@ -108,14 +108,8 @@ impl ScreenCast {
+@@ -120,14 +120,8 @@ impl ScreenCast {
      async fn create_session(
          &self,
          #[zbus(object_server)] server: &ObjectServer,
@@ -31,5 +31,5 @@ index 194c9724..4b93e231 100644
          let path = format!("/org/gnome/Mutter/ScreenCast/Session/u{}", session_id.get());
          let path = OwnedObjectPath::try_from(path).unwrap();
 -- 
-2.56.0
+2.56.1
 

@@ -26,12 +26,12 @@ let
     niri = config.programs.niri.package;
   };
 
-  niriRevision = "589bc406b45c8b89f69f9071a61d90d77336089f";
+  niriRevision = "ef54ab5421d13ffed2b5fc1f0308998cac4808d0";
   niriSource = pkgs.fetchFromGitHub {
     owner = "niri-wm";
     repo = "niri";
     rev = niriRevision;
-    hash = "sha256-2vZitM4q2Me89AEt/zciPsVs8ZUAszfLnHhTWxA+7GM=";
+    hash = "sha256-3jkICUcmdHc2jpQDCOlYcOa+6yN+FYB3KXZYkt5oCKU=";
   };
   niriPatches = [
     ./0000-version-report-downstream-patches.patch
@@ -55,7 +55,7 @@ let
       name = "${old.pname}-${old.version}";
       src = niriSource;
       patches = (old.cargoPatches or [ ]) ++ niriPatches;
-      hash = "sha256-oogI8cVUaSFg+MiimOoTQ6WMWPskC+HIx/n2ADl07nE=";
+      hash = "sha256-b8/M+33aeufpzMq5twHTAv6YQQb3smDlrBTMCD2vi2U=";
     };
     env = (old.env or { }) // {
       NIRI_BUILD_COMMIT = niriRevision;
