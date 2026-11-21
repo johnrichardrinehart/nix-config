@@ -331,6 +331,33 @@ in
             interface automatically.
           '';
         };
+        temperatureSensor = lib.mkOption {
+          type = lib.types.nullOr (
+            lib.types.submodule {
+              options = {
+                hwmonPathAbs = lib.mkOption {
+                  type = lib.types.str;
+                  example = "/sys/devices/platform/coretemp.0/hwmon";
+                  description = ''
+                    Parent of the hwmonN directory, whose number can change
+                    between boots.
+                  '';
+                };
+                inputFilename = lib.mkOption {
+                  type = lib.types.str;
+                  default = "temp1_input";
+                  description = "Input file inside the hwmonN directory.";
+                };
+              };
+            }
+          );
+          default = null;
+          description = ''
+            Sensor for Waybar's temperature module. Leave null to use
+            thermal_zone0, which on some Intel laptops is the INT3400 DPTF
+            placeholder stuck at 20 °C.
+          '';
+        };
       };
     };
 
@@ -567,6 +594,15 @@ in
     environment.etc."xdg/waybar".source =
       let
         defaultInterfaceLine = ''// "interface": "wlp2*", // (Optional) To force the use of this interface'';
+        defaultHwmonLine = ''// "hwmon-path": "/sys/class/hwmon/hwmon2/temp1_input",'';
+        configuredHwmonLine =
+          let
+            sensor = cfg.waybar.temperatureSensor;
+          in
+          if sensor == null then
+            defaultHwmonLine
+          else
+            ''"hwmon-path-abs": ${builtins.toJSON sensor.hwmonPathAbs}, "input-filename": ${builtins.toJSON sensor.inputFilename},'';
         configuredInterfaceLine =
           if cfg.waybar.connectivityInterfacePattern == null then
             defaultInterfaceLine
@@ -578,6 +614,9 @@ in
             "--replace-fail"
             defaultInterfaceLine
             configuredInterfaceLine
+            "--replace-fail"
+            defaultHwmonLine
+            configuredHwmonLine
             # Waybar's user unit runs with a minimal PATH, so bare names from
             # the system profile do not resolve.
             "--subst-var-by"

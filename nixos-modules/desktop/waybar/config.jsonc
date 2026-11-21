@@ -114,9 +114,11 @@
     // "thermal-zone": 2,
     // "hwmon-path": "/sys/class/hwmon/hwmon2/temp1_input",
     "critical-threshold": 80,
-    // "format-critical": "{temperatureC}°C {icon}",
+    "format-critical": "{temperatureC}°C ",
     "format": "{temperatureC}°C {icon}",
-    "format-icons": ["", "", ""],
+    // Font Awesome thermometer empty → full; Nerd Fonts v3 dropped the old
+    // f5xx–fdxx range, which fell back to TeX Gyre small caps (U+F76B = ᴋ).
+    "format-icons": ["", "", "", "", ""],
   },
   "backlight": {
     // "device": "acpi_video1",

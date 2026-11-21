@@ -57,6 +57,13 @@
     inputFormat = "mjpeg";
   };
 
+  # thermal_zone0 is the INT3400 DPTF placeholder, stuck at 20 °C; read the
+  # CPU package sensor instead.
+  dev.johnrinehart.desktop.greetd_niri.waybar.temperatureSensor = {
+    hwmonPathAbs = "/sys/devices/platform/coretemp.0/hwmon";
+    inputFilename = "temp1_input";
+  };
+
   dev.johnrinehart.desktop.greetd_niri.niri.extraConfig = ''
     output "eDP-1" {
         mode "1920x1200@60.001"
