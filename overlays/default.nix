@@ -151,6 +151,7 @@ inputs: {
         };
         tmux.tmux = prev.tmux;
         tuigreet.tuigreet = prev.tuigreet;
+        wl-gammarelay-rs.wl-gammarelay-rs = prev.wl-gammarelay-rs;
         util-linux.util-linux = prev.util-linux;
       };
       johnPkgs = lib.mapAttrs (

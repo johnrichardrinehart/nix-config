@@ -1,0 +1,156 @@
+diff --git a/src/main.rs b/src/main.rs
+index f9ee642..7b73e5f 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -53,11 +53,14 @@ fn main() -> anyhow::Result<()> {
+                     }
+                 }
+ 
+-                poll(&mut fds[..fds_cnt])?;
++                poll(&mut fds[..fds_cnt], wayland.retry_timeout())?;
+                 if fds[0].revents != 0 {
+                     dbus_server.poll(&mut wayland.state)?;
+                 }
+-                if fds[1].revents != 0 || wayland.state.color_changed() {
++                if fds[1].revents != 0
++                    || wayland.state.color_changed()
++                    || wayland.retry_timeout().is_some_and(|t| t.is_zero())
++                {
+                     wayland.poll()?;
+                 }
+                 if fds[2].revents != 0 {
+@@ -212,9 +215,11 @@ fn pollin(fd: RawFd) -> libc::pollfd {
+     }
+ }
+ 
+-fn poll(fds: &mut [libc::pollfd]) -> io::Result<()> {
++fn poll(fds: &mut [libc::pollfd], timeout: Option<std::time::Duration>) -> io::Result<()> {
++    // Round up so a pending retry is due when poll returns.
++    let timeout_ms = timeout.map_or(-1, |t| t.as_nanos().div_ceil(1_000_000).min(i32::MAX as u128) as i32);
+     loop {
+-        if unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as _, -1) } == -1 {
++        if unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as _, timeout_ms) } == -1 {
+             let err = io::Error::last_os_error();
+             if err.kind() == io::ErrorKind::Interrupted {
+                 continue;
+diff --git a/src/wayland.rs b/src/wayland.rs
+index d4423e7..3ad39da 100644
+--- a/src/wayland.rs
++++ b/src/wayland.rs
+@@ -1,6 +1,7 @@
+ use std::collections::VecDeque;
+ use std::io::ErrorKind;
+ use std::os::fd::{AsRawFd, RawFd};
++use std::time::{Duration, Instant};
+ 
+ use anyhow::{Result, bail};
+ 
+@@ -64,7 +65,16 @@ impl Wayland {
+             Err(e) => return Err(e.into()),
+         }
+ 
++        let now = Instant::now();
++        let gamma_manager = self.state.gamma_manager;
+         for output in &mut self.state.outputs {
++            if output.retry_at.is_some_and(|at| at <= now) {
++                eprintln!("Output {}: requesting gamma control again", output.reg_name);
++                output.retry_at = None;
++                output.color_changed = true;
++                output.gamma_control =
++                    gamma_manager.get_gamma_control_with_cb(&mut self.conn, output.wl, gamma_control_cb);
++            }
+             if output.color_changed {
+                 output.update_displayed_color(&mut self.conn)?;
+             }
+@@ -74,6 +84,17 @@ impl Wayland {
+         Ok(())
+     }
+ 
++    /// Time until the earliest pending gamma control retry, if any.
++    pub fn retry_timeout(&self) -> Option<Duration> {
++        let now = Instant::now();
++        self.state
++            .outputs
++            .iter()
++            .filter_map(|o| o.retry_at)
++            .min()
++            .map(|at| at.saturating_duration_since(now))
++    }
++
+     pub fn next_event(&mut self) -> Option<WaylandEvent> {
+         self.state.events.pop_front()
+     }
+@@ -88,6 +109,10 @@ pub struct Output {
+     gamma_control: ZwlrGammaControlV1,
+     ramp_size: usize,
+     color_changed: bool,
++    // A failed gamma control is re-requested at retry_at, with backoff
++    // growing with consecutive failures.
++    retry_at: Option<Instant>,
++    failures: u32,
+ }
+ 
+ impl Output {
+@@ -106,12 +131,17 @@ impl Output {
+             gamma_control: gamma_manager.get_gamma_control_with_cb(conn, output, gamma_control_cb),
+             ramp_size: 0,
+             color_changed: true,
++            retry_at: None,
++            failures: 0,
+         }
+     }
+ 
+     fn destroy(self, conn: &mut Connection<WaylandState>) {
+         eprintln!("Output {} removed", self.reg_name);
+-        self.gamma_control.destroy(conn);
++        // A control awaiting retry was already destroyed when it failed.
++        if self.retry_at.is_none() {
++            self.gamma_control.destroy(conn);
++        }
+         self.wl.release(conn);
+     }
+ 
+@@ -141,7 +171,7 @@ impl Output {
+     }
+ 
+     fn update_displayed_color(&mut self, conn: &mut Connection<WaylandState>) -> Result<()> {
+-        if self.ramp_size == 0 {
++        if self.ramp_size == 0 || self.retry_at.is_some() {
+             return Ok(());
+         }
+ 
+@@ -198,17 +228,26 @@ fn gamma_control_cb(ctx: EventCtx<WaylandState, ZwlrGammaControlV1>) {
+             let output = &mut ctx.state.outputs[output_index];
+             eprintln!("Output {}: ramp_size = {}", output.reg_name, size);
+             output.ramp_size = size as usize;
++            output.failures = 0;
+             output.update_displayed_color(ctx.conn).unwrap();
+         }
+         zwlr_gamma_control_v1::Event::Failed => {
+-            let output = ctx.state.outputs.swap_remove(output_index);
+-            eprintln!("Output {}: gamma_control::Event::Failed", output.reg_name);
+-            if let Some(output_name) = &output.name {
+-                ctx.state.events.push_back(WaylandEvent::RemoveOutput {
+-                    name: output_name.clone(),
+-                });
+-            }
+-            output.destroy(ctx.conn);
++            // The output is still there (its removal comes through the
++            // registry), so the control can fail transiently, e.g. when the
++            // compositor loses DRM master mid-resume. Keep the output and its
++            // color, and request a new control after a backoff.
++            let output = &mut ctx.state.outputs[output_index];
++            let delay = Duration::from_millis(250)
++                .saturating_mul(1 << output.failures.min(7))
++                .min(Duration::from_secs(30));
++            output.failures = output.failures.saturating_add(1);
++            eprintln!(
++                "Output {}: gamma_control::Event::Failed, retrying in {delay:?}",
++                output.reg_name
++            );
++            output.gamma_control.destroy(ctx.conn);
++            output.ramp_size = 0;
++            output.retry_at = Some(Instant::now() + delay);
+         }
+         _ => (),
+     }

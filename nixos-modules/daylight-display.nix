@@ -39,7 +39,7 @@ let
   wl-gammarelay = pkgs.writeShellApplication {
     name = "wl-gammarelay";
     runtimeInputs = [
-      pkgs.wl-gammarelay-rs
+      pkgs.dev.johnrinehart.wl-gammarelay-rs
       pkgs.systemd
       pkgs.coreutils
     ];
