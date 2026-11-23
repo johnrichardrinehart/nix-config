@@ -160,6 +160,9 @@ in
         # serial (the nRF52's device ID) narrow it down. The left half,
         # which the cable connects:
         ''allow id 1d50:615e serial "F6766C9E78D57732" name "SliceMK Kbd"''
+        # Its UF2 bootloader (double-tap reset; `nix run .#slicemk-update`)
+        # is a USB drive with a different ID and the same serial.
+        ''allow id 239a:00b3 serial "F6766C9E78D57732" name "ErgoDox 202207 Green"''
         # The dongle (packages/slicemk-update/dongle.json). Its serial has
         # not been read off the device, so it is matched by name only.
         ''allow id 1d50:615e name "SliceMK Dongle"''
