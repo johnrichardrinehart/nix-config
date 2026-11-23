@@ -400,6 +400,13 @@ The keyboard enables host Bluetooth after reboot.
 The central reports its own battery level through the standard Battery Service and each split peripheral's level through an additional Battery Service.
 Most host battery indicators show only the first service; reading the others needs a GATT client such as `bluetoothctl`'s `gatt` menu.
 
+Both configurations set `CONFIG_BT_GATT_CACHING=n`.
+With caching on, the keyboard reported an all-zero Database Hash and sent Service Changed to hosts after reboots.
+Android 17 then deleted its saved HID record for the keyboard and stopped reconnecting; each Service Changed also added about 6 s of GATT rediscovery.
+Without caching, hosts keep their own GATT cache.
+Turning caching off removes two GATT characteristics and shifts the handles of every later attribute, so it is itself such a change.
+If a firmware change alters the GATT layout, clear the profile on the keyboard, forget the keyboard on each host, and pair again.
+
 The firmware uses the public SliceMK ZMK source and the local host-only Bluetooth patch.
 `packages/slicemk-update/firmware.nix` pins the firmware sources, Zephyr modules, and build tools.
 `render-keymap.py` generates the devicetree keymap directly from each JSON configuration.
