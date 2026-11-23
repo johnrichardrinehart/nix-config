@@ -38,6 +38,21 @@
     enable = true;
     manager = "iwd";
   };
+  # While disconnected, scan every 5 s instead of backing off from 10 s to
+  # 300 s, so a known network (hidden ones included) is joined within
+  # seconds of coming into range. Periodic scans stop once connected.
+  networking.wireless.iwd.settings.Scan = {
+    InitialPeriodicScanInterval = 5;
+    MaximumPeriodicScanInterval = 5;
+  };
+  # Debug messages from iwd's scanning and autoconnect code, to see in the
+  # journal why a network was or was not joined. Patterns match source files
+  # or function names; station.c as a whole also prints every BSS of every
+  # scan, about 20 lines a second while disconnected.
+  systemd.services.iwd.serviceConfig.ExecStart = [
+    ""
+    "${config.networking.wireless.iwd.package}/libexec/iwd --debug=src/scan.c:station_autoconnect_*:station_quick_scan_*:station_hidden_bss_scan*"
+  ];
   networking.useDHCP = true;
   networking.dhcpcd.allowInterfaces = [
     "en*"

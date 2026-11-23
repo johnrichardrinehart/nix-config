@@ -199,9 +199,14 @@ in
         # hidden networks dwell 15 TU per channel where the driver allows it
         # (packages/iwlwifi does), so slow-answering hidden APs are found.
         #
-        # The last adds [BSS.<address>].UseDefaultEccGroup to profiles, so
+        # The next adds [BSS.<address>].UseDefaultEccGroup to profiles, so
         # one access point of a network can be held to ECC group 19 while
         # the others keep the most secure group.
+        #
+        # The last two make autoconnect find known hidden networks sooner:
+        # every periodic scan probes for them (only every other one did),
+        # and a periodic scan that leaves the station autoconnecting near
+        # hidden BSSs is followed at once by a probe on their channels.
         package = pkgs.iwd.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ../patches/iwd/0001-ap-Default-the-DHCP-router-to-the-AP-address.patch
@@ -215,6 +220,8 @@ in
             ../patches/iwd-create-p2p-after-default-interface.patch
             ../patches/iwd-dwell-longer-on-scans-for-hidden-networks.patch
             ../patches/iwd-per-bss-default-ecc-group.patch
+            ../patches/iwd-probe-for-hidden-networks-on-every-periodic-scan.patch
+            ../patches/iwd-probe-hidden-bss-channels-when-autoconnect-finds-nothing.patch
           ];
         });
         settings = {

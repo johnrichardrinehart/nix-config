@@ -1,0 +1,184 @@
+From 128460f57b32fde7ae28870863763526f6e6dd68 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Mon, 23 Nov 2026 15:02:17 -0500
+Subject: [PATCH 2/2] station: Probe hidden BSS channels again when autoconnect
+ finds nothing
+
+When a periodic scan leaves the station autoconnecting, hidden BSSs are
+in range and known hidden networks exist, probe for the known hidden
+networks once more right away, only on the channels of the hidden BSSs.
+A missed probe response otherwise costs a whole periodic scan interval,
+which grows to minutes.
+
+The follow-up scan's results do not start another one, so there is at
+most one per periodic scan.
+---
+ src/station.c | 110 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 110 insertions(+)
+
+diff --git a/src/station.c b/src/station.c
+index 8fcf8c7..318cb58 100644
+--- a/src/station.c
++++ b/src/station.c
+@@ -105,6 +105,7 @@ struct station {
+ 	struct signal_agent *signal_agent;
+ 	uint32_t dbus_scan_id;
+ 	uint32_t quick_scan_id;
++	uint32_t hidden_bss_scan_id;
+ 	uint32_t hidden_network_scan_id;
+ 	struct l_queue *owe_hidden_scan_ids;
+ 
+@@ -350,6 +351,13 @@ static int station_autoconnect_next(struct station *station)
+ 				station_property_set_scanning(station, false);
+ 			}
+ 
++			if (station->hidden_bss_scan_id) {
++				scan_cancel(netdev_get_wdev_id(station->netdev),
++						station->hidden_bss_scan_id);
++				station->hidden_bss_scan_id = 0;
++				station_property_set_scanning(station, false);
++			}
++
+ 			return 0;
+ 		}
+ 
+@@ -1467,6 +1475,8 @@ not_supported:
+ 	return NULL;
+ }
+ 
++static void station_hidden_bss_scan(struct station *station);
++
+ static bool new_scan_results(int err, struct l_queue *bss_list,
+ 				const struct scan_freq_set *freqs,
+ 				void *userdata)
+@@ -1485,6 +1495,8 @@ static bool new_scan_results(int err, struct l_queue *bss_list,
+ 	station->autoconnect_can_start = true;
+ 	station_autoconnect_start(station);
+ 
++	station_hidden_bss_scan(station);
++
+ 	return true;
+ }
+ 
+@@ -1664,6 +1676,93 @@ static int station_quick_scan_trigger(struct station *station)
+ 	return 0;
+ }
+ 
++static bool station_hidden_bss_scan_results(int err, struct l_queue *bss_list,
++					const struct scan_freq_set *freqs,
++					void *userdata)
++{
++	struct station *station = userdata;
++
++	station_property_set_scanning(station, false);
++
++	if (err)
++		return false;
++
++	station_set_scan_results(station, bss_list, freqs, false);
++
++	station_process_owe_transition_networks(station);
++
++	station->autoconnect_can_start = true;
++	station_autoconnect_start(station);
++
++	return true;
++}
++
++static void station_hidden_bss_scan_triggered(int err, void *user_data)
++{
++	struct station *station = user_data;
++
++	if (err < 0) {
++		l_debug("Hidden BSS scan trigger failed: %i", err);
++		return;
++	}
++
++	station_property_set_scanning(station, true);
++}
++
++static void station_hidden_bss_scan_destroy(void *userdata)
++{
++	struct station *station = userdata;
++
++	station->hidden_bss_scan_id = 0;
++}
++
++/*
++ * A periodic scan that left the station autoconnecting while hidden BSSs
++ * are in range probes for the known hidden networks again at once, on
++ * the hidden BSSs' channels only, instead of a periodic scan interval
++ * later. A probe response can be missed, and the periodic scan interval
++ * grows to minutes.
++ */
++static void station_hidden_bss_scan(struct station *station)
++{
++	_auto_(scan_freq_set_free) struct scan_freq_set *freqs = NULL;
++	_auto_(scan_freq_set_free) struct scan_freq_set *allowed = NULL;
++	const struct l_queue_entry *entry;
++
++	if (station->state != STATION_STATE_AUTOCONNECT_FULL ||
++			station->hidden_bss_scan_id ||
++			!l_queue_isempty(station->anqp_pending) ||
++			!l_queue_isempty(station->owe_hidden_scan_ids) ||
++			l_queue_isempty(station->hidden_bss_list_sorted) ||
++			!known_networks_has_hidden())
++		return;
++
++	freqs = scan_freq_set_new();
++
++	for (entry = l_queue_get_entries(station->hidden_bss_list_sorted);
++						entry; entry = entry->next) {
++		struct scan_bss *bss = entry->data;
++
++		scan_freq_set_add(freqs, bss->frequency);
++	}
++
++	allowed = station_get_allowed_freqs(station);
++	if (!allowed)
++		return;
++
++	scan_freq_set_constrain(freqs, allowed);
++
++	if (scan_freq_set_isempty(freqs))
++		return;
++
++	l_debug("Probing for known hidden networks on hidden BSS channels");
++
++	station->hidden_bss_scan_id = station_scan_trigger(station, freqs,
++					station_hidden_bss_scan_triggered,
++					station_hidden_bss_scan_results,
++					station_hidden_bss_scan_destroy);
++}
++
+ static const char *station_state_to_string(enum station_state state)
+ {
+ 	switch (state) {
+@@ -4040,6 +4139,13 @@ void station_connect_network(struct station *station, struct network *network,
+ 		station_property_set_scanning(station, false);
+ 	}
+ 
++	if (station->hidden_bss_scan_id) {
++		scan_cancel(netdev_get_wdev_id(station->netdev),
++				station->hidden_bss_scan_id);
++		station->hidden_bss_scan_id = 0;
++		station_property_set_scanning(station, false);
++	}
++
+ 	if (station_is_busy(station)) {
+ 		station_disconnect_onconnect(station, network, bss, message);
+ 
+@@ -5243,6 +5349,10 @@ static void station_free(struct station *station)
+ 		scan_cancel(netdev_get_wdev_id(station->netdev),
+ 				station->quick_scan_id);
+ 
++	if (station->hidden_bss_scan_id)
++		scan_cancel(netdev_get_wdev_id(station->netdev),
++				station->hidden_bss_scan_id);
++
+ 	if (station->hidden_network_scan_id)
+ 		scan_cancel(netdev_get_wdev_id(station->netdev),
+ 				station->hidden_network_scan_id);
+-- 
+2.56.1
+

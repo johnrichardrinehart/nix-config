@@ -1,0 +1,94 @@
+From 6d48d3f665dce81aa18cd08d87e37f0d7ec4c584 Mon Sep 17 00:00:00 2001
+From: John Rinehart <johnrichardrinehart@gmail.com>
+Date: Mon, 23 Nov 2026 15:02:17 -0500
+Subject: [PATCH 1/2] scan: Probe for known hidden networks on every periodic
+ scan
+
+A hidden network is only found by a probe request naming it. Periodic
+scans probed for the known hidden networks only when the previous
+periodic scan had seen a hidden BSS, so every other periodic scan was
+passive and could not find them. Once the periodic scan interval had
+grown to its 300 second maximum, a known hidden network in range was
+probed for only every ten minutes.
+
+Every periodic scan is now active and names the known hidden networks
+whenever there are any. The number of scans does not change.
+---
+ src/scan.c | 31 ++++++++-----------------------
+ 1 file changed, 8 insertions(+), 23 deletions(-)
+
+diff --git a/src/scan.c b/src/scan.c
+index afe3cd7..b054fc1 100644
+--- a/src/scan.c
++++ b/src/scan.c
+@@ -75,7 +75,6 @@ struct scan_periodic {
+ 	scan_notify_func_t callback;
+ 	void *userdata;
+ 	uint32_t id;
+-	bool needs_active_scan:1;
+ };
+ 
+ struct scan_request {
+@@ -1072,10 +1071,16 @@ static bool scan_periodic_queue(struct scan_context *sc)
+ 
+ 	params.freqs = freqs;
+ 
+-	if (sc->sp.needs_active_scan && known_networks_has_hidden()) {
++	/*
++	 * A hidden network is only found by a probe request naming it, so
++	 * every periodic scan probes for the known hidden networks. Probing
++	 * only after a passive scan had seen a hidden BSS left every other
++	 * periodic scan unable to find them, up to twice the maximum
++	 * periodic scan interval apart.
++	 */
++	if (known_networks_has_hidden()) {
+ 		params.randomize_mac_addr_hint = true;
+ 
+-		sc->sp.needs_active_scan = false;
+ 		sc->sp.id = scan_common(sc->wdev_id, false, &params,
+ 					WIPHY_WORK_PRIORITY_PERIODIC_SCAN,
+ 					scan_periodic_triggered,
+@@ -1160,7 +1165,6 @@ bool scan_periodic_stop(uint64_t wdev_id)
+ 	sc->sp.trigger = NULL;
+ 	sc->sp.callback = NULL;
+ 	sc->sp.userdata = NULL;
+-	sc->sp.needs_active_scan = false;
+ 
+ 	return true;
+ }
+@@ -2021,22 +2025,6 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
+ 	l_queue_insert(results->bss_list, bss, scan_bss_rank_compare, NULL);
+ }
+ 
+-static void discover_hidden_network_bsses(struct scan_context *sc,
+-						struct l_queue *bss_list)
+-{
+-	const struct l_queue_entry *bss_entry;
+-
+-	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+-						bss_entry = bss_entry->next) {
+-		struct scan_bss *bss = bss_entry->data;
+-
+-		if (!util_ssid_is_hidden(bss->ssid_len, bss->ssid))
+-			continue;
+-
+-		sc->sp.needs_active_scan = true;
+-	}
+-}
+-
+ static void scan_finished(struct scan_context *sc,
+ 				int err, struct l_queue *bss_list,
+ 				const struct scan_freq_set *freqs,
+@@ -2046,9 +2034,6 @@ static void scan_finished(struct scan_context *sc,
+ 	scan_notify_func_t callback = sr ? sr->callback : sc->sp.callback;
+ 	void *userdata = sr ? sr->userdata : sc->sp.userdata;
+ 
+-	if (bss_list)
+-		discover_hidden_network_bsses(sc, bss_list);
+-
+ 	if (sr)
+ 		sr->in_callback = true;
+ 
+-- 
+2.56.1
+
