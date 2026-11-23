@@ -62,6 +62,13 @@ in
     # 2 minutes for that device and then boots without resuming; this makes
     # it wait for the unlock however long it takes.
     "resumeflags=x-systemd.device-timeout=infinity"
+    # Suspend and resume devices one at a time. With devices in parallel,
+    # hibernation here fails about one cycle in four: the GPU times out on
+    # restore (MES/SDMA -110) or the whole machine freezes with no log.
+    # pm_test=core loops: parallel failed by cycle 7, 21 and 26; serial ran
+    # 40/40 clean. Costs ~5 s per freeze/thaw. Also applies to the boot
+    # kernel that quiesces devices before jumping into the image.
+    "pm_async=off"
   ];
   dev.johnrinehart.system.suspendVerb = "suspend-then-hibernate";
   services.logind.settings.Login = {
