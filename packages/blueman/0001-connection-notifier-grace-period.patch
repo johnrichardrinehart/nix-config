@@ -1,77 +1,73 @@
-From 4e7236089c617058f1d0806be15490921eb8bc44 Mon Sep 17 00:00:00 2001
+From 5e1ccb21f10c685aba0302c5a4d00e79366b77c6 Mon Sep 17 00:00:00 2001
 From: John Rinehart <johnrichardrinehart@gmail.com>
-Date: Mon, 23 Nov 2026 12:15:34 -0500
-Subject: [PATCH] ConnectionNotifier: hide connections that drop for less than
- 30 seconds
+Date: Mon, 23 Nov 2026 12:24:38 -0500
+Subject: [PATCH] ConnectionNotifier: take back Disconnected when the device
+ returns within 30 seconds
 
 ---
- blueman/plugins/applet/ConnectionNotifier.py | 36 ++++++++++++++++----
- 1 file changed, 30 insertions(+), 6 deletions(-)
+ blueman/plugins/applet/ConnectionNotifier.py | 25 +++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
 
 diff --git a/blueman/plugins/applet/ConnectionNotifier.py b/blueman/plugins/applet/ConnectionNotifier.py
-index 1deae45..e3a0d1e 100644
+index 1deae45..a32fed9 100644
 --- a/blueman/plugins/applet/ConnectionNotifier.py
 +++ b/blueman/plugins/applet/ConnectionNotifier.py
-@@ -14,18 +14,30 @@ class ConnectionNotifier(AppletPlugin):
+@@ -1,6 +1,6 @@
+ import logging
+ from gettext import gettext as _
+-from typing import Any, Dict, Union
++from typing import Any, Dict, Tuple, Union
+ 
+ from blueman.bluez.Device import Device
+ from blueman.gui.Notification import Notification, _NotificationBubble, _NotificationDialog
+@@ -14,9 +14,15 @@ class ConnectionNotifier(AppletPlugin):
      __icon__ = "bluetooth-symbolic"
      __description__ = _("Shows desktop notifications when devices get connected or disconnected.")
  
-+    # A device that comes back within this many seconds of dropping out gets
-+    # neither the Disconnected nor the Connected notification.
-+    DISCONNECT_GRACE_SECONDS = 30
++    # A device that comes back within this many seconds of dropping out takes
++    # its Disconnected notification back and gets no Connected notification.
++    RECONNECT_GRACE_SECONDS = 30
 +
      _notifications: Dict[str, Union[_NotificationBubble, _NotificationDialog]] = {}
  
      def on_load(self) -> None:
-+        self._pending_disconnects: Dict[str, int] = {}
++        # Disconnected notification and monotonic time of the disconnect, per device.
++        self._disconnects: Dict[str, Tuple[Union[_NotificationBubble, _NotificationDialog], int]] = {}
          self._battery_watcher = BatteryWatcher(self._on_battery_update)
  
      def on_unload(self) -> None:
-+        for source_id in self._pending_disconnects.values():
-+            GLib.source_remove(source_id)
-+        self._pending_disconnects.clear()
-         del self._battery_watcher
- 
-     def on_device_property_changed(self, path: str, key: str, value: Any) -> None:
+@@ -26,6 +32,16 @@ class ConnectionNotifier(AppletPlugin):
          if key == "Connected":
              device = Device(obj_path=path)
              if value:
-+                pending = self._pending_disconnects.pop(path, None)
-+                if pending is not None:
-+                    GLib.source_remove(pending)
-+                    return
++                disconnect = self._disconnects.pop(path, None)
++                if disconnect is not None:
++                    disconnected, since = disconnect
++                    if GLib.get_monotonic_time() - since < self.RECONNECT_GRACE_SECONDS * 1_000_000:
++                        try:
++                            disconnected.close()
++                        except GLib.Error:
++                            # The notification server already closed it.
++                            pass
++                        return
                  self._notifications[path] = notification = Notification(
                      device.display_name,
                      _('Connected'),
-@@ -33,13 +45,25 @@ class ConnectionNotifier(AppletPlugin):
-                     transient=True,
+@@ -34,12 +50,15 @@ class ConnectionNotifier(AppletPlugin):
                  )
                  notification.show()
--            else:
+             else:
 -                Notification(
-+            elif path not in self._pending_disconnects:
 +                self._notifications.pop(path, None)
-+                self._pending_disconnects[path] = GLib.timeout_add_seconds(
-+                    self.DISCONNECT_GRACE_SECONDS,
-+                    self._show_disconnected,
-+                    path,
++                notification = Notification(
                      device.display_name,
--                    _('Disconnected'),
--                    icon_name=device["Icon"],
--                    transient=True,
+                     _('Disconnected'),
+                     icon_name=device["Icon"],
+                     transient=True,
 -                ).show()
-+                    device["Icon"],
 +                )
-+
-+    def _show_disconnected(self, path: str, name: str, icon: str) -> bool:
-+        del self._pending_disconnects[path]
-+        Notification(
-+            name,
-+            _('Disconnected'),
-+            icon_name=icon,
-+            transient=True,
-+        ).show()
-+        return False
++                notification.show()
++                self._disconnects[path] = (notification, GLib.get_monotonic_time())
  
      def _on_battery_update(self, path: str, value: int) -> None:
          notification = self._notifications.pop(path, None)
