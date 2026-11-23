@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] drm/amdgpu: debug knobs for the GFX 11.5 hibernation freeze
+
+Not for upstream. Lets the hibernation freeze of GFX 11.5 APUs be moved
+(s4_freeze_late) and delayed (s4_freeze_delay_ms) at runtime, and logs
+when the freeze starts, when PG/CG are ungated and when it is done, so
+pm_test loops can compare timings and callback overlap without a reboot
+per variant.
+---
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -2704,6 +2704,21 @@
+ }
+ 
+ /*
++ * Debug knobs for the GFX 11.5 hibernation failure, so the freeze can be
++ * moved and delayed at runtime between pm_test cycles without a reboot.
++ * Set them before a transition starts, not during one.
++ */
++static bool amdgpu_s4_freeze_late = true;
++module_param_named(s4_freeze_late, amdgpu_s4_freeze_late, bool, 0644);
++MODULE_PARM_DESC(s4_freeze_late,
++		 "Freeze GFX 11.5 APUs in the late phase of hibernation (default: true)");
++
++static unsigned int amdgpu_s4_freeze_delay_ms;
++module_param_named(s4_freeze_delay_ms, amdgpu_s4_freeze_delay_ms, uint, 0644);
++MODULE_PARM_DESC(s4_freeze_delay_ms,
++		 "Sleep this many ms before freezing for hibernation (default: 0)");
++
++/*
+  * On GFX 11.5 APUs MES intermittently fails to come back on restore from
+  * hibernation when the GPU is frozen while other devices are still running
+  * their freeze callbacks.  Do the freeze in the late phase for these parts,
+@@ -2711,7 +2726,7 @@
+  */
+ static bool amdgpu_pmops_freeze_in_late_phase(struct amdgpu_device *adev)
+ {
+-	return (adev->flags & AMD_IS_APU) &&
++	return amdgpu_s4_freeze_late && (adev->flags & AMD_IS_APU) &&
+ 	       amdgpu_ip_version(adev, GC_HWIP, 0) >= IP_VERSION(11, 5, 0) &&
+ 	       amdgpu_ip_version(adev, GC_HWIP, 0) < IP_VERSION(11, 6, 0);
+ }
+@@ -2722,7 +2737,13 @@
+ 	struct amdgpu_device *adev = drm_to_adev(drm_dev);
+ 	int r;
+ 
++	if (amdgpu_s4_freeze_delay_ms)
++		msleep(amdgpu_s4_freeze_delay_ms);
++
++	dev_info(adev->dev, "S4 freeze start (%s phase)\n",
++		 amdgpu_pmops_freeze_in_late_phase(adev) ? "late" : "regular");
+ 	r = amdgpu_device_suspend(drm_dev, true);
++	dev_info(adev->dev, "S4 freeze done: %d\n", r);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
+@@ -3046,6 +3046,8 @@
+ 
+ 	amdgpu_device_set_pg_state(adev, AMD_PG_STATE_UNGATE);
+ 	amdgpu_device_set_cg_state(adev, AMD_CG_STATE_UNGATE);
++	if (adev->in_s4)
++		dev_info(adev->dev, "S4 freeze: PG/CG ungated\n");
+ 
+ 	/*
+ 	 * Per PMFW team's suggestion, driver needs to handle gfxoff
