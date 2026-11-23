@@ -69,7 +69,17 @@ in
       enable = true;
     };
 
-    services.blueman.enable = true;
+    # services.blueman has no package option, so this does what it does with
+    # the patched blueman (packages/blueman).
+    assertions = [
+      {
+        assertion = !config.services.blueman.enable;
+        message = "dev.johnrinehart.bluetooth installs its own blueman; drop services.blueman.enable.";
+      }
+    ];
+    environment.systemPackages = [ pkgs.dev.johnrinehart.blueman ];
+    services.dbus.packages = [ pkgs.dev.johnrinehart.blueman ];
+    systemd.packages = [ pkgs.dev.johnrinehart.blueman ];
 
     # System-level timer to auto-suspend bluetooth when idle
     systemd.services.bt-auto-suspend = lib.mkIf cfg.autoSuspend.enable {
