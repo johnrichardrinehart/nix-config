@@ -333,38 +333,41 @@ in
         };
         temperatureSensor = lib.mkOption {
           type = lib.types.nullOr (
-            lib.types.submodule {
-              options = {
-                hwmonPathAbs = lib.mkOption {
-                  type = lib.types.str;
-                  example = "/sys/devices/platform/coretemp.0/hwmon";
-                  description = ''
-                    Parent of the hwmonN directory, whose number can change
-                    between boots.
-                  '';
+            lib.types.attrTag {
+              hwmon = lib.mkOption {
+                description = "An hwmon temperature input, found by stable parent path.";
+                type = lib.types.submodule {
+                  options = {
+                    pathAbs = lib.mkOption {
+                      type = lib.types.str;
+                      example = "/sys/devices/platform/coretemp.0/hwmon";
+                      description = ''
+                        Parent of the hwmonN directory, whose number can change
+                        between boots.
+                      '';
+                    };
+                    inputFilename = lib.mkOption {
+                      type = lib.types.str;
+                      default = "temp1_input";
+                      description = "Input file inside the hwmonN directory.";
+                    };
+                  };
                 };
-                inputFilename = lib.mkOption {
-                  type = lib.types.str;
-                  default = "temp1_input";
-                  description = "Input file inside the hwmonN directory.";
-                };
+              };
+              thermalZone = lib.mkOption {
+                description = "N in /sys/class/thermal/thermal_zoneN.";
+                type = lib.types.ints.unsigned;
               };
             }
           );
           default = null;
+          example = {
+            thermalZone = 3;
+          };
           description = ''
-            Sensor for Waybar's temperature module. Leave null (and
-            temperatureThermalZone null) to use thermal_zone0, which on some
-            Intel laptops is the INT3400 DPTF placeholder stuck at 20 °C.
-          '';
-        };
-        temperatureThermalZone = lib.mkOption {
-          type = lib.types.nullOr lib.types.ints.unsigned;
-          default = null;
-          example = 3;
-          description = ''
-            /sys/class/thermal/thermal_zoneN for Waybar's temperature module.
-            Mutually exclusive with temperatureSensor.
+            Sensor for Waybar's temperature module: exactly one of `hwmon` or
+            `thermalZone`. Leave null to use thermal_zone0, which on some Intel
+            laptops is the INT3400 DPTF placeholder stuck at 20 °C.
           '';
         };
       };
@@ -604,22 +607,16 @@ in
       let
         defaultInterfaceLine = ''// "interface": "wlp2*", // (Optional) To force the use of this interface'';
         defaultHwmonLine = ''// "hwmon-path": "/sys/class/hwmon/hwmon2/temp1_input",'';
-        defaultThermalZoneLine = ''// "thermal-zone": 2,'';
-        configuredThermalZoneLine =
-          let
-            zone = cfg.waybar.temperatureThermalZone;
-          in
-          assert lib.assertMsg (zone == null || cfg.waybar.temperatureSensor == null)
-            "waybar.temperatureThermalZone and waybar.temperatureSensor are mutually exclusive";
-          if zone == null then defaultThermalZoneLine else ''"thermal-zone": ${toString zone},'';
         configuredHwmonLine =
           let
             sensor = cfg.waybar.temperatureSensor;
           in
           if sensor == null then
             defaultHwmonLine
+          else if sensor ? thermalZone then
+            ''"thermal-zone": ${toString sensor.thermalZone},''
           else
-            ''"hwmon-path-abs": ${builtins.toJSON sensor.hwmonPathAbs}, "input-filename": ${builtins.toJSON sensor.inputFilename},'';
+            ''"hwmon-path-abs": ${builtins.toJSON sensor.hwmon.pathAbs}, "input-filename": ${builtins.toJSON sensor.hwmon.inputFilename},'';
         configuredInterfaceLine =
           if cfg.waybar.connectivityInterfacePattern == null then
             defaultInterfaceLine
@@ -634,9 +631,6 @@ in
             "--replace-fail"
             defaultHwmonLine
             configuredHwmonLine
-            "--replace-fail"
-            defaultThermalZoneLine
-            configuredThermalZoneLine
             # Waybar's user unit runs with a minimal PATH, so bare names from
             # the system profile do not resolve.
             "--subst-var-by"

@@ -59,8 +59,8 @@
 
   # thermal_zone0 is the INT3400 DPTF placeholder, stuck at 20 °C; read the
   # CPU package sensor instead.
-  dev.johnrinehart.desktop.greetd_niri.waybar.temperatureSensor = {
-    hwmonPathAbs = "/sys/devices/platform/coretemp.0/hwmon";
+  dev.johnrinehart.desktop.greetd_niri.waybar.temperatureSensor.hwmon = {
+    pathAbs = "/sys/devices/platform/coretemp.0/hwmon";
     inputFilename = "temp1_input";
   };
 
