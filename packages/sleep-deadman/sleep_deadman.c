@@ -61,17 +61,82 @@ static u32 deadman_apic_read(u32 reg)
 	return apic->read(reg);
 }
 
+/*
+ * The local APIC as this CPU sees it: the APIC_BASE MSR, and the ID and ICR
+ * read straight through the xAPIC MMIO page. After a hibernation restore one
+ * CPU was seen spinning in an IPI send on an ICR that read 0xffffffff, i.e.
+ * its MMIO page did not decode.
+ */
+struct deadman_apic_state {
+	u64 base;
+	u32 id, icr;
+};
+
+static void deadman_apic_state(struct deadman_apic_state *s)
+{
+	void __iomem *mmio = (void __iomem *)APIC_BASE;
+
+	if (rdmsrq_safe(MSR_IA32_APICBASE, &s->base))
+		s->base = ~0ULL;
+	s->id = readl(mmio + APIC_ID);
+	s->icr = readl(mmio + APIC_ICR);
+}
+
+static bool deadman_apic_bad(const struct deadman_apic_state *s)
+{
+	return (s->base & (MSR_IA32_APICBASE_ENABLE | X2APIC_ENABLE |
+			   MSR_IA32_APICBASE_BASE)) !=
+		       (MSR_IA32_APICBASE_ENABLE | APIC_DEFAULT_PHYS_BASE) ||
+	       s->id == ~0U || (s->icr & APIC_ICR_BUSY);
+}
+
+static void deadman_print_apic(const char *why, int cpu,
+			       const struct deadman_apic_state *s)
+{
+	pr_emerg("sleep_deadman: %s CPU %d APIC_BASE=%llx MMIO ID=%08x ICR=%08x\n",
+		 why, cpu, s->base, s->id, s->icr);
+}
+
+static atomic_t deadman_apic_bad_cpus;
+
+static void deadman_check_apic_cpu(void *unused)
+{
+	struct deadman_apic_state s;
+
+	deadman_apic_state(&s);
+	if (deadman_apic_bad(&s)) {
+		atomic_inc(&deadman_apic_bad_cpus);
+		deadman_print_apic("bad APIC on", smp_processor_id(), &s);
+	}
+}
+
+/* After a resume: does every CPU's local APIC still decode in xAPIC mode? */
+static void deadman_check_apics(const char *when)
+{
+	atomic_set(&deadman_apic_bad_cpus, 0);
+	on_each_cpu(deadman_check_apic_cpu, NULL, 1);
+	pr_info("sleep_deadman: APIC check %s: %d of %u CPUs bad\n", when,
+		atomic_read(&deadman_apic_bad_cpus), num_online_cpus());
+}
+
 static int deadman_idle_nmi(unsigned int type, struct pt_regs *regs)
 {
+	struct deadman_apic_state s;
 	u32 irr[8], isr[8];
 	int i;
 
-	if (!(atomic_read(&deadman_watching) || idle_nmi_always) || !is_idle_task(current))
+	if (!(atomic_read(&deadman_watching) || idle_nmi_always))
 		return NMI_DONE;
 	if (this_cpu_read(deadman_idle_dumped) &&
 	    time_before(jiffies, this_cpu_read(deadman_idle_dumped) + 5 * HZ))
 		return NMI_DONE;
 	this_cpu_write(deadman_idle_dumped, jiffies ?: 1);
+
+	deadman_apic_state(&s);
+	deadman_print_apic(is_idle_task(current) ? "idle" : "busy",
+			   smp_processor_id(), &s);
+	if (!is_idle_task(current))
+		return NMI_DONE;
 
 	for (i = 0; i < 8; i++) {
 		irr[i] = deadman_apic_read(APIC_IRR + i * 0x10);
@@ -157,6 +222,7 @@ static int deadman_pm_notify(struct notifier_block *nb, unsigned long action,
 		pr_info("sleep_deadman: armed for %u s\n", timeout_secs);
 		break;
 	case PM_POST_HIBERNATION:
+		deadman_check_apics("after hibernation");
 		deadman_watch(false);
 		if (cancel_delayed_work(&deadman_work))
 			pr_info("sleep_deadman: disarmed\n");
@@ -165,6 +231,7 @@ static int deadman_pm_notify(struct notifier_block *nb, unsigned long action,
 		deadman_watch(true);
 		break;
 	case PM_POST_SUSPEND:
+		deadman_check_apics("after suspend");
 		deadman_watch(false);
 		break;
 	}
@@ -183,9 +250,12 @@ static int __init deadman_init(void)
 	if (r)
 		return r;
 	r = register_pm_notifier(&deadman_nb);
-	if (r)
+	if (r) {
 		unregister_nmi_handler(NMI_LOCAL, "sleep_deadman");
-	return r;
+		return r;
+	}
+	deadman_check_apics("at load");
+	return 0;
 }
 
 static void __exit deadman_exit(void)
