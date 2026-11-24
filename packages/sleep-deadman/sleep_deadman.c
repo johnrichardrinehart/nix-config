@@ -68,33 +68,76 @@ static u32 deadman_apic_read(u32 reg)
  * its MMIO page did not decode.
  */
 struct deadman_apic_state {
-	u64 base;
-	u32 id, icr;
+	u64 base, pat, deftype, syscfg, cr0;
+	u32 id, icr, mtrr_sum;
 };
+
+/*
+ * The MSRs that decide how a physical address is cached: if a CPU's
+ * MTRRs or PAT differ from the boot CPU's after resume, a read of the
+ * APIC page may be served from somewhere other than the local APIC.
+ */
+static const u32 deadman_mtrr_msrs[] = {
+	0x200, 0x201, 0x202, 0x203, 0x204, 0x205, 0x206, 0x207,
+	0x208, 0x209, 0x20a, 0x20b, 0x20c, 0x20d, 0x20e, 0x20f,
+	0x250, 0x258, 0x259, 0x268, 0x269, 0x26a, 0x26b, 0x26c,
+	0x26d, 0x26e, 0x26f, 0x2ff, 0xc0010010,
+};
+
+static u64 deadman_rdmsr(u32 msr)
+{
+	u64 v;
+
+	return rdmsrq_safe(msr, &v) ? ~0ULL : v;
+}
 
 static void deadman_apic_state(struct deadman_apic_state *s)
 {
 	void __iomem *mmio = (void __iomem *)APIC_BASE;
+	u32 sum = 0;
+	int i;
 
-	if (rdmsrq_safe(MSR_IA32_APICBASE, &s->base))
-		s->base = ~0ULL;
+	s->base = deadman_rdmsr(MSR_IA32_APICBASE);
+	s->pat = deadman_rdmsr(MSR_IA32_CR_PAT);
+	s->deftype = deadman_rdmsr(MSR_MTRRdefType);
+	s->syscfg = deadman_rdmsr(MSR_AMD64_SYSCFG);
+	s->cr0 = read_cr0();
+	for (i = 0; i < ARRAY_SIZE(deadman_mtrr_msrs); i++) {
+		u64 v = deadman_rdmsr(deadman_mtrr_msrs[i]);
+
+		sum = (sum * 31) ^ lower_32_bits(v) ^ upper_32_bits(v) * 7;
+	}
+	s->mtrr_sum = sum;
 	s->id = readl(mmio + APIC_ID);
 	s->icr = readl(mmio + APIC_ICR);
 }
+
+/* The boot CPU's view at load, which every CPU should match. */
+static struct deadman_apic_state deadman_ref;
 
 static bool deadman_apic_bad(const struct deadman_apic_state *s)
 {
 	return (s->base & (MSR_IA32_APICBASE_ENABLE | X2APIC_ENABLE |
 			   MSR_IA32_APICBASE_BASE)) !=
 		       (MSR_IA32_APICBASE_ENABLE | APIC_DEFAULT_PHYS_BASE) ||
-	       s->id == ~0U || (s->icr & APIC_ICR_BUSY);
+	       s->id == ~0U || (s->icr & APIC_ICR_BUSY) ||
+	       s->pat != deadman_ref.pat || s->deftype != deadman_ref.deftype ||
+	       s->syscfg != deadman_ref.syscfg ||
+	       s->mtrr_sum != deadman_ref.mtrr_sum ||
+	       (s->cr0 & (X86_CR0_CD | X86_CR0_NW));
 }
 
 static void deadman_print_apic(const char *why, int cpu,
 			       const struct deadman_apic_state *s)
 {
-	pr_emerg("sleep_deadman: %s CPU %d APIC_BASE=%llx MMIO ID=%08x ICR=%08x\n",
-		 why, cpu, s->base, s->id, s->icr);
+	pr_emerg("sleep_deadman: %s CPU %d APIC_BASE=%llx MMIO ID=%08x ICR=%08x PAT=%llx MTRRdef=%llx SYSCFG=%llx MTRRsum=%08x CR0=%llx\n",
+		 why, cpu, s->base, s->id, s->icr, s->pat, s->deftype,
+		 s->syscfg, s->mtrr_sum, s->cr0);
+}
+
+static void deadman_read_ref(void *unused)
+{
+	deadman_apic_state(&deadman_ref);
 }
 
 static atomic_t deadman_apic_bad_cpus;
@@ -254,6 +297,8 @@ static int __init deadman_init(void)
 		unregister_nmi_handler(NMI_LOCAL, "sleep_deadman");
 		return r;
 	}
+	smp_call_function_single(0, deadman_read_ref, NULL, 1);
+	deadman_print_apic("reference", 0, &deadman_ref);
 	deadman_check_apics("at load");
 	return 0;
 }
