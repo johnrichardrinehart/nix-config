@@ -22,12 +22,13 @@
  *
  * While a suspend or hibernation is in progress, the module also watches
  * NMIs (backtrace requests from RCU stall reports, lockup detectors and
- * panic). The first time one lands on a CPU that is idle, it prints that
+ * panic). When one lands on a CPU that is idle, it prints that
  * CPU's local APIC state: IRR and ISR (pending and in-service vectors,
  * e.g. a reschedule IPI that was delivered but did not wake the CPU), TPR
  * and PPR, and the idle task's need_resched and polling flags. That tells
  * a wakeup lost before the APIC from one the APIC holds while the CPU
- * stays in its C-state.
+ * stays in its C-state. Each CPU prints at most once every 5 s, so a
+ * stray NMI early on does not use up the dump for a later stall.
  */
 #include <asm/apic.h>
 #include <asm/irq_vectors.h>
@@ -51,7 +52,8 @@ module_param(idle_nmi_always, bool, 0644);
 MODULE_PARM_DESC(idle_nmi_always,
 		 "Print the APIC state of idle CPUs on NMIs outside suspend/hibernation too (default: false)");
 
-static DEFINE_PER_CPU(bool, deadman_idle_dumped);
+/* jiffies of each CPU's last dump; 0 = none yet */
+static DEFINE_PER_CPU(unsigned long, deadman_idle_dumped);
 
 /* apic_read() goes through a static call that is not exported to modules. */
 static u32 deadman_apic_read(u32 reg)
@@ -64,10 +66,12 @@ static int deadman_idle_nmi(unsigned int type, struct pt_regs *regs)
 	u32 irr[8], isr[8];
 	int i;
 
-	if (!(atomic_read(&deadman_watching) || idle_nmi_always) || !is_idle_task(current) ||
-	    this_cpu_read(deadman_idle_dumped))
+	if (!(atomic_read(&deadman_watching) || idle_nmi_always) || !is_idle_task(current))
 		return NMI_DONE;
-	this_cpu_write(deadman_idle_dumped, true);
+	if (this_cpu_read(deadman_idle_dumped) &&
+	    time_before(jiffies, this_cpu_read(deadman_idle_dumped) + 5 * HZ))
+		return NMI_DONE;
+	this_cpu_write(deadman_idle_dumped, jiffies ?: 1);
 
 	for (i = 0; i < 8; i++) {
 		irr[i] = deadman_apic_read(APIC_IRR + i * 0x10);
@@ -97,7 +101,7 @@ static void deadman_watch(bool on)
 
 	if (on)
 		for_each_possible_cpu(cpu)
-			per_cpu(deadman_idle_dumped, cpu) = false;
+			per_cpu(deadman_idle_dumped, cpu) = 0;
 	atomic_set(&deadman_watching, on);
 }
 
