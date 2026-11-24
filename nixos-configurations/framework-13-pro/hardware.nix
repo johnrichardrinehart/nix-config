@@ -30,7 +30,13 @@
   # offload. 80 GiB (in 4 KiB pages) fits a ~47 GB MoE plus KV cache and
   # leaves ~13 GiB for the desktop. A cap, not a reservation: GTT pages are
   # allocated on demand.
-  boot.kernelParams = [ "ttm.pages_limit=20971520" ];
+  boot.kernelParams = [
+    "ttm.pages_limit=20971520"
+    # Debug: MES (the GPU's scheduler firmware) sometimes stops during a
+    # hibernation restore. Keep its event log so amdgpu can snapshot it at
+    # the first hang (debugfs amdgpu_mes_event_log_hang, packages/amdgpu 0005).
+    "amdgpu.mes_log_enable=1"
+  ];
 
   # The lid and power button can come up with wakeup disabled, so the machine
   # sleeps but only a long press of the power button wakes it.

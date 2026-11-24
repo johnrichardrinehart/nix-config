@@ -8,8 +8,77 @@ Log the PSP's answer to each MES firmware load and the MES pipe state
 right after the pipes are enabled, and on a MES or KIQ timeout dump the
 MES control register, pipe instruction pointers, GP0-GP3, ring and
 fence state, the PSP mailbox registers, and the KIQ poll time by each
-clock.
+clock. With amdgpu.mes_log_enable=1, also keep a copy of the MES event
+log and scratch area taken at the first hang, in debugfs as
+amdgpu_mes_event_log_hang.
 ---
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index 1a86a47..4877a96 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -21,6 +21,7 @@
+  *
+  */
+ 
++#include <linux/debugfs.h>
+ #include <linux/firmware.h>
+ #include <drm/drm_exec.h>
+ 
+@@ -1157,15 +1158,42 @@ DEFINE_SHOW_ATTRIBUTE(amdgpu_debugfs_mes_event_log);
+ 
+ #endif
+ 
++/*
++ * Debug: a copy of the whole MES event log and scratch area, taken at the
++ * first MES hang of this boot, before recovery touches MES again. Read it
++ * from debugfs as amdgpu_mes_event_log_hang (raw bytes).
++ */
++static struct debugfs_blob_wrapper amdgpu_mes_hang_log;
++
++void amdgpu_mes_event_log_snapshot(struct amdgpu_device *adev, const char *why)
++{
++	void *copy;
++
++	if (!amdgpu_mes_log_enable || !adev->mes.event_log_cpu_addr ||
++	    READ_ONCE(amdgpu_mes_hang_log.data))
++		return;
++	copy = kvmalloc(adev->mes.event_log_size, GFP_KERNEL);
++	if (!copy)
++		return;
++	memcpy(copy, adev->mes.event_log_cpu_addr, adev->mes.event_log_size);
++	amdgpu_mes_hang_log.size = adev->mes.event_log_size;
++	smp_store_release(&amdgpu_mes_hang_log.data, copy);
++	dev_err(adev->dev, "MES event log snapshot taken (%s, %u bytes)\n",
++		why, adev->mes.event_log_size);
++}
++
+ void amdgpu_debugfs_mes_event_log_init(struct amdgpu_device *adev)
+ {
+ 
+ #if defined(CONFIG_DEBUG_FS)
+ 	struct drm_minor *minor = adev_to_drm(adev)->primary;
+ 	struct dentry *root = minor->debugfs_root;
+-	if (adev->enable_mes && amdgpu_mes_log_enable)
++	if (adev->enable_mes && amdgpu_mes_log_enable) {
+ 		debugfs_create_file("amdgpu_mes_event_log", 0444, root,
+ 				    adev, &amdgpu_debugfs_mes_event_log_fops);
++		debugfs_create_blob("amdgpu_mes_event_log_hang", 0400, root,
++				    &amdgpu_mes_hang_log);
++	}
+ 
+ #endif
+ }
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+index 977c057..1a080c5 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+@@ -643,4 +643,6 @@ int amdgpu_mes_alloc_gang_ctx_index(struct amdgpu_mes *mes,
+ 				    uint32_t *index);
+ void amdgpu_mes_free_gang_ctx_index(struct amdgpu_mes *mes,
+ 				    uint32_t index);
++void amdgpu_mes_event_log_snapshot(struct amdgpu_device *adev, const char *why);
++
+ #endif /* __AMDGPU_MES_H__ */
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
 index 42adc8e..1563ed7 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
@@ -84,7 +153,7 @@ index 7a006b2..193c216 100644
  }
  
 diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-index 10bed6f..03ce792 100644
+index 10bed6f..870428f 100644
 --- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
 @@ -31,7 +31,9 @@
@@ -97,7 +166,7 @@ index 10bed6f..03ce792 100644
  
  MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes.bin");
  MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes_2.bin");
-@@ -173,6 +175,60 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
+@@ -173,6 +175,62 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
  	return op_str;
  }
  
@@ -136,6 +205,8 @@ index 10bed6f..03ce792 100644
 +		mutex_unlock(&adev->srbm_mutex);
 +	}
 +
++	if (!strcmp(why, "hang"))
++		amdgpu_mes_event_log_snapshot(adev, why);
 +	dev_printk(level, adev->dev, "MES %s: CP_MES_CNTL=%08x srbm=%d\n", why, cntl, sel);
 +	for (pipe = 0; pipe < AMDGPU_MAX_MES_PIPES; pipe++)
 +		dev_printk(level, adev->dev,
@@ -158,7 +229,7 @@ index 10bed6f..03ce792 100644
  static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
  						    void *pkt, int size,
  						    int api_status_off)
-@@ -268,6 +324,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
+@@ -268,6 +326,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
  			dev_err(adev->dev, "MES failed to respond to msg=%d\n",
  				x_pkt->header.opcode);
  
@@ -166,7 +237,7 @@ index 10bed6f..03ce792 100644
  		while (halt_if_hws_hang)
  			schedule();
  
-@@ -1899,6 +1956,10 @@ static int mes_v11_0_kiq_hw_init(struct amdgpu_device *adev, uint32_t xcc_id)
+@@ -1899,6 +1958,10 @@ static int mes_v11_0_kiq_hw_init(struct amdgpu_device *adev, uint32_t xcc_id)
  
  	mes_v11_0_enable(adev, true);
  
