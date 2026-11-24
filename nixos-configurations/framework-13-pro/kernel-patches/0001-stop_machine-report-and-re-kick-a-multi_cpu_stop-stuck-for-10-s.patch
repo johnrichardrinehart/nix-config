@@ -12,11 +12,12 @@ operation proceeds.
 diff --git a/kernel/stop_machine.c b/kernel/stop_machine.c
 --- a/kernel/stop_machine.c
 +++ b/kernel/stop_machine.c
-@@ -23,6 +23,7 @@
+@@ -23,6 +23,8 @@
  #include <linux/atomic.h>
  #include <linux/nmi.h>
  #include <linux/sched/wake_q.h>
 +#include <linux/sched/clock.h>
++#include <trace/events/ipi.h>
  
  /*
   * Structure to determine completion condition and record errors.  May
