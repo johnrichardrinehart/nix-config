@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] drm/amdgpu/mes11: debug dump when MES fails to respond
+
+Debug patch, not for upstream as is. After some hibernation restores on
+GC 11.5.0, MES never answers SET_HW_RSRC. Print the MES control
+register, two samples of each MES pipe's instruction pointer, GP0-GP3,
+the MES ring and fence state, and the PSP mailbox registers, to tell a
+MES that never started from one that is stuck or waiting on the PSP.
+---
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+index 10bed6f..4e54eb9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+@@ -32,6 +32,7 @@
+ #include "gc/gc_11_0_0_default.h"
+ #include "v11_structs.h"
+ #include "mes_v11_api_def.h"
++#include "mp/mp_13_0_2_offset.h"
+ 
+ MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes.bin");
+ MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes_2.bin");
+@@ -173,6 +174,59 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
+ 	return op_str;
+ }
+ 
++/*
++ * Debug: on a MES timeout, show whether the MES pipes run (two samples of
++ * each pipe's instruction pointer), what they report in GP0-GP3, how far
++ * the MES ring got, and the PSP mailbox state, so a hang after hibernation
++ * restore can be told apart from a MES that never started.
++ */
++static void mes_v11_0_dump_hang(struct amdgpu_device *adev,
++				struct amdgpu_ring *ring, u32 seq, u64 status)
++{
++	u32 ip[AMDGPU_MAX_MES_PIPES][2], gp[AMDGPU_MAX_MES_PIPES][4];
++	u32 cntl = RREG32_SOC15(GC, 0, regCP_MES_CNTL);
++	bool sel = mutex_trylock(&adev->srbm_mutex);
++	int pipe, i;
++
++	memset(ip, 0xff, sizeof(ip));
++	memset(gp, 0xff, sizeof(gp));
++	if (sel) {
++		for (i = 0; i < 2; i++) {
++			for (pipe = 0; pipe < AMDGPU_MAX_MES_PIPES; pipe++) {
++				soc21_grbm_select(adev, 3, pipe, 0, 0);
++				ip[pipe][i] = RREG32_SOC15(GC, 0, regCP_MES_INSTR_PNTR);
++				if (i)
++					continue;
++				gp[pipe][0] = RREG32_SOC15(GC, 0, regCP_MES_GP0_LO);
++				gp[pipe][1] = RREG32_SOC15(GC, 0, regCP_MES_GP1_LO);
++				gp[pipe][2] = RREG32_SOC15(GC, 0, regCP_MES_GP2_LO);
++				gp[pipe][3] = RREG32_SOC15(GC, 0, regCP_MES_GP3_LO);
++			}
++			soc21_grbm_select(adev, 0, 0, 0, 0);
++			udelay(20);
++		}
++		mutex_unlock(&adev->srbm_mutex);
++	}
++
++	dev_err(adev->dev, "MES hang: CP_MES_CNTL=%08x srbm=%d\n", cntl, sel);
++	for (pipe = 0; pipe < AMDGPU_MAX_MES_PIPES; pipe++)
++		dev_err(adev->dev,
++			"MES hang: pipe%d IP=%08x,%08x GP0-3=%08x %08x %08x %08x\n",
++			pipe, ip[pipe][0], ip[pipe][1], gp[pipe][0], gp[pipe][1],
++			gp[pipe][2], gp[pipe][3]);
++	dev_err(adev->dev,
++		"MES hang: ring rptr=%llx wptr=%llx fence=%u seq=%u api_status=%llx ready=%d\n",
++		amdgpu_ring_get_rptr(ring), ring->wptr,
++		le32_to_cpu(*ring->fence_drv.cpu_addr), seq, status,
++		ring->sched.ready);
++	dev_err(adev->dev,
++		"MES hang: PSP C2PMSG_33=%08x 35=%08x 64=%08x 81=%08x\n",
++		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_33),
++		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_35),
++		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_64),
++		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_81));
++}
++
+ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
+ 						    void *pkt, int size,
+ 						    int api_status_off)
+@@ -268,6 +322,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
+ 			dev_err(adev->dev, "MES failed to respond to msg=%d\n",
+ 				x_pkt->header.opcode);
+ 
++		mes_v11_0_dump_hang(adev, ring, seq, *status_ptr);
+ 		while (halt_if_hws_hang)
+ 			schedule();
+ 
