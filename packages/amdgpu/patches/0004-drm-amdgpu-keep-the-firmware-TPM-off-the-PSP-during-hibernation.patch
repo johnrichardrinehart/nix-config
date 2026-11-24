@@ -1,0 +1,155 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] drm/amdgpu: keep the firmware TPM off the PSP during
+ hibernation freeze and restore
+
+On AMD APUs the firmware TPM runs on the same PSP that amdgpu drives.
+With parallel device PM (pm_async=1), the TPM's freeze callback sends
+TPM2_Shutdown while amdgpu freezes for hibernation. On a Ryzen AI 9 HX
+370 (GC 11.5.0) the GPU then fails to come back on restore about once
+every ten cycles:
+
+  amdgpu: ring mes_kiq_3.1.0 test failed (-110)
+  amdgpu: MES failed to respond to msg=ADD_QUEUE
+  amdgpu: resume of IP block <gfx_v11_0> failed -110
+
+and the following GPU recovery leaves the device wedged.
+
+Tracing every device PM callback over pm_test=core loops showed the
+TPM still in its freeze callback when amdgpu started freezing in all
+failing cycles. Delaying amdgpu's freeze until the TPM was done, or a
+device link ordering the TPM before the GPU, made the failure go away
+while every other device kept suspending in parallel.
+
+Hold the TPM's command lock across amdgpu's hibernation freeze, restore,
+thaw and poweroff, so no TPM command reaches the PSP in parallel with
+amdgpu's PSP traffic.
+
+Link: https://gitlab.freedesktop.org/drm/amd/-/issues/5379
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c | 66 +++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 57 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -38,6 +38,7 @@
+ #include <linux/mmu_notifier.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/suspend.h>
++#include <linux/tpm.h>
+ #include <linux/vga_switcheroo.h>
+ 
+ #include "amdgpu.h"
+@@ -2703,29 +2704,62 @@
+ 	return r;
+ }
+ 
++/*
++ * On AMD APUs the firmware TPM runs on the same PSP that amdgpu drives.
++ * With parallel device PM (pm_async), the TPM's freeze callback sends
++ * TPM2_Shutdown while amdgpu freezes for hibernation; on GFX 11.5 APUs the
++ * GPU then intermittently fails to come back on restore (MES stops
++ * responding, gfx_v11_0 resume fails with -110, and the following GPU
++ * recovery leaves the device wedged).  Hold the TPM's command lock while
++ * amdgpu freezes, restores and powers off for hibernation, so that no TPM
++ * command reaches the PSP in parallel with amdgpu's PSP traffic.  Other
++ * devices keep freezing and resuming in parallel.
++ */
++static struct tpm_chip *amdgpu_pm_tpm_lock(struct amdgpu_device *adev)
++{
++	struct tpm_chip *chip;
++
++	if (!IS_REACHABLE(CONFIG_TCG_TPM) || !(adev->flags & AMD_IS_APU))
++		return NULL;
++
++	chip = tpm_default_chip();
++	if (chip)
++		mutex_lock(&chip->tpm_mutex);
++	return chip;
++}
++
++static void amdgpu_pm_tpm_unlock(struct tpm_chip *chip)
++{
++	if (!chip)
++		return;
++	mutex_unlock(&chip->tpm_mutex);
++	put_device(&chip->dev);
++}
++
+ static int amdgpu_pmops_freeze(struct device *dev)
+ {
+ 	struct drm_device *drm_dev = dev_get_drvdata(dev);
+ 	struct amdgpu_device *adev = drm_to_adev(drm_dev);
++	struct tpm_chip *tpm;
+ 	int r;
+ 
++	tpm = amdgpu_pm_tpm_lock(adev);
+ 	r = amdgpu_device_suspend(drm_dev, true);
+-	if (r)
+-		return r;
+-
+-	if (amdgpu_acpi_should_gpu_reset(adev)) {
++	if (!r && amdgpu_acpi_should_gpu_reset(adev)) {
+ 		amdgpu_device_lock_reset_domain(adev->reset_domain);
+ 		r = amdgpu_asic_reset(adev);
+ 		amdgpu_device_unlock_reset_domain(adev->reset_domain);
+-		return r;
+ 	}
+-	return 0;
++	amdgpu_pm_tpm_unlock(tpm);
++	return r;
+ }
+ 
+ static int amdgpu_pmops_thaw(struct device *dev)
+ {
+ 	struct drm_device *drm_dev = dev_get_drvdata(dev);
+ 	struct amdgpu_device *adev = drm_to_adev(drm_dev);
++	struct tpm_chip *tpm;
++	int r;
+ 
+ 	/* do not resume device if it's normal hibernation */
+ 	if (!adev->debug_hibernation_thaw_resume_gpu &&
+@@ -2733,26 +2767,40 @@
+ 	    !pm_hibernation_mode_is_suspend())
+ 		return 0;
+ 
+-	return amdgpu_device_resume(drm_dev, true);
++	tpm = amdgpu_pm_tpm_lock(adev);
++	r = amdgpu_device_resume(drm_dev, true);
++	amdgpu_pm_tpm_unlock(tpm);
++	return r;
+ }
+ 
+ static int amdgpu_pmops_poweroff(struct device *dev)
+ {
+ 	struct drm_device *drm_dev = dev_get_drvdata(dev);
+ 	struct amdgpu_device *adev = drm_to_adev(drm_dev);
++	struct tpm_chip *tpm;
++	int r;
+ 
+ 	/* device maybe not resumed here, return immediately in this case */
+ 	if (adev->in_s4 && adev->in_suspend)
+ 		return 0;
+ 
+-	return amdgpu_device_suspend(drm_dev, true);
++	tpm = amdgpu_pm_tpm_lock(adev);
++	r = amdgpu_device_suspend(drm_dev, true);
++	amdgpu_pm_tpm_unlock(tpm);
++	return r;
+ }
+ 
+ static int amdgpu_pmops_restore(struct device *dev)
+ {
+ 	struct drm_device *drm_dev = dev_get_drvdata(dev);
++	struct amdgpu_device *adev = drm_to_adev(drm_dev);
++	struct tpm_chip *tpm;
++	int r;
+ 
+-	return amdgpu_device_resume(drm_dev, true);
++	tpm = amdgpu_pm_tpm_lock(adev);
++	r = amdgpu_device_resume(drm_dev, true);
++	amdgpu_pm_tpm_unlock(tpm);
++	return r;
+ }
+ 
+ static int amdgpu_runtime_idle_check_display(struct device *dev)

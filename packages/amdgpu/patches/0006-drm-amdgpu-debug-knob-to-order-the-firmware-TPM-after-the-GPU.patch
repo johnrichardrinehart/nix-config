@@ -10,10 +10,11 @@ failure comes from the TPM's PSP traffic overlapping amdgpu's.
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -2719,6 +2719,74 @@
+@@ -2729,6 +2729,74 @@
+ MODULE_PARM_DESC(s4_freeze_delay_ms,
  		 "Sleep this many ms before freezing for hibernation (default: 0)");
  
- /*
++/*
 + * s4_tpm_link: link the firmware TPM (ACPI MSFT0101:00) as a PM consumer of
 + * the GPU, so the PM core suspends the TPM before amdgpu and resumes it
 + * after, while every other device stays parallel. Both talk to the PSP.
@@ -81,7 +82,6 @@ diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgp
 +MODULE_PARM_DESC(s4_tpm_link,
 +		 "Order the firmware TPM's suspend before and resume after the GPU (default: 0)");
 +
-+/*
-  * On GFX 11.5 APUs MES intermittently fails to come back on restore from
-  * hibernation when the GPU is frozen while other devices are still running
-  * their freeze callbacks.  Do the freeze in the late phase for these parts,
+ static struct tpm_chip *amdgpu_pm_tpm_lock(struct amdgpu_device *adev)
+ {
+ 	struct tpm_chip *chip;
