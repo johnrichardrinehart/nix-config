@@ -353,9 +353,18 @@ in
           );
           default = null;
           description = ''
-            Sensor for Waybar's temperature module. Leave null to use
-            thermal_zone0, which on some Intel laptops is the INT3400 DPTF
-            placeholder stuck at 20 °C.
+            Sensor for Waybar's temperature module. Leave null (and
+            temperatureThermalZone null) to use thermal_zone0, which on some
+            Intel laptops is the INT3400 DPTF placeholder stuck at 20 °C.
+          '';
+        };
+        temperatureThermalZone = lib.mkOption {
+          type = lib.types.nullOr lib.types.ints.unsigned;
+          default = null;
+          example = 3;
+          description = ''
+            /sys/class/thermal/thermal_zoneN for Waybar's temperature module.
+            Mutually exclusive with temperatureSensor.
           '';
         };
       };
@@ -595,6 +604,14 @@ in
       let
         defaultInterfaceLine = ''// "interface": "wlp2*", // (Optional) To force the use of this interface'';
         defaultHwmonLine = ''// "hwmon-path": "/sys/class/hwmon/hwmon2/temp1_input",'';
+        defaultThermalZoneLine = ''// "thermal-zone": 2,'';
+        configuredThermalZoneLine =
+          let
+            zone = cfg.waybar.temperatureThermalZone;
+          in
+          assert lib.assertMsg (zone == null || cfg.waybar.temperatureSensor == null)
+            "waybar.temperatureThermalZone and waybar.temperatureSensor are mutually exclusive";
+          if zone == null then defaultThermalZoneLine else ''"thermal-zone": ${toString zone},'';
         configuredHwmonLine =
           let
             sensor = cfg.waybar.temperatureSensor;
@@ -617,6 +634,9 @@ in
             "--replace-fail"
             defaultHwmonLine
             configuredHwmonLine
+            "--replace-fail"
+            defaultThermalZoneLine
+            configuredThermalZoneLine
             # Waybar's user unit runs with a minimal PATH, so bare names from
             # the system profile do not resolve.
             "--subst-var-by"

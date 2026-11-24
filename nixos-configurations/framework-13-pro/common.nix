@@ -79,6 +79,10 @@
     height = 1080;
   };
 
+  # thermal_zone0 is the EC's board sensor (local_f75303), ~16 °C below the
+  # die under load; zone3 is the EC's cpu@4c reading, which tracks k10temp Tctl.
+  dev.johnrinehart.desktop.greetd_niri.waybar.temperatureThermalZone = 3;
+
   # 13.5" 2880x1920 touch panel, 30-120 Hz. 1.5 leaves a 1920x1280 logical
   # desktop, about what framie's panel shows at 1.0. Mode is left to the
   # panel's preferred timing.
