@@ -12,6 +12,16 @@
   # https://community.frame.work/t/framework-13-pro-fedora-44-frequent-system-freezes/85040
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
+  # Debug: after a hibernation thaw, a stop_machine() sometimes waits
+  # forever for one CPU that sits in an I/O-port C-state. Report what each
+  # CPU's stopper is doing after 10 s, then re-kick the missing CPUs.
+  boot.kernelPatches = [
+    {
+      name = "stop-machine-hang-report";
+      patch = ./kernel-patches/0001-stop_machine-report-and-re-kick-a-multi_cpu_stop-stuck-for-10-s.patch;
+    }
+  ];
+
   boot.kernelModules = [ "kvm-amd" ];
 
   # The 890M's VRAM carve-out is 512 MiB; everything else it reaches is GTT,

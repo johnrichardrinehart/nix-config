@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] stop_machine: report and re-kick a multi_cpu_stop() stuck for 10 s
+
+Debug patch, not for upstream as is. On a Ryzen AI 300 laptop a
+stop_machine() right after hibernation brings the CPUs back
+(cache_aps_init()) spins until the RCU stall detector fires, with one
+CPU idle in an I/O-port C-state that never joins. Print, once, what
+every CPU's stopper is doing and which state each CPU reached, then
+re-kick the stoppers of CPUs that never joined and report whether the
+operation proceeds.
+---
+diff --git a/kernel/stop_machine.c b/kernel/stop_machine.c
+--- a/kernel/stop_machine.c
++++ b/kernel/stop_machine.c
+@@ -23,6 +23,7 @@
+ #include <linux/atomic.h>
+ #include <linux/nmi.h>
+ #include <linux/sched/wake_q.h>
++#include <linux/sched/clock.h>
+ 
+ /*
+  * Structure to determine completion condition and record errors.  May
+@@ -198,6 +199,62 @@
+ 	cpu_relax();
+ }
+ 
++/*
++ * Hang report for multi_cpu_stop(): if a stop_machine() spins for more than
++ * 10 s, print once what every CPU's stopper is doing and which state each
++ * CPU has reached, then re-kick the stoppers of CPUs that never joined
++ * (wake the thread again and resend the call-function IPI, which flushes a
++ * wakeup that may be sitting in the target's call-single queue).  If the
++ * operation then proceeds, say so.  Uses local_clock(), which keeps running
++ * with interrupts off.
++ */
++struct multi_stop_dbg {
++	struct multi_stop_data	*msdata;
++	int			curstate;
++	u64			entered;
++};
++static DEFINE_PER_CPU(struct multi_stop_dbg, multi_stop_dbg);
++static atomic_t multi_stop_reported;
++static struct multi_stop_data *multi_stop_kicked;
++
++static void multi_stop_report(struct multi_stop_data *msdata)
++{
++	u64 now = local_clock();
++	int cpu;
++
++	if (atomic_xchg(&multi_stop_reported, 1))
++		return;
++
++	pr_emerg("stop_machine: stuck >10s: msdata=%px state=%d thread_ack=%d num_threads=%u reporter=cpu%d\n",
++		 msdata, READ_ONCE(msdata->state), atomic_read(&msdata->thread_ack),
++		 msdata->num_threads, smp_processor_id());
++	for_each_possible_cpu(cpu) {
++		struct multi_stop_dbg *d = per_cpu_ptr(&multi_stop_dbg, cpu);
++		struct cpu_stopper *st = per_cpu_ptr(&cpu_stopper, cpu);
++		struct task_struct *t = st->thread;
++
++		pr_emerg("stop_machine: cpu%d online=%d active=%d stopper:enabled=%d works=%d fn=%ps thread_state=%#x on_cpu=%d | joined=%d state=%d for %llums\n",
++			 cpu, cpu_online(cpu), cpu_active(cpu), st->enabled,
++			 !list_empty(&st->works), st->fn,
++			 t ? READ_ONCE(t->__state) : ~0U, t ? READ_ONCE(t->on_cpu) : -1,
++			 d->msdata == msdata, d->msdata == msdata ? d->curstate : -1,
++			 d->msdata == msdata ? div_u64(now - d->entered, NSEC_PER_MSEC) : 0);
++	}
++	trigger_all_cpu_backtrace();
++
++	for_each_online_cpu(cpu) {
++		struct cpu_stopper *st = per_cpu_ptr(&cpu_stopper, cpu);
++
++		if (per_cpu_ptr(&multi_stop_dbg, cpu)->msdata == msdata || !st->thread)
++			continue;
++		pr_emerg("stop_machine: re-kicking cpu%d\n", cpu);
++		wake_up_process(st->thread);
++		arch_send_call_function_single_ipi(cpu);
++		smp_send_reschedule(cpu);
++	}
++	WRITE_ONCE(multi_stop_kicked, msdata);
++}
++
+ /* This is the cpu_stop function which stops the CPU. */
+ static int multi_cpu_stop(void *data)
+ {
+@@ -214,6 +271,10 @@
+ 	 */
+ 	local_save_flags(flags);
+ 
++	this_cpu_write(multi_stop_dbg.msdata, msdata);
++	this_cpu_write(multi_stop_dbg.curstate, curstate);
++	this_cpu_write(multi_stop_dbg.entered, local_clock());
++
+ 	if (!msdata->active_cpus) {
+ 		cpumask = cpu_online_mask;
+ 		is_active = cpu == cpumask_first(cpumask);
+@@ -228,7 +289,12 @@
+ 		stop_machine_yield(cpumask);
+ 		newstate = READ_ONCE(msdata->state);
+ 		if (newstate != curstate) {
++			if (READ_ONCE(multi_stop_kicked) == msdata && is_active &&
++			    cpu == cpumask_first(cpumask))
++				pr_emerg("stop_machine: progressed to state %d after re-kick\n",
++					 newstate);
+ 			curstate = newstate;
++			this_cpu_write(multi_stop_dbg.curstate, curstate);
+ 			switch (curstate) {
+ 			case MULTI_STOP_DISABLE_IRQ:
+ 				local_irq_disable();
+@@ -252,6 +318,9 @@
+ 			/* Also suppress RCU CPU stall warnings. */
+ 			rcu_momentary_eqs();
+ 		}
++		if (unlikely(local_clock() - this_cpu_read(multi_stop_dbg.entered) >
++			     10ULL * NSEC_PER_SEC))
++			multi_stop_report(msdata);
+ 	} while (curstate != MULTI_STOP_EXIT);
+ 
+ 	local_irq_restore(flags);
