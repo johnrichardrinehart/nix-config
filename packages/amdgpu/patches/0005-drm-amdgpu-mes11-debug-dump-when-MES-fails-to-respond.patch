@@ -1,25 +1,82 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-Subject: [PATCH] drm/amdgpu/mes11: debug dump when MES fails to respond
+Subject: [PATCH] drm/amdgpu/mes11: debug dump when MES or its KIQ fails to respond
 
 Debug patch, not for upstream as is. After some hibernation restores on
-GC 11.5.0, MES never answers SET_HW_RSRC. Print the MES control
-register, two samples of each MES pipe's instruction pointer, GP0-GP3,
-the MES ring and fence state, and the PSP mailbox registers, to tell a
-MES that never started from one that is stuck or waiting on the PSP.
+GC 11.5.0, MES never answers SET_HW_RSRC, or the KIQ ring test fails.
+Print the MES control register, two samples of each MES pipe's
+instruction pointer, GP0-GP3, the MES ring and fence state, and the PSP
+mailbox registers, to tell a MES that never started from one that is
+stuck or waiting on the PSP. The KIQ ring test also reports how long its
+poll took by each clock.
 ---
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+index 7a006b2..99102d5 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+@@ -21,6 +21,7 @@
+  *
+  */
+ #include <linux/delay.h>
++#include <linux/sched/clock.h>
+ #include <linux/kernel.h>
+ #include <linux/firmware.h>
+ #include <linux/module.h>
+@@ -583,6 +584,9 @@ static int gfx_v11_0_ring_test_ring(struct amdgpu_ring *ring)
+ 	struct amdgpu_device *adev = ring->adev;
+ 	uint32_t scratch = SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG0);
+ 	uint32_t tmp = 0;
++	u64 t0_mono, t0_raw, t0_local;
++	unsigned long j0;
++	int cpu0;
+ 	unsigned i;
+ 	int r;
+ 
+@@ -604,6 +608,11 @@ static int gfx_v11_0_ring_test_ring(struct amdgpu_ring *ring)
+ 	}
+ 	amdgpu_ring_commit(ring);
+ 
++	t0_mono = ktime_get_ns();
++	t0_raw = ktime_get_raw_ns();
++	t0_local = local_clock();
++	j0 = jiffies;
++	cpu0 = raw_smp_processor_id();
+ 	for (i = 0; i < adev->usec_timeout; i++) {
+ 		tmp = RREG32(scratch);
+ 		if (tmp == 0xDEADBEEF)
+@@ -614,8 +623,17 @@ static int gfx_v11_0_ring_test_ring(struct amdgpu_ring *ring)
+ 			udelay(1);
+ 	}
+ 
+-	if (i >= adev->usec_timeout)
++	if (i >= adev->usec_timeout) {
+ 		r = -ETIMEDOUT;
++		/* Debug: how long the poll really took, by every clock. */
++		drm_err(adev_to_drm(adev),
++			"ring %s test: %u polls, scratch=%08x, elapsed mono=%llu raw=%llu local=%llu ns jiffies=%lu cpu %d->%d\n",
++			ring->name, i, tmp, ktime_get_ns() - t0_mono,
++			ktime_get_raw_ns() - t0_raw, local_clock() - t0_local,
++			jiffies - j0, cpu0, raw_smp_processor_id());
++		if (adev->enable_mes)
++			mes_v11_0_dump_hang(adev, &adev->mes.ring[0], 0, 0);
++	}
+ 	return r;
+ }
+ 
 diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-index 10bed6f..4e54eb9 100644
+index 10bed6f..7c22f3f 100644
 --- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-@@ -32,6 +32,7 @@
+@@ -31,7 +31,9 @@
+ #include "gc/gc_11_0_0_sh_mask.h"
  #include "gc/gc_11_0_0_default.h"
  #include "v11_structs.h"
++#include "mes_v11_0.h"
  #include "mes_v11_api_def.h"
 +#include "mp/mp_13_0_2_offset.h"
  
  MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes.bin");
  MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes_2.bin");
-@@ -173,6 +174,59 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
+@@ -173,6 +175,59 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
  	return op_str;
  }
  
@@ -29,7 +86,7 @@ index 10bed6f..4e54eb9 100644
 + * the MES ring got, and the PSP mailbox state, so a hang after hibernation
 + * restore can be told apart from a MES that never started.
 + */
-+static void mes_v11_0_dump_hang(struct amdgpu_device *adev,
++void mes_v11_0_dump_hang(struct amdgpu_device *adev,
 +				struct amdgpu_ring *ring, u32 seq, u64 status)
 +{
 +	u32 ip[AMDGPU_MAX_MES_PIPES][2], gp[AMDGPU_MAX_MES_PIPES][4];
@@ -79,7 +136,7 @@ index 10bed6f..4e54eb9 100644
  static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
  						    void *pkt, int size,
  						    int api_status_off)
-@@ -268,6 +322,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
+@@ -268,6 +323,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
  			dev_err(adev->dev, "MES failed to respond to msg=%d\n",
  				x_pkt->header.opcode);
  
@@ -87,3 +144,16 @@ index 10bed6f..4e54eb9 100644
  		while (halt_if_hws_hang)
  			schedule();
  
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h
+index b3519e1..57bab4d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h
+@@ -26,4 +26,8 @@
+ 
+ extern const struct amdgpu_ip_block_version mes_v11_0_ip_block;
+ 
++struct amdgpu_ring;
++void mes_v11_0_dump_hang(struct amdgpu_device *adev,
++			 struct amdgpu_ring *ring, u32 seq, u64 status);
++
+ #endif
