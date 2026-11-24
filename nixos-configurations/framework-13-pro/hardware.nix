@@ -49,8 +49,10 @@
 
   # MT7925 and amdgpu driver fixes, built out of tree against this kernel
   # so a change needs no kernel rebuild (packages/mt76, packages/amdgpu).
-  # amdgpu: release leaked DP MST payloads, which otherwise leave the
-  # USB4-docked monitors in standby after a failed resume until reboot.
+  # amdgpu: recover USB4-docked monitors after a resume that lost the DP
+  # tunnel (leaked MST payloads, stale cached CRTCs), allow 4K60 DSC over
+  # a 2-lane USB4 link, and keep the firmware TPM off the PSP while the
+  # GPU freezes and restores for hibernation (MES -110 on restore).
   # thunderbolt: re-create a DP tunnel through the DP IN adapter it used
   # before, so USB4 monitors keep their connector across resume.
   boot.extraModulePackages = [
