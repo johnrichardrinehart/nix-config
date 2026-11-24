@@ -33,6 +33,8 @@
 #include <asm/apic.h>
 #include <asm/irq_vectors.h>
 #include <asm/nmi.h>
+#include <linux/cpuhotplug.h>
+#include <linux/hrtimer.h>
 #include <linux/jiffies.h>
 #include <linux/module.h>
 #include <linux/notifier.h>
@@ -203,14 +205,87 @@ static int deadman_idle_nmi(unsigned int type, struct pt_regs *regs)
 	return NMI_DONE;
 }
 
+/*
+ * While a sleep transition is under way, every online CPU checks every
+ * 20 ms that its APIC MMIO page still decodes. A CPU whose page reads
+ * 0xffffffff gets its APIC_BASE MSR written back with the same value, to
+ * see whether that brings the MMIO decode back.
+ */
+static bool apic_repair = true;
+module_param(apic_repair, bool, 0644);
+MODULE_PARM_DESC(apic_repair,
+		 "Rewrite APIC_BASE when a CPU's APIC MMIO page stops decoding during sleep (default: true)");
+
+#define DEADMAN_POLL_NS (20 * NSEC_PER_MSEC)
+static DEFINE_PER_CPU(struct hrtimer, deadman_poll);
+static DEFINE_PER_CPU(bool, deadman_poll_bad);
+
+static enum hrtimer_restart deadman_poll_fn(struct hrtimer *t)
+{
+	void __iomem *mmio = (void __iomem *)APIC_BASE;
+	u32 id = readl(mmio + APIC_ID);
+	int cpu = smp_processor_id();
+
+	if (id == ~0U && !this_cpu_read(deadman_poll_bad)) {
+		u64 base = deadman_rdmsr(MSR_IA32_APICBASE);
+
+		this_cpu_write(deadman_poll_bad, true);
+		pr_emerg("sleep_deadman: CPU %d APIC MMIO stopped decoding (APIC_BASE=%llx)\n",
+			 cpu, base);
+		if (apic_repair && base != ~0ULL) {
+			wrmsrq(MSR_IA32_APICBASE, base);
+			id = readl(mmio + APIC_ID);
+			pr_emerg("sleep_deadman: CPU %d APIC_BASE rewritten: MMIO ID now %08x\n",
+				 cpu, id);
+		}
+	} else if (id != ~0U && this_cpu_read(deadman_poll_bad)) {
+		this_cpu_write(deadman_poll_bad, false);
+		pr_emerg("sleep_deadman: CPU %d APIC MMIO decodes again (ID=%08x)\n",
+			 cpu, id);
+	}
+	if (!atomic_read(&deadman_watching))
+		return HRTIMER_NORESTART;
+	hrtimer_forward_now(t, ns_to_ktime(DEADMAN_POLL_NS));
+	return HRTIMER_RESTART;
+}
+
+static void deadman_poll_start(void *unused)
+{
+	hrtimer_start(this_cpu_ptr(&deadman_poll), ns_to_ktime(DEADMAN_POLL_NS),
+		      HRTIMER_MODE_REL_PINNED_HARD);
+}
+
+static int deadman_cpu_online(unsigned int cpu)
+{
+	if (atomic_read(&deadman_watching))
+		deadman_poll_start(NULL);
+	return 0;
+}
+
+static int deadman_cpu_offline(unsigned int cpu)
+{
+	hrtimer_cancel(this_cpu_ptr(&deadman_poll));
+	return 0;
+}
+
+static enum cpuhp_state deadman_cpuhp;
+
 static void deadman_watch(bool on)
 {
 	int cpu;
 
 	if (on)
-		for_each_possible_cpu(cpu)
+		for_each_possible_cpu(cpu) {
 			per_cpu(deadman_idle_dumped, cpu) = 0;
+			per_cpu(deadman_poll_bad, cpu) = false;
+		}
 	atomic_set(&deadman_watching, on);
+	if (on) {
+		on_each_cpu(deadman_poll_start, NULL, 1);
+	} else {
+		for_each_possible_cpu(cpu)
+			hrtimer_cancel(per_cpu_ptr(&deadman_poll, cpu));
+	}
 }
 
 static unsigned int timeout_secs = 300;
@@ -287,14 +362,25 @@ static struct notifier_block deadman_nb = {
 
 static int __init deadman_init(void)
 {
-	int r;
+	int cpu, r;
 
-	r = register_nmi_handler(NMI_LOCAL, deadman_idle_nmi, 0, "sleep_deadman");
-	if (r)
+	for_each_possible_cpu(cpu)
+		hrtimer_setup(per_cpu_ptr(&deadman_poll, cpu), deadman_poll_fn,
+			      CLOCK_MONOTONIC, HRTIMER_MODE_REL_PINNED_HARD);
+	r = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN, "sleep_deadman:online",
+				      deadman_cpu_online, deadman_cpu_offline);
+	if (r < 0)
 		return r;
+	deadman_cpuhp = r;
+	r = register_nmi_handler(NMI_LOCAL, deadman_idle_nmi, 0, "sleep_deadman");
+	if (r) {
+		cpuhp_remove_state_nocalls(deadman_cpuhp);
+		return r;
+	}
 	r = register_pm_notifier(&deadman_nb);
 	if (r) {
 		unregister_nmi_handler(NMI_LOCAL, "sleep_deadman");
+		cpuhp_remove_state_nocalls(deadman_cpuhp);
 		return r;
 	}
 	smp_call_function_single(0, deadman_read_ref, NULL, 1);
@@ -306,6 +392,8 @@ static int __init deadman_init(void)
 static void __exit deadman_exit(void)
 {
 	unregister_pm_notifier(&deadman_nb);
+	deadman_watch(false);
+	cpuhp_remove_state_nocalls(deadman_cpuhp);
 	unregister_nmi_handler(NMI_LOCAL, "sleep_deadman");
 	cancel_delayed_work_sync(&deadman_work);
 }
