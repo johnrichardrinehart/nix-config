@@ -235,11 +235,86 @@ struct deadman_apic_event {
 	u64 base;
 	unsigned long ip;
 	u32 id_before, id_after;
+	/* SPIV, LVTT, LVT0, LVTERR right after the APIC_BASE rewrite */
+	u32 spiv, lvtt, lvt0, lvterr;
+	/* the same after restoring the last good register snapshot */
+	u32 r_spiv, r_lvtt;
 	int cpu;
 	u8 where;
 	bool repaired;
+	bool restored;
 	bool recovered;
 };
+
+/*
+ * The second lockup after a repair showed the APIC decoding again but the
+ * CPU no longer taking timer interrupts: the APIC had come back with its
+ * reset state (software-disabled, LVTs masked). Keep each CPU's last good
+ * registers, taken by the 20 ms poll, and write them back after the
+ * APIC_BASE rewrite, as lapic_resume() does after a system resume.
+ */
+static bool apic_restore = true;
+module_param(apic_restore, bool, 0644);
+MODULE_PARM_DESC(apic_restore,
+		 "After rewriting APIC_BASE, restore the CPU's last good local APIC registers (default: true)");
+
+struct deadman_lapic {
+	u32 id, tpr, ldr, dfr, spiv, lvtt, lvtpc, lvt0, lvt1, lvterr, tdcr, thmr;
+	int maxlvt;
+	bool valid;
+};
+
+static DEFINE_PER_CPU(struct deadman_lapic, deadman_good);
+
+static void deadman_save_lapic(void)
+{
+	void __iomem *m = (void __iomem *)APIC_BASE;
+	struct deadman_lapic *s = this_cpu_ptr(&deadman_good);
+
+	s->id = readl(m + APIC_ID);
+	if (s->id == ~0U)
+		return;
+	s->maxlvt = (readl(m + APIC_LVR) >> 16) & 0xff;
+	s->tpr = readl(m + APIC_TASKPRI);
+	s->ldr = readl(m + APIC_LDR);
+	s->dfr = readl(m + APIC_DFR);
+	s->spiv = readl(m + APIC_SPIV);
+	s->lvtt = readl(m + APIC_LVTT);
+	s->lvtpc = readl(m + APIC_LVTPC);
+	s->lvt0 = readl(m + APIC_LVT0);
+	s->lvt1 = readl(m + APIC_LVT1);
+	s->lvterr = readl(m + APIC_LVTERR);
+	s->tdcr = readl(m + APIC_TDCR);
+	s->thmr = readl(m + APIC_LVTTHMR);
+	s->valid = true;
+}
+
+static void deadman_restore_lapic(const struct deadman_lapic *s)
+{
+	void __iomem *m = (void __iomem *)APIC_BASE;
+
+	writel(ERROR_APIC_VECTOR | APIC_LVT_MASKED, m + APIC_LVTERR);
+	writel(s->id, m + APIC_ID);
+	writel(s->dfr, m + APIC_DFR);
+	writel(s->ldr, m + APIC_LDR);
+	writel(s->tpr, m + APIC_TASKPRI);
+	writel(s->spiv, m + APIC_SPIV);
+	writel(s->lvt0, m + APIC_LVT0);
+	writel(s->lvt1, m + APIC_LVT1);
+	if (s->maxlvt >= 5)
+		writel(s->thmr, m + APIC_LVTTHMR);
+	if (s->maxlvt >= 4)
+		writel(s->lvtpc, m + APIC_LVTPC);
+	writel(s->lvtt, m + APIC_LVTT);
+	writel(s->tdcr, m + APIC_TDCR);
+	/* Fire the one-shot timer at once; its handler programs the next event. */
+	writel(1, m + APIC_TMICT);
+	writel(0, m + APIC_ESR);
+	readl(m + APIC_ESR);
+	writel(s->lvterr, m + APIC_LVTERR);
+	writel(0, m + APIC_ESR);
+	readl(m + APIC_ESR);
+}
 
 #define DEADMAN_NR_EVENTS 32
 static struct deadman_apic_event deadman_events[DEADMAN_NR_EVENTS];
@@ -260,11 +335,13 @@ static void deadman_print_event(const struct deadman_apic_event *ev)
 			 ev->ns / NSEC_PER_SEC, (ev->ns % NSEC_PER_SEC) / 1000,
 			 ev->cpu, ev->id_after);
 	else
-		pr_emerg("sleep_deadman: [%llu.%06llu] CPU %d APIC MMIO stopped decoding (seen by %s at %pS, APIC_BASE=%llx)%s ID after=%08x\n",
+		pr_emerg("sleep_deadman: [%llu.%06llu] CPU %d APIC MMIO stopped decoding (seen by %s at %pS, APIC_BASE=%llx)%s ID after=%08x SPIV=%08x LVTT=%08x LVT0=%08x LVTERR=%08x%s restored SPIV=%08x LVTT=%08x\n",
 			 ev->ns / NSEC_PER_SEC, (ev->ns % NSEC_PER_SEC) / 1000,
 			 ev->cpu, ev->where == DEADMAN_EV_NMI ? "NMI" : "poll",
 			 (void *)ev->ip, ev->base,
-			 ev->repaired ? ", APIC_BASE rewritten," : ",", ev->id_after);
+			 ev->repaired ? ", APIC_BASE rewritten," : ",", ev->id_after,
+			 ev->spiv, ev->lvtt, ev->lvt0, ev->lvterr,
+			 ev->restored ? "; registers" : "; not", ev->r_spiv, ev->r_lvtt);
 }
 
 /*
@@ -292,6 +369,8 @@ static void deadman_apic_check(u8 where, unsigned long ip)
 			deadman_record(&ev);
 			deadman_print_event(&ev);
 		}
+		if (where == DEADMAN_EV_POLL)
+			deadman_save_lapic();
 		return;
 	}
 	if (this_cpu_read(deadman_poll_bad))
@@ -304,8 +383,19 @@ static void deadman_apic_check(u8 where, unsigned long ip)
 		ev.repaired = true;
 	}
 	ev.id_after = readl(mmio + APIC_ID);
-	if (ev.id_after != ~0U)
+	if (ev.id_after != ~0U) {
+		ev.spiv = readl(mmio + APIC_SPIV);
+		ev.lvtt = readl(mmio + APIC_LVTT);
+		ev.lvt0 = readl(mmio + APIC_LVT0);
+		ev.lvterr = readl(mmio + APIC_LVTERR);
+		if (apic_restore && this_cpu_ptr(&deadman_good)->valid) {
+			deadman_restore_lapic(this_cpu_ptr(&deadman_good));
+			ev.restored = true;
+			ev.r_spiv = readl(mmio + APIC_SPIV);
+			ev.r_lvtt = readl(mmio + APIC_LVTT);
+		}
 		this_cpu_write(deadman_poll_bad, false);
+	}
 	deadman_record(&ev);
 	deadman_print_event(&ev);
 }
