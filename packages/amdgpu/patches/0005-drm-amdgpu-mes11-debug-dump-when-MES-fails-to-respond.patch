@@ -1,16 +1,36 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-Subject: [PATCH] drm/amdgpu/mes11: debug dump when MES or its KIQ fails to respond
+Subject: [PATCH] drm/amdgpu/mes11: debug MES start-up after hibernation restore
 
 Debug patch, not for upstream as is. After some hibernation restores on
-GC 11.5.0, MES never answers SET_HW_RSRC, or the KIQ ring test fails.
-Print the MES control register, two samples of each MES pipe's
-instruction pointer, GP0-GP3, the MES ring and fence state, and the PSP
-mailbox registers, to tell a MES that never started from one that is
-stuck or waiting on the PSP. The KIQ ring test also reports how long its
-poll took by each clock.
+GC 11.5.0 the MES pipes are enabled but never execute: the KIQ ring test
+or SET_HW_RSRC times out with both instruction pointers at 0.
+Log the PSP's answer to each MES firmware load and the MES pipe state
+right after the pipes are enabled, and on a MES or KIQ timeout dump the
+MES control register, pipe instruction pointers, GP0-GP3, ring and
+fence state, the PSP mailbox registers, and the KIQ poll time by each
+clock.
 ---
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+index 42adc8e..1563ed7 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+@@ -3401,6 +3401,14 @@ int psp_execute_ip_fw_load(struct psp_context *psp,
+ 					 psp->fence_buf_mc_addr);
+ 	}
+ 
++	/* Debug: the PSP's answer to each MES firmware load. */
++	if (ucode->ucode_id >= AMDGPU_UCODE_ID_CP_MES &&
++	    ucode->ucode_id <= AMDGPU_UCODE_ID_CP_MES1_DATA)
++		dev_info(psp->adev->dev,
++			 "PSP load %s: ret=%d status=%08x mc=%llx size=%u\n",
++			 amdgpu_ucode_name(ucode->ucode_id), ret,
++			 cmd->resp.status, ucode->mc_addr, ucode->ucode_size);
++
+ 	release_psp_cmd_buf(psp);
+ 
+ 	return ret;
 diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
-index 7a006b2..99102d5 100644
+index 7a006b2..193c216 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
 @@ -21,6 +21,7 @@
@@ -43,7 +63,7 @@ index 7a006b2..99102d5 100644
  	for (i = 0; i < adev->usec_timeout; i++) {
  		tmp = RREG32(scratch);
  		if (tmp == 0xDEADBEEF)
-@@ -614,8 +623,17 @@ static int gfx_v11_0_ring_test_ring(struct amdgpu_ring *ring)
+@@ -614,8 +623,18 @@ static int gfx_v11_0_ring_test_ring(struct amdgpu_ring *ring)
  			udelay(1);
  	}
  
@@ -57,13 +77,14 @@ index 7a006b2..99102d5 100644
 +			ktime_get_raw_ns() - t0_raw, local_clock() - t0_local,
 +			jiffies - j0, cpu0, raw_smp_processor_id());
 +		if (adev->enable_mes)
-+			mes_v11_0_dump_hang(adev, &adev->mes.ring[0], 0, 0);
++			mes_v11_0_dump_state(adev, KERN_ERR, "hang",
++					     &adev->mes.ring[0], 0, 0);
 +	}
  	return r;
  }
  
 diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-index 10bed6f..7c22f3f 100644
+index 10bed6f..03ce792 100644
 --- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
 @@ -31,7 +31,9 @@
@@ -76,7 +97,7 @@ index 10bed6f..7c22f3f 100644
  
  MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes.bin");
  MODULE_FIRMWARE("amdgpu/gc_11_0_0_mes_2.bin");
-@@ -173,6 +175,59 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
+@@ -173,6 +175,60 @@ static const char *mes_v11_0_get_misc_op_string(union MESAPI__MISC *x_pkt)
  	return op_str;
  }
  
@@ -86,8 +107,9 @@ index 10bed6f..7c22f3f 100644
 + * the MES ring got, and the PSP mailbox state, so a hang after hibernation
 + * restore can be told apart from a MES that never started.
 + */
-+void mes_v11_0_dump_hang(struct amdgpu_device *adev,
-+				struct amdgpu_ring *ring, u32 seq, u64 status)
++void mes_v11_0_dump_state(struct amdgpu_device *adev, const char *level,
++			  const char *why, struct amdgpu_ring *ring, u32 seq,
++			  u64 status)
 +{
 +	u32 ip[AMDGPU_MAX_MES_PIPES][2], gp[AMDGPU_MAX_MES_PIPES][4];
 +	u32 cntl = RREG32_SOC15(GC, 0, regCP_MES_CNTL);
@@ -114,20 +136,20 @@ index 10bed6f..7c22f3f 100644
 +		mutex_unlock(&adev->srbm_mutex);
 +	}
 +
-+	dev_err(adev->dev, "MES hang: CP_MES_CNTL=%08x srbm=%d\n", cntl, sel);
++	dev_printk(level, adev->dev, "MES %s: CP_MES_CNTL=%08x srbm=%d\n", why, cntl, sel);
 +	for (pipe = 0; pipe < AMDGPU_MAX_MES_PIPES; pipe++)
-+		dev_err(adev->dev,
-+			"MES hang: pipe%d IP=%08x,%08x GP0-3=%08x %08x %08x %08x\n",
-+			pipe, ip[pipe][0], ip[pipe][1], gp[pipe][0], gp[pipe][1],
++		dev_printk(level, adev->dev,
++			"MES %s: pipe%d IP=%08x,%08x GP0-3=%08x %08x %08x %08x\n",
++			why, pipe, ip[pipe][0], ip[pipe][1], gp[pipe][0], gp[pipe][1],
 +			gp[pipe][2], gp[pipe][3]);
-+	dev_err(adev->dev,
-+		"MES hang: ring rptr=%llx wptr=%llx fence=%u seq=%u api_status=%llx ready=%d\n",
-+		amdgpu_ring_get_rptr(ring), ring->wptr,
++	dev_printk(level, adev->dev,
++		"MES %s: ring rptr=%llx wptr=%llx fence=%u seq=%u api_status=%llx ready=%d\n",
++		why, amdgpu_ring_get_rptr(ring), ring->wptr,
 +		le32_to_cpu(*ring->fence_drv.cpu_addr), seq, status,
 +		ring->sched.ready);
-+	dev_err(adev->dev,
-+		"MES hang: PSP C2PMSG_33=%08x 35=%08x 64=%08x 81=%08x\n",
-+		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_33),
++	dev_printk(level, adev->dev,
++		"MES %s: PSP C2PMSG_33=%08x 35=%08x 64=%08x 81=%08x\n",
++		why, RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_33),
 +		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_35),
 +		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_64),
 +		RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_81));
@@ -136,24 +158,36 @@ index 10bed6f..7c22f3f 100644
  static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
  						    void *pkt, int size,
  						    int api_status_off)
-@@ -268,6 +323,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
+@@ -268,6 +324,7 @@ static int mes_v11_0_submit_pkt_and_poll_completion(struct amdgpu_mes *mes,
  			dev_err(adev->dev, "MES failed to respond to msg=%d\n",
  				x_pkt->header.opcode);
  
-+		mes_v11_0_dump_hang(adev, ring, seq, *status_ptr);
++		mes_v11_0_dump_state(adev, KERN_ERR, "hang", ring, seq, *status_ptr);
  		while (halt_if_hws_hang)
  			schedule();
  
+@@ -1899,6 +1956,10 @@ static int mes_v11_0_kiq_hw_init(struct amdgpu_device *adev, uint32_t xcc_id)
+ 
+ 	mes_v11_0_enable(adev, true);
+ 
++	/* Debug: is MES running once enabled? */
++	mes_v11_0_dump_state(adev, KERN_INFO, "enabled", &adev->mes.ring[0],
++			     0, 0);
++
+ 	mes_v11_0_get_fw_version(adev);
+ 
+ 	mes_v11_0_kiq_setting(&adev->gfx.kiq[0].ring);
 diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h
-index b3519e1..57bab4d 100644
+index b3519e1..300d2b0 100644
 --- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h
 +++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.h
-@@ -26,4 +26,8 @@
+@@ -26,4 +26,9 @@
  
  extern const struct amdgpu_ip_block_version mes_v11_0_ip_block;
  
 +struct amdgpu_ring;
-+void mes_v11_0_dump_hang(struct amdgpu_device *adev,
-+			 struct amdgpu_ring *ring, u32 seq, u64 status);
++void mes_v11_0_dump_state(struct amdgpu_device *adev, const char *level,
++			  const char *why, struct amdgpu_ring *ring, u32 seq,
++			  u64 status);
 +
  #endif
