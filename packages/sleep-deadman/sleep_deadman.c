@@ -39,6 +39,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 #include <linux/panic.h>
+#include <linux/panic_notifier.h>
 #include <linux/rcupdate.h>
 #include <linux/sched.h>
 #include <linux/sched/debug.h>
@@ -164,6 +165,9 @@ static void deadman_check_apics(const char *when)
 		atomic_read(&deadman_apic_bad_cpus), num_online_cpus());
 }
 
+enum { DEADMAN_EV_POLL, DEADMAN_EV_NMI };
+static void deadman_apic_check(u8 where, unsigned long ip);
+
 static int deadman_idle_nmi(unsigned int type, struct pt_regs *regs)
 {
 	struct deadman_apic_state s;
@@ -172,6 +176,7 @@ static int deadman_idle_nmi(unsigned int type, struct pt_regs *regs)
 
 	if (!(atomic_read(&deadman_watching) || idle_nmi_always))
 		return NMI_DONE;
+	deadman_apic_check(DEADMAN_EV_NMI, instruction_pointer(regs));
 	if (this_cpu_read(deadman_idle_dumped) &&
 	    time_before(jiffies, this_cpu_read(deadman_idle_dumped) + 5 * HZ))
 		return NMI_DONE;
@@ -220,29 +225,111 @@ MODULE_PARM_DESC(apic_repair,
 static DEFINE_PER_CPU(struct hrtimer, deadman_poll);
 static DEFINE_PER_CPU(bool, deadman_poll_bad);
 
-static enum hrtimer_restart deadman_poll_fn(struct hrtimer *t)
+/*
+ * APIC MMIO events, kept so a panic notifier can print them last: the
+ * hard-lockup backtraces of all CPUs otherwise push them out of the few
+ * kilobytes pstore saves.
+ */
+struct deadman_apic_event {
+	u64 ns;
+	u64 base;
+	unsigned long ip;
+	u32 id_before, id_after;
+	int cpu;
+	u8 where;
+	bool repaired;
+	bool recovered;
+};
+
+#define DEADMAN_NR_EVENTS 32
+static struct deadman_apic_event deadman_events[DEADMAN_NR_EVENTS];
+static atomic_t deadman_nr_events;
+
+static void deadman_record(const struct deadman_apic_event *ev)
+{
+	int n = atomic_fetch_inc(&deadman_nr_events);
+
+	if (n < DEADMAN_NR_EVENTS)
+		deadman_events[n] = *ev;
+}
+
+static void deadman_print_event(const struct deadman_apic_event *ev)
+{
+	if (ev->recovered)
+		pr_emerg("sleep_deadman: [%llu.%06llu] CPU %d APIC MMIO decodes again (ID=%08x)\n",
+			 ev->ns / NSEC_PER_SEC, (ev->ns % NSEC_PER_SEC) / 1000,
+			 ev->cpu, ev->id_after);
+	else
+		pr_emerg("sleep_deadman: [%llu.%06llu] CPU %d APIC MMIO stopped decoding (seen by %s at %pS, APIC_BASE=%llx)%s ID after=%08x\n",
+			 ev->ns / NSEC_PER_SEC, (ev->ns % NSEC_PER_SEC) / 1000,
+			 ev->cpu, ev->where == DEADMAN_EV_NMI ? "NMI" : "poll",
+			 (void *)ev->ip, ev->base,
+			 ev->repaired ? ", APIC_BASE rewritten," : ",", ev->id_after);
+}
+
+/*
+ * Check that this CPU's APIC MMIO page decodes; if it reads all ones,
+ * rewrite APIC_BASE with its own value and read again. Runs from the
+ * 20 ms poll and from every NMI (the watchdog NMI still reaches a CPU
+ * that spins with interrupts off).
+ */
+static void deadman_apic_check(u8 where, unsigned long ip)
 {
 	void __iomem *mmio = (void __iomem *)APIC_BASE;
-	u32 id = readl(mmio + APIC_ID);
-	int cpu = smp_processor_id();
+	struct deadman_apic_event ev = {
+		.cpu = smp_processor_id(),
+		.where = where,
+		.ip = ip,
+	};
 
-	if (id == ~0U && !this_cpu_read(deadman_poll_bad)) {
-		u64 base = deadman_rdmsr(MSR_IA32_APICBASE);
-
-		this_cpu_write(deadman_poll_bad, true);
-		pr_emerg("sleep_deadman: CPU %d APIC MMIO stopped decoding (APIC_BASE=%llx)\n",
-			 cpu, base);
-		if (apic_repair && base != ~0ULL) {
-			wrmsrq(MSR_IA32_APICBASE, base);
-			id = readl(mmio + APIC_ID);
-			pr_emerg("sleep_deadman: CPU %d APIC_BASE rewritten: MMIO ID now %08x\n",
-				 cpu, id);
+	ev.id_before = readl(mmio + APIC_ID);
+	if (ev.id_before != ~0U) {
+		if (this_cpu_read(deadman_poll_bad)) {
+			this_cpu_write(deadman_poll_bad, false);
+			ev.ns = ktime_get_mono_fast_ns();
+			ev.id_after = ev.id_before;
+			ev.recovered = true;
+			deadman_record(&ev);
+			deadman_print_event(&ev);
 		}
-	} else if (id != ~0U && this_cpu_read(deadman_poll_bad)) {
-		this_cpu_write(deadman_poll_bad, false);
-		pr_emerg("sleep_deadman: CPU %d APIC MMIO decodes again (ID=%08x)\n",
-			 cpu, id);
+		return;
 	}
+	if (this_cpu_read(deadman_poll_bad))
+		return;
+	this_cpu_write(deadman_poll_bad, true);
+	ev.ns = ktime_get_mono_fast_ns();
+	ev.base = deadman_rdmsr(MSR_IA32_APICBASE);
+	if (apic_repair && ev.base != ~0ULL) {
+		wrmsrq(MSR_IA32_APICBASE, ev.base);
+		ev.repaired = true;
+	}
+	ev.id_after = readl(mmio + APIC_ID);
+	if (ev.id_after != ~0U)
+		this_cpu_write(deadman_poll_bad, false);
+	deadman_record(&ev);
+	deadman_print_event(&ev);
+}
+
+static int deadman_panic_notify(struct notifier_block *nb, unsigned long action,
+				void *data)
+{
+	int i, n = min(atomic_read(&deadman_nr_events), DEADMAN_NR_EVENTS);
+
+	pr_emerg("sleep_deadman: %d APIC MMIO event(s) this boot\n",
+		 atomic_read(&deadman_nr_events));
+	for (i = 0; i < n; i++)
+		deadman_print_event(&deadman_events[i]);
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block deadman_panic_nb = {
+	.notifier_call = deadman_panic_notify,
+	.priority = INT_MIN,
+};
+
+static enum hrtimer_restart deadman_poll_fn(struct hrtimer *t)
+{
+	deadman_apic_check(DEADMAN_EV_POLL, 0);
 	if (!atomic_read(&deadman_watching))
 		return HRTIMER_NORESTART;
 	hrtimer_forward_now(t, ns_to_ktime(DEADMAN_POLL_NS));
@@ -383,6 +470,7 @@ static int __init deadman_init(void)
 		cpuhp_remove_state_nocalls(deadman_cpuhp);
 		return r;
 	}
+	atomic_notifier_chain_register(&panic_notifier_list, &deadman_panic_nb);
 	smp_call_function_single(0, deadman_read_ref, NULL, 1);
 	deadman_print_apic("reference", 0, &deadman_ref);
 	deadman_check_apics("at load");
@@ -391,6 +479,7 @@ static int __init deadman_init(void)
 
 static void __exit deadman_exit(void)
 {
+	atomic_notifier_chain_unregister(&panic_notifier_list, &deadman_panic_nb);
 	unregister_pm_notifier(&deadman_nb);
 	deadman_watch(false);
 	cpuhp_remove_state_nocalls(deadman_cpuhp);
