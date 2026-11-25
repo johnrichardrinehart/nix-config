@@ -262,11 +262,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795630743,
-        "narHash": "sha256-GRNUET6ASwpuC66JoU5tLE5yEHkbCTHxGoNmvDe5mI8=",
+        "lastModified": 1795639364,
+        "narHash": "sha256-9U/GwpUkRPYghARIH9Rfn2v8fquMxV5YnEUeY65bAkA=",
         "owner": "johnrichardrinehart",
         "repo": "keepassxc-hybrid",
-        "rev": "64e5f9752a6ff59facea6778fb9245df8a1e5a84",
+        "rev": "6b9b8dcf9c2c34d94a7d9d45c27f8578870b7000",
         "type": "github"
       },
       "original": {
