@@ -71,18 +71,42 @@ let
   # Mod+Ctrl+P answers a passkey QR code on screen (the browser's "use your
   # phone or tablet" code) with KeePassXC: keepassxc-hybrid finds the code in a
   # capture of every output, and KeePassXC asks which entry the passkey is for.
+  # A notification shows each run from its start; pressing the key again
+  # while a run waits for the browser cancels that run.
   passkey-from-screen = pkgs.writeShellApplication {
     name = "passkey-from-screen";
     runtimeInputs = [
       pkgs.dev.johnrinehart.keepassxc-hybrid
       pkgs.grim
       pkgs.libnotify
+      pkgs.procps
     ];
     text = ''
+      pidfile=$XDG_RUNTIME_DIR/passkey-from-screen.pid
+      if running=$(cat "$pidfile" 2>/dev/null) &&
+        grep -qs passkey-from-screen "/proc/$running/cmdline"; then
+        kill -TERM "$running"
+        exit 0
+      fi
+      echo $$ >"$pidfile"
       log=$(mktemp)
-      trap 'rm -f "$log"' EXIT
-      if ! grim - | keepassxc-hybrid - 2>"$log"; then
-        notify-send --app-name=keepassxc-hybrid "Passkey QR code failed" "$(tail -n 3 "$log")"
+      trap 'rm -f "$log" "$pidfile"' EXIT
+
+      notify() {
+        notify-send --app-name=keepassxc-hybrid --replace-id="$id" "$@"
+      }
+      id=$(notify-send --app-name=keepassxc-hybrid --print-id \
+        "Passkey QR code" "Waiting for the browser. Press Mod+Ctrl+P again to cancel.")
+
+      grim - | keepassxc-hybrid - 2>"$log" &
+      helper=$!
+      trap 'pkill -TERM -P $$ || true; notify "Passkey QR code cancelled"; exit 0' TERM
+
+      if wait "$helper"; then
+        notify "Passkey QR code done" "KeePassXC answered the browser."
+      else
+        # The final line is the error; HTTP errors from the relay run long.
+        notify --urgency=critical "Passkey QR code failed" "$(tail -n 1 "$log" | cut -c 1-240)"
         exit 1
       fi
     '';
