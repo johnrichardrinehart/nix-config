@@ -218,8 +218,17 @@ if grep -Fq 'untrusted-node.other-tail.ts.net' "$calls_file"; then
 fi
 
 original_inode=$(stat -c %i "$machines_file")
+: >"$calls_file"
 run_program
 [[ $(stat -c %i "$machines_file") == "$original_inode" ]]
+if grep -Fqx 'ssh remoteowner@standard-node.standard-tail.ts.net' "$calls_file"; then
+  echo "re-probed failing derived SSH user instead of remembered fallback user" >&2
+  exit 1
+fi
+if ! grep -Fqx 'ssh builder@standard-node.standard-tail.ts.net' "$calls_file"; then
+  echo "expected remembered fallback SSH user to be probed" >&2
+  exit 1
+fi
 
 cat >"$status_file" <<'EOF'
 {
@@ -275,11 +284,16 @@ EOF
 
 : >"$ssh_failures_file"
 : >"$nix_failures_file"
+: >"$calls_file"
 printf 'standard-node.standard-tail.ts.net\n' >"$pingable_file"
 run_program
 assert_machines <<EOF
 ssh-ng://builder@standard-node.standard-tail.ts.net x86_64-linux $ssh_key 4 1 $features - $host_key_base64
 EOF
+if grep -Fqx 'ssh remoteowner@standard-node.standard-tail.ts.net' "$calls_file"; then
+  echo "re-probed failing derived SSH user after peer returned online" >&2
+  exit 1
+fi
 
 export MOCK_STATUS_FAIL=1
 run_program

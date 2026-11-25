@@ -63,6 +63,8 @@ in
     "z ${statePath} 0700 ${primaryUser} ${primaryGroup} -"
     "d ${statePath}/known-hosts 0700 ${primaryUser} ${primaryGroup} -"
     "Z ${statePath}/known-hosts 0700 ${primaryUser} ${primaryGroup} -"
+    "d ${statePath}/accepted-users 0700 ${primaryUser} ${primaryGroup} -"
+    "Z ${statePath}/accepted-users 0700 ${primaryUser} ${primaryGroup} -"
   ];
 
   systemd.user.services.tailscale-nix-builders = {

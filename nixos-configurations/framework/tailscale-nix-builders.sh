@@ -48,7 +48,7 @@ fi
 
 machines_dir=$(dirname -- "$machines_file")
 install -d -m 0755 "$machines_dir"
-install -d -m 0700 "$state_dir" "$state_dir/known-hosts"
+install -d -m 0700 "$state_dir" "$state_dir/known-hosts" "$state_dir/accepted-users"
 
 exec 9>"$state_dir/lock"
 if ! flock -n 9; then
@@ -167,10 +167,13 @@ probe_builder() {
   local host_key
   local host_key_base64
   local known_hosts_file=$state_dir/known-hosts/$dns_name
+  local accepted_user_file=$state_dir/accepted-users/$dns_name
+  local remembered_ssh_user=
   local nix_ssh_opts
   local remote_system
   local result_file=$results_dir/$user_id-$dns_name
   local selected_target=
+  local selected_ssh_user=
   local ssh_user
   local target
   local -a ssh_users=()
@@ -198,10 +201,19 @@ probe_builder() {
   fi
 
   derived_ssh_user=$(ssh_user_from_login "$login_name")
-  if [[ -n $derived_ssh_user ]]; then
+  if [[ -r $accepted_user_file ]]; then
+    IFS= read -r remembered_ssh_user <"$accepted_user_file" || true
+  fi
+  if [[ -n $remembered_ssh_user ]] && {
+    [[ $remembered_ssh_user == "$derived_ssh_user" ]] ||
+      [[ $remembered_ssh_user == "$fallback_ssh_user" ]]
+  }; then
+    ssh_users+=("$remembered_ssh_user")
+  fi
+  if [[ -n $derived_ssh_user && $derived_ssh_user != "$remembered_ssh_user" ]]; then
     ssh_users+=("$derived_ssh_user")
   fi
-  if [[ $fallback_ssh_user != "$derived_ssh_user" ]]; then
+  if [[ $fallback_ssh_user != "$derived_ssh_user" && $fallback_ssh_user != "$remembered_ssh_user" ]]; then
     ssh_users+=("$fallback_ssh_user")
   fi
 
@@ -223,6 +235,7 @@ probe_builder() {
       --extra-experimental-features nix-command \
       store info --store "ssh-ng://$target?ssh-key=$ssh_key" >/dev/null 2>&1; then
       selected_target=$target
+      selected_ssh_user=$ssh_user
       break
     fi
   done
@@ -231,6 +244,12 @@ probe_builder() {
     log "skipping $dns_name: no derived SSH account exposes an ssh-ng Nix store"
     return
   fi
+
+  local accepted_user_tmp
+  accepted_user_tmp=$(mktemp "$state_dir/accepted-users/.${dns_name}.XXXXXX")
+  printf '%s\n' "$selected_ssh_user" >"$accepted_user_tmp"
+  chmod 0600 "$accepted_user_tmp"
+  mv -fT "$accepted_user_tmp" "$accepted_user_file"
 
   host_key=$("$SSH_KEYGEN_BIN" -F "$dns_name" -f "$known_hosts_file" 2>/dev/null |
     awk '!/^#/ && NF >= 3 { print $2 " " $3; exit }')
