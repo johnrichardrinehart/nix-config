@@ -68,6 +68,26 @@ let
     inherit wormhole-send;
   };
 
+  # Mod+Ctrl+P answers a passkey QR code on screen (the browser's "use your
+  # phone or tablet" code) with KeePassXC: keepassxc-hybrid finds the code in a
+  # capture of every output, and KeePassXC asks which entry the passkey is for.
+  passkey-from-screen = pkgs.writeShellApplication {
+    name = "passkey-from-screen";
+    runtimeInputs = [
+      pkgs.dev.johnrinehart.keepassxc-hybrid
+      pkgs.grim
+      pkgs.libnotify
+    ];
+    text = ''
+      log=$(mktemp)
+      trap 'rm -f "$log"' EXIT
+      if ! grim - | keepassxc-hybrid - 2>"$log"; then
+        notify-send --app-name=keepassxc-hybrid "Passkey QR code failed" "$(tail -n 3 "$log")"
+        exit 1
+      fi
+    '';
+  };
+
   inherit (pkgs.dev.johnrinehart)
     brightness-notify
     keyboard-brightness-notify
@@ -580,6 +600,7 @@ in
             display_layout_editor = lib.getExe display-layout;
             niri_cycle_display_mode = lib.getExe niri-cycle-display-mode;
             niri_screenshot = lib.getExe niri-screenshot;
+            passkey_from_screen = lib.getExe passkey-from-screen;
             playerctl = lib.getExe pkgs.playerctl;
             volume_notify = lib.getExe volume-notify;
             wormhole_send = lib.getExe wormhole-send;

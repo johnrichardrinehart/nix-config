@@ -102,7 +102,8 @@ in
         pkgs.gnome-icon-theme
         pkgs.vscodium
         braveWithInputLogging
-        pkgs.keepassxc
+        pkgs.dev.johnrinehart.keepassxc
+        pkgs.dev.johnrinehart.keepassxc-hybrid
         pkgs.pavucontrol
         pkgs.gparted
       ];

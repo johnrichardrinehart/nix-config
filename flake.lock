@@ -255,6 +255,26 @@
         "type": "github"
       }
     },
+    "keepassxc-hybrid": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795630743,
+        "narHash": "sha256-GRNUET6ASwpuC66JoU5tLE5yEHkbCTHxGoNmvDe5mI8=",
+        "owner": "johnrichardrinehart",
+        "repo": "keepassxc-hybrid",
+        "rev": "64e5f9752a6ff59facea6778fb9245df8a1e5a84",
+        "type": "github"
+      },
+      "original": {
+        "owner": "johnrichardrinehart",
+        "repo": "keepassxc-hybrid",
+        "type": "github"
+      }
+    },
     "kitkat-rs": {
       "inputs": {
         "nixpkgs": [
@@ -550,6 +570,7 @@
         "git-meld": "git-meld",
         "home-manager": "home-manager",
         "home-manager-nixos": "home-manager-nixos",
+        "keepassxc-hybrid": "keepassxc-hybrid",
         "kitkat-rs": "kitkat-rs",
         "lanzaboote": "lanzaboote",
         "monstar": "monstar",

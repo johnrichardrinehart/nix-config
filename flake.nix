@@ -21,6 +21,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    keepassxc-hybrid = {
+      url = "github:johnrichardrinehart/keepassxc-hybrid";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       # release-26.05 plus nix-community/home-manager#10006, which master
       # contains (cf22324a2724) but release-26.05 does not.

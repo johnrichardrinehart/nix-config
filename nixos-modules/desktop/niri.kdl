@@ -764,6 +764,10 @@ binds {
     Mod+Alt+S repeat=false {
         spawn "@niri_screenshot@" "region-wormhole"
     }
+    // Answer a passkey QR code on screen with KeePassXC
+    Mod+Ctrl+P repeat=false hotkey-overlay-title="Passkey from QR Code on Screen" {
+        spawn "@passkey_from_screen@"
+    }
     // View clipboard history with automatic image previews.
     Mod+Shift+C {
         spawn "@cliphist_picker@"

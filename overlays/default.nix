@@ -58,6 +58,14 @@ inputs: {
           inherit (inputs) git-meld;
           system = final.stdenv.hostPlatform.system;
         };
+        keepassxc = {
+          inherit (prev) keepassxc;
+          inherit (inputs) keepassxc-hybrid;
+        };
+        keepassxc-hybrid = {
+          inherit (inputs) keepassxc-hybrid;
+          system = final.stdenv.hostPlatform.system;
+        };
         kitkat-rs-faster = {
           inherit (inputs) kitkat-rs;
           system = final.stdenv.hostPlatform.system;

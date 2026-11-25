@@ -252,6 +252,18 @@ Framework disables the Bluetooth idle timer so keyboards can reconnect after sle
 BlueZ automatically enables the adapter through `[Policy] AutoEnable=true`.
 Framework does not power-cycle the adapter during resume.
 
+## Passkeys from QR codes
+
+Hosts with `dev.johnrinehart.packages.gui.enable` get KeePassXC with the
+[keepassxc-hybrid](https://github.com/johnrichardrinehart/keepassxc-hybrid)
+patch, and the `keepassxc-hybrid` command. On `greetd+niri` hosts, Mod+Ctrl+P
+captures the screen, finds a browser's "use your phone or tablet" passkey QR
+code, and answers it with KeePassXC: KeePassXC asks which entry gets the
+passkey, or which passkey to sign in with. A notification shows failures.
+KeePassXC needs Settings > Browser Integration > Enable browser integration.
+The browser must hear this machine's Bluetooth, so it has to run on another
+device or use a second Bluetooth adapter.
+
 ## Login greeter
 
 Each `greetd+niri` host (`framework`, `framework-13-pro` and
