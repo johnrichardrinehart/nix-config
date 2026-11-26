@@ -169,6 +169,28 @@ in
       '';
     };
 
+    # Resume from hibernation adds no sleep time to the system clock, so the
+    # clock stays behind by the whole powered-off period. The makestep limit
+    # above lets a running chronyd only slew, at 83 ppm or less. A restart
+    # opens a new 3-update step window and corrects the clock in seconds.
+    systemd.services.chronyd-resync-after-hibernate =
+      let
+        hibernateTargets = [
+          "hibernate.target"
+          "hybrid-sleep.target"
+          "suspend-then-hibernate.target"
+        ];
+      in
+      {
+        description = "Restart chronyd to step the clock after hibernation";
+        after = hibernateTargets;
+        wantedBy = hibernateTargets;
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${config.systemd.package}/bin/systemctl try-restart chronyd.service";
+        };
+      };
+
     networking.timeServers = options.networking.timeServers.default ++ [ "time.facebook.com" ];
 
     services.upower = {
