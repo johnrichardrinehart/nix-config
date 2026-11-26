@@ -180,6 +180,9 @@ in
         # switch-to-configuration waits for a restarted oneshot, so a long
         # upload would block activation. The path unit starts it instead.
         restartIfChanged = false;
+        # The protected client stub ignores `token-file` in auth.toml and reads
+        # only this variable or an inline token. %d is the credentials folder.
+        environment.NEOCACHE_CLIENT_TOKEN_FILE = "%d/token";
         serviceConfig = {
           Type = "oneshot";
           ExecStart = lib.getExe push;
