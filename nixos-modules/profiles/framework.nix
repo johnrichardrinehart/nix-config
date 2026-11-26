@@ -169,10 +169,36 @@ in
       '';
     };
 
-    # Resume from hibernation adds no sleep time to the system clock, so the
-    # clock stays behind by the whole powered-off period. The makestep limit
-    # above lets a running chronyd only slew, at 83 ppm or less. A restart
-    # opens a new 3-update step window and corrects the clock in seconds.
+    # The RTC on framie (11th Gen, RTC Battery Substitute instead of an ML1220
+    # cell) loses power during hibernation on battery and restarts at
+    # 2021-01-01. The kernel then adds no sleep time on resume, so the clock
+    # stays behind by the whole powered-off period.
+    #
+    # Cause: in the hx20 EC (FrameworkComputer/EmbeddedController f6620a8),
+    # board/hx20/power_sequence.c:578-580 calls board_power_off() on S5 to G3
+    # without AC, and board/hx20/board.c:470-474 (board_extpower) does the same
+    # when AC is removed while the host is off. 30 s later,
+    # board_power_off_deferred() (board.c:417) calls charge_gate_onoff(0),
+    # drives VS_ON low, and releases the VCI latch. The board, the EC, and the
+    # RTC substitute then have no power.
+    #
+    # Hibernation on AC: the EC code does not power off, so the RTC keeps time
+    # and the kernel adds the sleep time (not yet tested on framie).
+    # Hibernation on battery: the RTC resets. An armed RTC wake alarm
+    # (keep_pch_power(), power_sequence.c:111) also keeps power on.
+    #
+    # Possible permanent fixes:
+    # - EC firmware: patch board_power_off_deferred() to leave the battery
+    #   gates on (conducting), so that the substitute stays powered. This
+    #   is not tested. It costs battery drain while the host is off. Get
+    #   electrical advice before you flash it.
+    # - Hardware: make sure that the substitute's 17.6 V wire connects
+    #   upstream of the battery gates, as in Framework's RTC Battery
+    #   Substitution guide. Alternatively, install a real ML1220 cell.
+    #
+    # Until then: the makestep limit above lets a running chronyd only slew,
+    # at 83 ppm or less. A restart opens a new 3-update step window and
+    # corrects the clock in seconds when a network time source is available.
     systemd.services.chronyd-resync-after-hibernate =
       let
         hibernateTargets = [
