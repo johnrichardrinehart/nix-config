@@ -637,6 +637,8 @@ in
 
       autosuggestion.enable = true;
 
+      history.extended = true;
+
       shellAliases =
         let
           fetchLatestKernelVersion =

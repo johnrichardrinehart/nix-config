@@ -1,6 +1,9 @@
 { inputs, lib, ... }:
 {
   config._module.args.inputs = lib.mkDefault inputs;
+  # Record a start time and duration with each zsh history entry. mkOptionDefault
+  # merges the entry with the NixOS default options instead of replacing them.
+  config.programs.zsh.setOptions = lib.mkOptionDefault [ "EXTENDED_HISTORY" ];
 
   options.dev.johnrinehart.users = {
     primary = lib.mkOption {

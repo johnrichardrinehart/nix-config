@@ -161,6 +161,7 @@ in
 
     programs.zsh = {
       enable = true;
+      history.extended = true;
       initContent = ''
         # zsh picks the vi keymap whenever $EDITOR/$VISUAL contain "vi"
         # (silently unbinding ^A, ^R, ...). Line editing stays emacs.
