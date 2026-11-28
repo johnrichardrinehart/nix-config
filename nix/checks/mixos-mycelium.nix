@@ -77,6 +77,8 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q 'nebula-registry --config /etc/nebula/registry.json' ${regRun}
   grep -q '"10.77.0.11"' ${regCfg}
   grep -q '"peer-uz801-0.mycelium.internal"' ${regCfg}
+  grep -q '"/state/secrets/nebula-registry-tls-cert"' ${regCfg}
+  grep -q '"/state/secrets/nebula-registry-tls-key"' ${regCfg}
   grep -q '"/sbin/dbclient"' ${regCfg}
 
   # Cloudflare DDNS service wired for host-deployed SOPS token + valid shebang + network-change polling

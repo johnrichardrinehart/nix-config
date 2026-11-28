@@ -36,6 +36,7 @@
       enable = true;
       address = "10.77.0.11";
       site = "peer-uz801-0.mycelium.internal";
+      tls.sopsFile = ../../secrets/uz801-0.yaml;
     };
   };
 
