@@ -151,7 +151,7 @@ in
       );
       default = [
         {
-          name = "lighthouse-uz801";
+          name = "lighthouse-uz801-0";
           address = "10.77.0.10";
           endpoint = "uz801-0.nebula.johnrinehart.dev:4242";
           relay = true;
