@@ -67,6 +67,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # MixOS builds mainline Linux 7.3.5 and Zig from nixos-unstable, so it
+    # keeps its own nixpkgs.
+    nixos-uz801.url = "git+ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801";
+
     pam-biometrics = {
       url = "github:johnrichardrinehart/pam-biometrics";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -324,6 +328,12 @@
           };
         };
 
+        mixosModules = {
+          cloudflare-ddns = ./mixos-modules/cloudflare-ddns.nix;
+          mycelium = ./mixos-modules/mycelium.nix;
+        };
+        mixosConfigurations = import ./mixos-configurations inputs;
+
         darwinModules = {
           keyboard-remap = ./darwin-modules/keyboard-remap;
           mbp-host = mbpHostModule;
@@ -337,18 +347,28 @@
             aarch64-darwin = reusablePackages.aarch64-darwin // configurationPackages;
           }
         );
-        apps = lib.mapAttrs (system: apps: apps // (mkNetbootApps self).${system}) (
-          slicemkApps
-          // {
-            aarch64-darwin = slicemkApps.aarch64-darwin // {
-              mbp-apple-silicon-qemu-vm = {
-                type = "app";
-                program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
-              };
-              provision-mac = mkProvisionMac mbpHost;
-            };
-          }
-        );
+        apps =
+          lib.mapAttrs
+            (
+              system: apps:
+              apps
+              // (mkNetbootApps self).${system}
+              // lib.optionalAttrs (inputs.nixos-uz801.apps ? ${system}) {
+                uz801-deploy = inputs.nixos-uz801.apps.${system}.deploy;
+              }
+            )
+            (
+              slicemkApps
+              // {
+                aarch64-darwin = slicemkApps.aarch64-darwin // {
+                  mbp-apple-silicon-qemu-vm = {
+                    type = "app";
+                    program = "${mbpAppleSiliconQemuVm}/bin/mbp-apple-silicon-qemu-vm";
+                  };
+                  provision-mac = mkProvisionMac mbpHost;
+                };
+              }
+            );
       };
     };
 }

@@ -72,6 +72,22 @@
         "type": "github"
       }
     },
+    "flake-compat_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
@@ -319,6 +335,29 @@
         "type": "github"
       }
     },
+    "mixos": {
+      "inputs": {
+        "flake-compat": "flake-compat_2",
+        "nixpkgs": [
+          "nixos-uz801",
+          "nixpkgs"
+        ],
+        "pyproject-nix": "pyproject-nix"
+      },
+      "locked": {
+        "lastModified": 1794511613,
+        "narHash": "sha256-gz3+U1iX2SDTWF03SkiVYav8SgzTMxJPDL4Ar/Yb8CE=",
+        "ref": "refs/heads/main",
+        "rev": "e8a7f03266af6e66b501eeb702ec61760541c49c",
+        "revCount": 422,
+        "type": "git",
+        "url": "https://codeberg.org/jmbaur/mixos"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://codeberg.org/jmbaur/mixos"
+      }
+    },
     "monstar": {
       "inputs": {
         "nixpkgs": "nixpkgs"
@@ -414,6 +453,28 @@
         "type": "github"
       }
     },
+    "nixos-uz801": {
+      "inputs": {
+        "mixos": "mixos",
+        "nixpkgs": "nixpkgs_2",
+        "psi": "psi",
+        "rmux": "rmux",
+        "rmux-deck": "rmux-deck"
+      },
+      "locked": {
+        "lastModified": 1795827299,
+        "narHash": "sha256-c/7oLWD732j0qDiQxOl046rLkdw3kXmcQ/XmssQWX1Y=",
+        "ref": "refs/heads/main",
+        "rev": "da11967f79f603e92af95504c4eb3855814c67a0",
+        "revCount": 28,
+        "type": "git",
+        "url": "ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1793341285,
@@ -461,6 +522,22 @@
       }
     },
     "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1795234589,
+        "narHash": "sha256-f/VVvxf5RsQgWVhUtefoca5ktVg0DA2bnkMOcmSnozo=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "2786a2a72088ecf32aea5b3ec52099e6a7cff78f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
       "locked": {
         "lastModified": 1795137884,
         "narHash": "sha256-iKXCN36qYfBni+3nH4vAd98/kshoIsPB2S9mYWhma30=",
@@ -519,6 +596,44 @@
         "type": "github"
       }
     },
+    "psi": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794541937,
+        "narHash": "sha256-UYbAhxUs0ZJnSj2Ueutae0F6KJI9vJpq0lWBnIBPG7M=",
+        "owner": "siraben",
+        "repo": "psi",
+        "rev": "1806c49459c9610de0b67e4a3266f147986e81e8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "siraben",
+        "repo": "psi",
+        "type": "github"
+      }
+    },
+    "pyproject-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixos-uz801",
+          "mixos",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1793820880,
+        "narHash": "sha256-NUMabnvaL/0Ah9WM9pBMXEp+dQjMSYjezZ/fNjXouLQ=",
+        "owner": "pyproject-nix",
+        "repo": "pyproject.nix",
+        "rev": "d43f0e74444c1f266c640fc49ce6ce6fb69d33c3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pyproject-nix",
+        "repo": "pyproject.nix",
+        "type": "github"
+      }
+    },
     "repo-manager": {
       "inputs": {
         "flake-parts": "flake-parts_5",
@@ -539,6 +654,39 @@
         "owner": "johnrichardrinehart",
         "repo": "repo-manager",
         "type": "github"
+      }
+    },
+    "rmux": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784374261,
+        "narHash": "sha256-axzW52qL9I4EKqOT5ctHdafIxeZcQIbeDTfIVscFerE=",
+        "ref": "refs/heads/main",
+        "rev": "69497e361989ef4f7760978d94c99abad1aa2610",
+        "revCount": 764,
+        "type": "git",
+        "url": "ssh://forgejo@desktop.tail5ca7.ts.net/jrestivo/rmux"
+      },
+      "original": {
+        "rev": "69497e361989ef4f7760978d94c99abad1aa2610",
+        "type": "git",
+        "url": "ssh://forgejo@desktop.tail5ca7.ts.net/jrestivo/rmux"
+      }
+    },
+    "rmux-deck": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786244389,
+        "narHash": "sha256-FrDACj29c/ezQDPf13K+2aE/IOVuOjH2AIOlkX+BVz4=",
+        "ref": "refs/heads/master",
+        "rev": "2d02cabf260305e2fb5495d46500835a49c8e958",
+        "revCount": 155,
+        "type": "git",
+        "url": "ssh://forgejo@desktop.tail5ca7.ts.net/fuzzybear3965/rmux-deck"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://forgejo@desktop.tail5ca7.ts.net/fuzzybear3965/rmux-deck"
       }
     },
     "rock5c-nixos": {
@@ -577,7 +725,8 @@
         "nix-darwin": "nix-darwin",
         "nixos-generators": "nixos-generators",
         "nixos-hardware": "nixos-hardware",
-        "nixpkgs": "nixpkgs_2",
+        "nixos-uz801": "nixos-uz801",
+        "nixpkgs": "nixpkgs_3",
         "pam-biometrics": "pam-biometrics",
         "repo-manager": "repo-manager",
         "rock5c-nixos": "rock5c-nixos",

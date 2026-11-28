@@ -20,6 +20,10 @@ creation_rules:
       - age:
           - *framework
           - *thinkie
+  - path_regex: secrets/nebula-uz801-[0-9]+\.yaml$
+    key_groups:
+      - age:
+          - *framework
   - path_regex: secrets/framework\.yaml$
     key_groups:
       - age:

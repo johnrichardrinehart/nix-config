@@ -13,6 +13,7 @@ in
   display-seams = import ./display-seams.nix { inherit lib pkgs; };
   git-meld-module = import ./git-meld-module.nix { inherit inputs lib pkgs; };
   kitkat-rs-module = import ./kitkat-rs-module.nix { inherit inputs lib pkgs; };
+  mixos-mycelium = import ./mixos-mycelium.nix { inherit inputs lib pkgs; };
   mycelium-module = import ./mycelium-module.nix { inherit inputs lib pkgs; };
   mycelium-tls = import ./mycelium-tls.nix { inherit pkgs; };
   nebula-registry = import ./nebula-registry.nix { inherit lib pkgs; };

@@ -9,6 +9,13 @@ let
   cfg = config.dev.johnrinehart.mycelium;
   network = "mycelium";
   lighthouse = cfg.lighthouse.address;
+  extraRelayAddrs = map (lh: lh.address) (builtins.filter (lh: lh.relay) cfg.extraLighthouses);
+  extraStaticHostMap = builtins.listToAttrs (
+    map (lh: {
+      name = lh.address;
+      value = [ lh.endpoint ];
+    }) cfg.extraLighthouses
+  );
   peerRules = rules: map (rule: rule // { group = cfg.peerGroup; }) rules;
   toLighthouse = proto: port: {
     inherit port proto;
@@ -89,6 +96,29 @@ in
         default = "nebula-lighthouse.johnrinehart.dev:4242";
         description = "Mycelium lighthouse public host and UDP port.";
       };
+    };
+    extraLighthouses = lib.mkOption {
+      type = lib.types.listOf (
+        lib.types.submodule {
+          options = {
+            address = lib.mkOption {
+              type = lib.types.str;
+              description = "Secondary lighthouse overlay IPv4 address.";
+            };
+            endpoint = lib.mkOption {
+              type = lib.types.str;
+              description = "Secondary lighthouse underlay host and UDP port.";
+            };
+            relay = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = "Use this secondary lighthouse as a Nebula relay.";
+            };
+          };
+        }
+      );
+      default = [ ];
+      description = "Additional Mycelium lighthouses contacted by peers.";
     };
     firewall = {
       inbound = lib.mkOption {
@@ -202,10 +232,13 @@ in
       })
       (lib.mkIf (cfg.role == "peer") {
         services.nebula.networks.${network} = {
-          lighthouses = [ lighthouse ];
-          staticHostMap.${lighthouse} = [ cfg.lighthouse.endpoint ];
+          lighthouses = [ lighthouse ] ++ map (lh: lh.address) cfg.extraLighthouses;
+          staticHostMap = {
+            ${lighthouse} = [ cfg.lighthouse.endpoint ];
+          }
+          // extraStaticHostMap;
           listen.port = 0;
-          relays = [ lighthouse ];
+          relays = [ lighthouse ] ++ extraRelayAddrs;
           settings = {
             punchy = {
               punch = true;
