@@ -355,7 +355,102 @@
               apps
               // (mkNetbootApps self).${system}
               // lib.optionalAttrs (inputs.nixos-uz801.apps ? ${system}) {
-                uz801-deploy = inputs.nixos-uz801.apps.${system}.deploy;
+                uz801-deploy =
+                  let
+                    pkgs = pkgsBySystem.${system};
+                    upstreamDeploy = inputs.nixos-uz801.apps.${system}.deploy.program;
+                    manifest = self.mixosConfigurations.uz801-0.config.sops.deployManifest;
+                    nebulaPkg = pkgs.callPackage ./packages/nebula.nix { };
+                    wrapper = pkgs.writeShellApplication {
+                      name = "uz801-deploy";
+                      runtimeInputs = [
+                        pkgs.jq
+                        pkgs.openssh
+                        pkgs.sops
+                        pkgs.ssh-to-age
+                        nebulaPkg
+                      ];
+                      text = ''
+                        host=""
+                        skip_secrets=0
+                        has_image_or_flake=0
+                        pass_args=()
+                        while [ "$#" -gt 0 ]; do
+                          case "$1" in
+                            --host)
+                              host="$2"
+                              pass_args+=("$1" "$2")
+                              shift 2
+                              ;;
+                            --skip-secrets)
+                              skip_secrets=1
+                              shift
+                              ;;
+                            --image|--flake)
+                              has_image_or_flake=1
+                              pass_args+=("$1" "$2")
+                              shift 2
+                              ;;
+                            *)
+                              pass_args+=("$1")
+                              shift
+                              ;;
+                          esac
+                        done
+
+                        if [ "$skip_secrets" -eq 0 ] && [ -n "$host" ]; then
+                          if [ -z "''${SOPS_AGE_KEY_FILE:-}" ] && [ -z "''${SOPS_AGE_KEY_CMD:-}" ] && [ -z "''${SOPS_AGE_KEY:-}" ]; then
+                            if [ -r /etc/ssh/ssh_host_ed25519_key ]; then
+                              export SOPS_AGE_KEY_CMD="${lib.getExe pkgs.ssh-to-age} -private-key -i /etc/ssh/ssh_host_ed25519_key"
+                            fi
+                          fi
+                          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+                          echo "==> Decrypting and installing SOPS secrets to $host:/state/secrets..."
+                          ssh -n "''${ssh_opts[@]}" "$host" 'mkdir -p /state/secrets && chmod 0700 /state/secrets'
+                          while IFS= read -r entry; do
+                            name=$(printf '%s\n' "$entry" | jq -r '.name')
+                            sops_file=$(printf '%s\n' "$entry" | jq -r '.sopsFile')
+                            key=$(printf '%s\n' "$entry" | jq -r '.key')
+                            dest=$(printf '%s\n' "$entry" | jq -r '.path')
+                            mode=$(printf '%s\n' "$entry" | jq -r '.mode')
+                            optional=$(printf '%s\n' "$entry" | jq -r '.optional')
+                            tmp=$(mktemp)
+                            if sops -d --extract "[\"$key\"]" "$sops_file" > "$tmp" 2>/dev/null; then
+                              if [ "$name" = "nebula-lighthouse-cert" ]; then
+                                if nebula-cert print -json -path "$tmp" | grep -Eq '"groups":\[[^]]*"peer"'; then
+                                  rm -f "$tmp"
+                                  echo "uz801-deploy: refusing to deploy lighthouse cert with 'peer' group" >&2
+                                  exit 1
+                                fi
+                              fi
+                              dest_dir=$(dirname "$dest")
+                              # shellcheck disable=SC2029
+                              ssh "''${ssh_opts[@]}" "$host" "mkdir -p '$dest_dir' && cat > '$dest.tmp' && chmod '$mode' '$dest.tmp' && mv -f '$dest.tmp' '$dest'" < "$tmp"
+                              rm -f "$tmp"
+                            else
+                              rm -f "$tmp"
+                              if [ "$optional" = "true" ]; then
+                                echo "    skipping optional secret: $name" >&2
+                              else
+                                echo "uz801-deploy: failed to decrypt required secret '$key' from $sops_file" >&2
+                                exit 1
+                              fi
+                            fi
+                          done < <(jq -c '.[]' ${manifest})
+                        fi
+
+                        if [ "$has_image_or_flake" -eq 0 ]; then
+                          pass_args+=(--flake ".#mixosConfigurations.uz801-0.config.system.build.slotImage")
+                        fi
+                        exec ${upstreamDeploy} "''${pass_args[@]}"
+                      '';
+                    };
+                  in
+                  {
+                    type = "app";
+                    program = lib.getExe wrapper;
+                    meta.description = "Decrypt SOPS secrets on host and deploy uz801-0 A/B slot image";
+                  };
               }
             )
             (

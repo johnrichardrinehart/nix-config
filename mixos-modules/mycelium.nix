@@ -8,6 +8,7 @@
 let
   cfg = config.dev.johnrinehart.mycelium;
   lhSvc = cfg.lighthouseService;
+  regCfg = cfg.registry;
   lighthouse = cfg.lighthouse.address;
   extraRelayAddrs = map (lh: lh.address) (builtins.filter (lh: lh.relay) cfg.extraLighthouses);
   allLighthouseAddrs = [ lighthouse ] ++ map (lh: lh.address) cfg.extraLighthouses;
@@ -106,7 +107,27 @@ let
         udp_timeout = "3m";
         default_timeout = "10m";
       };
-      inbound = peerRules cfg.firewall.inbound;
+      inbound = peerRules (
+        cfg.firewall.inbound
+        ++ lib.optionals regCfg.enable (
+          [
+            {
+              port = toString regCfg.httpsPort;
+              proto = "tcp";
+            }
+          ]
+          ++ lib.optionals (regCfg.dnsPort > 0) [
+            {
+              port = toString regCfg.dnsPort;
+              proto = "udp";
+            }
+            {
+              port = toString regCfg.dnsPort;
+              proto = "tcp";
+            }
+          ]
+        )
+      );
       outbound =
         if cfg.role == "lighthouse" then
           [ ]
@@ -163,15 +184,96 @@ let
       };
 
   lhCertGuard = certPath: ''
-    # Enforce that a strict lighthouse certificate never carries the peer group.
-    if ${config.uz801.nebula.package}/bin/nebula-cert print -json -path ${lib.escapeShellArg certPath} \
+    # Enforce that a strict lighthouse certificate never carries the peer group
+    # when nebula-cert is present on-device (uz801-deploy also enforces this on the host).
+    if [ -x ${config.uz801.nebula.package}/bin/nebula-cert ] && ${config.uz801.nebula.package}/bin/nebula-cert print -json -path ${lib.escapeShellArg certPath} \
       | grep -Eq '"groups":\[[^]]*"${cfg.peerGroup}"'; then
       echo "refusing to start: lighthouse certificate ${certPath} is in group '${cfg.peerGroup}'; re-sign it without that group" >&2
       exit 1
     fi
   '';
 
+  # Strip Go symbol/DWARF tables (-s -w) and build only cmd/nebula (omitting the
+  # 6.8 MiB nebula-cert CLI) so Nebula adds ~3 MiB compressed to the EROFS image.
+  slimNebula = pkgs.nebula.overrideAttrs (old: {
+    subPackages = [ "cmd/nebula" ];
+    ldflags = (old.ldflags or [ ]) ++ [
+      "-s"
+      "-w"
+    ];
+  });
+
   nebulaFormat = pkgs.buildPackages.formats.yaml { };
+  jsonFormat = pkgs.buildPackages.formats.json { };
+  consoleDir = "/state/nebula-console";
+  regStateDir = "/state/nebula-registry";
+  consoleUser = "registry";
+  regPackage = regCfg.package;
+  registryConfig = jsonFormat.generate "nebula-registry.json" {
+    stateDir = regStateDir;
+    inherit consoleUser;
+    inherit (regCfg)
+      pollInterval
+      offlineAfterPolls
+      eventRetentionDays
+      upstreamResolvers
+      ;
+    ssh = "/sbin/dbclient";
+    tls = {
+      inherit (regCfg.tls) certFile keyFile;
+      port = regCfg.httpsPort;
+    };
+    networks.mycelium = {
+      inherit (regCfg)
+        address
+        consolePort
+        dnsPort
+        domain
+        aliases
+        site
+        adminGroups
+        ;
+    };
+  };
+
+  consolePrepScript = ''
+    mkdir -p ${consoleDir} ${regStateDir} /run/nebula-lighthouse.d
+    chmod 0700 ${consoleDir}
+    chmod 0750 ${regStateDir}
+    if [ ! -s ${consoleDir}/host_key ]; then
+      ${regPackage}/bin/nebula-registry --keygen-ecdsa ${consoleDir}/host_key
+    fi
+    if [ ! -s ${regStateDir}/client_key ]; then
+      /sbin/dropbearkey -t ed25519 -f ${regStateDir}/client_key >/dev/null
+      chmod 0600 ${regStateDir}/client_key
+    fi
+    client_pub=$(/sbin/dropbearkey -y -f ${regStateDir}/client_key | awk '/^ssh-ed25519 / {print $1 " " $2}')
+    ln -sf /etc/nebula/lighthouse.yml /run/nebula-lighthouse.d/00-base.yml
+    printf '{"sshd":{"enabled":true,"listen":"127.0.0.1:%s","host_key":"%s/host_key","authorized_users":[{"user":"%s","keys":["%s"]}]}}\n' \
+      ${toString regCfg.consolePort} ${consoleDir} ${consoleUser} "$client_pub" \
+      > /run/nebula-lighthouse.d/50-console.yml
+  '';
+
+  regServiceRun = pkgs.writeScript "nebula-registry-run" ''
+    #!/bin/sh
+    mkdir -p ${regStateDir}
+    chmod 0750 ${regStateDir}
+    ${lib.optionalString (regCfg.tls.sopsFile == null) ''
+      if [ ! -s ${lib.escapeShellArg regCfg.tls.certFile} ] || [ ! -s ${lib.escapeShellArg regCfg.tls.keyFile} ]; then
+        ${regPackage}/bin/nebula-registry --self-signed \
+          ${lib.escapeShellArg regCfg.tls.certFile} \
+          ${lib.escapeShellArg regCfg.tls.keyFile} \
+          ${lib.escapeShellArg regCfg.site}
+      fi
+    ''}
+    while [ ! -r ${lib.escapeShellArg regCfg.tls.certFile} ] \
+       || [ ! -r ${lib.escapeShellArg regCfg.tls.keyFile} ] \
+       || [ ! -r ${regStateDir}/client_key ]; do
+      sleep 1
+    done
+    exec ${regPackage}/bin/nebula-registry --config /etc/nebula/registry.json
+  '';
+
   lhServiceConfig = nebulaFormat.generate "nebula-lighthouse.yml" {
     pki = {
       inherit (lhSvc) ca cert key;
@@ -237,7 +339,10 @@ let
       waited=$((waited + 1))
     done
     ${lhCertGuard lhSvc.cert}
-    exec ${config.uz801.nebula.package}/bin/nebula -config /etc/nebula/lighthouse.yml
+    ${lib.optionalString regCfg.enable consolePrepScript}
+    exec ${config.uz801.nebula.package}/bin/nebula -config ${
+      if regCfg.enable then "/run/nebula-lighthouse.d" else "/etc/nebula/lighthouse.yml"
+    }
   '';
 in
 {
@@ -271,8 +376,8 @@ in
       default = null;
       description = ''
         SOPS file containing `nebula-ca`, `nebula-cert`, and `nebula-key`.
-        When set, mixos-modules/sops.nix decrypts them at boot into /run/secrets
-        and wires ca, cert, and key automatically.
+        When set, `uz801-deploy` decrypts them on the deploying host into
+        /state/secrets and wires ca, cert, and key automatically.
       '';
     };
 
@@ -418,6 +523,125 @@ in
         description = "Public TLS CA bundle trusted for Mycelium HTTPS services.";
       };
     };
+
+    registry = {
+      enable = lib.mkEnableOption "lightweight C Nebula peer registry dashboard on this host";
+
+      package = lib.mkOption {
+        type = lib.types.package;
+        # Match nixos-uz801's lib-only mbedtls override so the image reuses the
+        # existing mbedtls store path instead of pulling a second 14 MiB copy.
+        default = pkgs.callPackage ../packages/nebula-registry {
+          mbedtls = pkgs.mbedtls.overrideAttrs (old: {
+            cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+              "-DENABLE_PROGRAMS=OFF"
+              "-DENABLE_TESTING=OFF"
+            ];
+            postConfigure = "";
+          });
+        };
+        defaultText = lib.literalExpression "pkgs.callPackage ../packages/nebula-registry { }";
+        description = "The nebula-registry package to run.";
+      };
+
+      address = lib.mkOption {
+        type = lib.types.str;
+        description = "Overlay IPv4 address on this host's TUN interface to bind HTTPS (and optional DNS).";
+      };
+
+      site = lib.mkOption {
+        type = lib.types.str;
+        description = "HTTPS hostname for this host's registry view.";
+      };
+
+      domain = lib.mkOption {
+        type = lib.types.str;
+        default = "mycelium.nebula.johnrinehart.dev";
+        description = "Primary DNS zone served when dnsPort is nonzero.";
+      };
+
+      aliases = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ "mycelium.internal" ];
+        description = "Additional private DNS zones served when dnsPort is nonzero.";
+      };
+
+      consolePort = lib.mkOption {
+        type = lib.types.port;
+        default = 2222;
+        description = "Localhost SSH port for the headless lighthouse debug console.";
+      };
+
+      httpsPort = lib.mkOption {
+        type = lib.types.port;
+        default = 443;
+        description = "HTTPS port for the peer registry web UI and JSON API.";
+      };
+
+      dnsPort = lib.mkOption {
+        type = lib.types.int;
+        default = 0;
+        description = "DNS port to serve (0 disables the DNS listener).";
+      };
+
+      adminGroups = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ "registry-admin" ];
+        description = "Certificate groups permitted to archive and restore offline peers.";
+      };
+
+      pollInterval = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 10;
+        description = "Seconds between debug console polls.";
+      };
+
+      offlineAfterPolls = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 3;
+        description = "Missed polls before a peer is marked offline.";
+      };
+
+      eventRetentionDays = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 365;
+        description = "Days of peer events to keep.";
+      };
+
+      upstreamResolvers = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        description = "Upstream DNS resolvers when dnsPort is nonzero.";
+      };
+
+      tls = {
+        sopsFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = "Optional SOPS file holding the HTTPS certificate and key.";
+        };
+        certKey = lib.mkOption {
+          type = lib.types.str;
+          default = "tls-cert";
+          description = "Top-level YAML key in tls.sopsFile for the HTTPS certificate.";
+        };
+        keyKey = lib.mkOption {
+          type = lib.types.str;
+          default = "tls-key";
+          description = "Top-level YAML key in tls.sopsFile for the HTTPS private key.";
+        };
+        certFile = lib.mkOption {
+          type = lib.types.str;
+          default = "${regStateDir}/server.crt";
+          description = "Runtime path to the HTTPS certificate.";
+        };
+        keyFile = lib.mkOption {
+          type = lib.types.str;
+          default = "${regStateDir}/server.key";
+          description = "Runtime path to the HTTPS private key.";
+        };
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable (
@@ -427,6 +651,7 @@ in
 
         uz801.nebula = {
           enable = true;
+          package = lib.mkDefault slimNebula;
           inherit (cfg)
             ca
             cert
@@ -465,6 +690,18 @@ in
               mode = "0400";
             };
           })
+          (lib.mkIf (regCfg.enable && regCfg.tls.sopsFile != null) {
+            nebula-registry-tls-cert = {
+              inherit (regCfg.tls) sopsFile;
+              key = regCfg.tls.certKey;
+              mode = "0444";
+            };
+            nebula-registry-tls-key = {
+              inherit (regCfg.tls) sopsFile;
+              key = regCfg.tls.keyKey;
+              mode = "0400";
+            };
+          })
         ];
       })
       (lib.mkIf (cfg.sopsFile != null) {
@@ -499,6 +736,26 @@ in
 
         etc."nebula/lighthouse.yml".source = lhServiceConfig;
         services.nebula-lighthouse.run = lhServiceRun;
+      })
+      (lib.mkIf regCfg.enable {
+        assertions = [
+          {
+            assertion = lhSvc.enable;
+            message = "dev.johnrinehart.mycelium.registry currently requires dev.johnrinehart.mycelium.lighthouseService.enable.";
+          }
+          {
+            assertion = regCfg.tls.sopsFile == null || options ? sops;
+            message = "dev.johnrinehart.mycelium.registry.tls.sopsFile requires mixosModules.sops.";
+          }
+        ];
+
+        dev.johnrinehart.mycelium.registry.tls = lib.mkIf (regCfg.tls.sopsFile != null) {
+          certFile = config.sops.secrets.nebula-registry-tls-cert.path;
+          keyFile = config.sops.secrets.nebula-registry-tls-key.path;
+        };
+
+        etc."nebula/registry.json".source = registryConfig;
+        services.nebula-registry.run = regServiceRun;
       })
     ]
   );

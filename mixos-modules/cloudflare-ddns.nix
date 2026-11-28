@@ -240,7 +240,7 @@ in
     sopsFile = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
-      description = "Optional SOPS file providing the Cloudflare API token key decrypted into /run/secrets.";
+      description = "Optional SOPS file providing the Cloudflare API token key deployed to /state/secrets.";
     };
 
     sopsKey = lib.mkOption {

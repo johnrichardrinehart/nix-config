@@ -8,6 +8,8 @@ let
   nebulaCfg = cfg.etc."nebula/config.yml".source;
   lhCfg = cfg.etc."nebula/lighthouse.yml".source;
   lhRun = cfg.services.nebula-lighthouse.run;
+  regCfg = cfg.etc."nebula/registry.json".source;
+  regRun = cfg.services.nebula-registry.run;
   ddnsRun = cfg.services.cloudflare-ddns.run;
   caBundle = cfg.etc."ssl/certs/ca-certificates.crt".source;
   hostNameFile = cfg.etc."hostname".source;
@@ -43,15 +45,21 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q 'am_lighthouse: false' ${nebulaCfg}
   grep -q 'port: 0' ${nebulaCfg}
   grep -q 'nebula-lighthouse.johnrinehart.dev:4242' ${nebulaCfg}
-  grep -q 'uz801-0.nebula.johnrinehart.dev:4242' ${nebulaCfg}
-  grep -q '/run/secrets/nebula-ca' ${nebulaCfg}
-  grep -q '/run/secrets/nebula-cert' ${nebulaCfg}
-  grep -q '/run/secrets/nebula-key' ${nebulaCfg}
+  grep -q '127.0.0.1:4242' ${nebulaCfg}
+  grep -q "port: '443'" ${nebulaCfg} || grep -q 'port: "443"' ${nebulaCfg}
+  grep -q '/state/secrets/nebula-ca' ${nebulaCfg}
+  grep -q '/state/secrets/nebula-cert' ${nebulaCfg}
+  grep -q '/state/secrets/nebula-key' ${nebulaCfg}
   ${lib.concatMapStringsSep "\n" (fp: "grep -q ${lib.escapeShellArg fp} ${nebulaCfg}") blocklist}
+
+  # No sops binary on-device; nebula package is stripped cmd/nebula-only (no nebula-cert)
+  test ! -e ${cfg.uz801.nebula.package}/bin/nebula-cert
+  grep -q 'nebula-ca' ${cfg.sops.deployManifest}
+  grep -q 'cloudflare-api-token' ${cfg.sops.deployManifest}
 
   # uz801-0 separate headless lighthouse+relay instance (10.77.0.10/24, tun.disabled=true)
   head -n 1 ${lhRun} | grep -qx '#!/bin/sh'
-  grep -q 'nebula-cert print -json' ${lhRun}
+  grep -q '/run/nebula-lighthouse.d' ${lhRun}
   grep -q 'am_lighthouse: true' ${lhCfg}
   grep -q 'am_relay: true' ${lhCfg}
   grep -q 'use_relays: false' ${lhCfg}
@@ -59,15 +67,22 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q 'port: 4242' ${lhCfg}
   grep -q 'inbound: \[\]' ${lhCfg}
   grep -q 'outbound: \[\]' ${lhCfg}
-  grep -q '/run/secrets/nebula-ca' ${lhCfg}
-  grep -q '/run/secrets/nebula-lighthouse-cert' ${lhCfg}
-  grep -q '/run/secrets/nebula-lighthouse-key' ${lhCfg}
+  grep -q '/state/secrets/nebula-ca' ${lhCfg}
+  grep -q '/state/secrets/nebula-lighthouse-cert' ${lhCfg}
+  grep -q '/state/secrets/nebula-lighthouse-key' ${lhCfg}
   ${lib.concatMapStringsSep "\n" (fp: "grep -q ${lib.escapeShellArg fp} ${lhCfg}") blocklist}
 
-  # Cloudflare DDNS service wired for SOPS token + valid shebang + network-change polling
+  # uz801-0 C nebula-registry dashboard bound on peer TUN 10.77.0.11:443
+  head -n 1 ${regRun} | grep -qx '#!/bin/sh'
+  grep -q 'nebula-registry --config /etc/nebula/registry.json' ${regRun}
+  grep -q '"10.77.0.11"' ${regCfg}
+  grep -q '"uz801-0.mycelium.internal"' ${regCfg}
+  grep -q '"/sbin/dbclient"' ${regCfg}
+
+  # Cloudflare DDNS service wired for host-deployed SOPS token + valid shebang + network-change polling
   head -n 1 ${ddnsRun} | grep -qx '#!/bin/sh'
   grep -q 'uz801-cf-ddns' ${ddnsRun}
-  grep -q '/run/secrets/cloudflare-api-token' ${ddnsRun}
+  grep -q '/state/secrets/cloudflare-api-token' ${ddnsRun}
   grep -q 'ip -4 -o addr show' ${ddnsRun}
   grep -q 'uz801-0.nebula.johnrinehart.dev' $(grep -o '/nix/store/[^ ]*-uz801-cf-ddns' ${ddnsRun} | head -n 1)/bin/uz801-cf-ddns
 
