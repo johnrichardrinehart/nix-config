@@ -817,7 +817,7 @@ The module stores the public CA and revocations under `nixos-modules/nebula/myce
 The lighthouse polls its Nebula debug console (localhost only, keys
 generated on the lighthouse under `/var/lib/nebula-console` and
 `/var/lib/nebula-registry`) every 10 seconds and keeps every certificate it
-has ever seen in `/var/lib/nebula-registry/registry.db`. A peer is online
+has ever seen in `/var/lib/nebula-registry/registry.json`. A peer is online
 while it has a tunnel to the lighthouse and goes offline after 30 seconds
 without one; events (first seen, online, offline, address and certificate
 changes, archive and restore) are kept for 365 days, peers forever.
