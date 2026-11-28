@@ -156,6 +156,12 @@ in
           endpoint = "uz801-0.nebula.johnrinehart.dev:4242";
           relay = true;
         }
+        {
+          name = "lighthouse-uz801-1";
+          address = "10.77.0.12";
+          endpoint = "uz801-1.nebula.johnrinehart.dev:4243";
+          relay = true;
+        }
       ];
       description = "Additional Mycelium lighthouses contacted by peers.";
     };

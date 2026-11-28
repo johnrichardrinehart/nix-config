@@ -374,7 +374,10 @@
                   let
                     pkgs = pkgsBySystem.${system};
                     upstreamDeploy = inputs.nixos-uz801.apps.${system}.deploy.program;
-                    manifest = self.mixosConfigurations.uz801-0.config.sops.deployManifest;
+                    nodeManifests = lib.mapAttrs (_: sys: {
+                      sops = sys.config.sops.deployManifest;
+                      state = sys.config.sops.stateManifest;
+                    }) self.mixosConfigurations;
                     nebulaPkg = pkgs.callPackage ./packages/nebula.nix { };
                     wrapper = pkgs.writeShellApplication {
                       name = "uz801-deploy";
@@ -386,12 +389,17 @@
                         nebulaPkg
                       ];
                       text = ''
+                        node="uz801-0"
                         host=""
                         skip_secrets=0
                         has_image_or_flake=0
                         pass_args=()
                         while [ "$#" -gt 0 ]; do
                           case "$1" in
+                            --node)
+                              node="$2"
+                              shift 2
+                              ;;
                             --host)
                               host="$2"
                               pass_args+=("$1" "$2")
@@ -413,6 +421,21 @@
                           esac
                         done
 
+                        case "$node" in
+                        ${lib.concatStringsSep "\n" (
+                          lib.mapAttrsToList (name: m: ''
+                            ${lib.escapeShellArg name})
+                              sops_manifest=${m.sops}
+                              state_manifest=${m.state}
+                              ;;
+                          '') nodeManifests
+                        )}
+                          *)
+                            echo "uz801-deploy: unknown --node '$node' (expected one of: ${lib.concatStringsSep ", " (builtins.attrNames nodeManifests)})" >&2
+                            exit 2
+                            ;;
+                        esac
+
                         if [ "$skip_secrets" -eq 0 ] && [ -n "$host" ]; then
                           if [ -z "''${SOPS_AGE_KEY_FILE:-}" ] && [ -z "''${SOPS_AGE_KEY_CMD:-}" ] && [ -z "''${SOPS_AGE_KEY:-}" ]; then
                             if [ -r /etc/ssh/ssh_host_ed25519_key ]; then
@@ -420,7 +443,17 @@
                             fi
                           fi
                           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
-                          echo "==> Decrypting and installing SOPS secrets to $host:/state/secrets..."
+                          echo "==> Installing per-node /state identity files for $node on $host..."
+                          while IFS= read -r entry; do
+                            dest=$(printf '%s\n' "$entry" | jq -r '.path')
+                            mode=$(printf '%s\n' "$entry" | jq -r '.mode')
+                            dest_dir=$(dirname "$dest")
+                            # shellcheck disable=SC2029
+                            printf '%s\n' "$entry" | jq -rj '.content' \
+                              | ssh "''${ssh_opts[@]}" "$host" "mkdir -p '$dest_dir' && cat > '$dest.tmp' && chmod '$mode' '$dest.tmp' && mv -f '$dest.tmp' '$dest'"
+                          done < <(jq -c '.[]' "$state_manifest")
+
+                          echo "==> Decrypting and installing SOPS secrets for $node to $host:/state/secrets..."
                           ssh -n "''${ssh_opts[@]}" "$host" 'mkdir -p /state/secrets && chmod 0700 /state/secrets'
                           while IFS= read -r entry; do
                             name=$(printf '%s\n' "$entry" | jq -r '.name')
@@ -451,11 +484,11 @@
                                 exit 1
                               fi
                             fi
-                          done < <(jq -c '.[]' ${manifest})
+                          done < <(jq -c '.[]' "$sops_manifest")
                         fi
 
                         if [ "$has_image_or_flake" -eq 0 ]; then
-                          pass_args+=(--flake ".#mixosConfigurations.uz801-0.config.system.build.slotImage")
+                          pass_args+=(--flake ".#mixosConfigurations.$node.config.system.build.slotImage")
                         fi
                         exec ${upstreamDeploy} "''${pass_args[@]}"
                       '';
@@ -464,7 +497,7 @@
                   {
                     type = "app";
                     program = lib.getExe wrapper;
-                    meta.description = "Decrypt SOPS secrets on host and deploy uz801-0 A/B slot image";
+                    meta.description = "Deploy per-node /state identity, SOPS secrets, and shared UZ801 A/B slot image";
                   };
               }
             )

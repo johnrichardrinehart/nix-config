@@ -254,14 +254,32 @@ let
 
   regServiceRun = pkgs.writeScript "nebula-registry-run" ''
     #!/bin/sh
-    mkdir -p ${regStateDir}
+    mkdir -p ${regStateDir} /run/nebula
     chmod 0750 ${regStateDir}
+    ${lib.optionalString (cfg.identityFile != null) ''
+      while [ ! -r ${lib.escapeShellArg cfg.identityFile} ]; do
+        sleep 1
+      done
+      # shellcheck disable=SC1090
+      . ${lib.escapeShellArg cfg.identityFile}
+      site="''${LH_SITE:-${regCfg.site}}"
+      addr="''${LH_ADDRESS:-${regCfg.address}}"
+      sed \
+        -e "s|__LH_ADDRESS__|$addr|g" \
+        -e "s|__LH_SITE__|$site|g" \
+        /etc/nebula/registry.json > /run/nebula/registry.json
+      reg_conf=/run/nebula/registry.json
+    ''}
+    ${lib.optionalString (cfg.identityFile == null) ''
+      site=${lib.escapeShellArg regCfg.site}
+      reg_conf=/etc/nebula/registry.json
+    ''}
     ${lib.optionalString (regCfg.tls.sopsFile == null) ''
       if [ ! -s ${lib.escapeShellArg regCfg.tls.certFile} ] || [ ! -s ${lib.escapeShellArg regCfg.tls.keyFile} ]; then
         ${regPackage}/bin/nebula-registry --self-signed \
           ${lib.escapeShellArg regCfg.tls.certFile} \
           ${lib.escapeShellArg regCfg.tls.keyFile} \
-          ${lib.escapeShellArg regCfg.site}
+          "$site"
       fi
     ''}
     while [ ! -r ${lib.escapeShellArg regCfg.tls.certFile} ] \
@@ -274,7 +292,7 @@ let
        }; do
       sleep 1
     done
-    exec ${regPackage}/bin/nebula-registry --config /etc/nebula/registry.json
+    exec ${regPackage}/bin/nebula-registry --config "$reg_conf"
   '';
 
   lhTunDev = "nebula.lh";
@@ -371,8 +389,9 @@ let
       i=0
       while [ "$i" -lt 40 ]; do
         subnet=$(ip -4 route show dev ${lhTunDev} 2>/dev/null | awk 'NR==1 {print $1}')
-        if [ -n "$subnet" ]; then
-          ip route replace "$subnet" dev ${lhTunDev} src ${lib.escapeShellArg regCfg.address} metric 200 2>/dev/null || true
+        lh_ip=$(ip -4 -o addr show dev ${lhTunDev} 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')
+        if [ -n "$subnet" ] && [ -n "$lh_ip" ]; then
+          ip route replace "$subnet" dev ${lhTunDev} src "$lh_ip" metric 200 2>/dev/null || true
           ip route del "$subnet" dev ${lhTunDev} metric 0 2>/dev/null || true
           peer_ip=$(ip -4 -o addr show dev nebula.mycelium 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')
           if [ -n "$peer_ip" ]; then
@@ -391,6 +410,9 @@ let
     while [ ! -r ${lib.escapeShellArg lhSvc.ca} ] \
        || [ ! -r ${lib.escapeShellArg lhSvc.cert} ] \
        || [ ! -r ${lib.escapeShellArg lhSvc.key} ] \
+       ${
+         lib.optionalString (cfg.identityFile != null) "|| [ ! -r ${lib.escapeShellArg cfg.identityFile} ] "
+       } \
        || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
       sleep 1
     done
@@ -401,10 +423,22 @@ let
       waited=$((waited + 1))
     done
     ${lhCertGuard lhSvc.cert}
+    mkdir -p /run/nebula-lighthouse.d
+    ln -sf /etc/nebula/lighthouse.yml /run/nebula-lighthouse.d/00-base.yml
+    ${lib.optionalString (cfg.identityFile != null) ''
+      # shellcheck disable=SC1090
+      . ${lib.escapeShellArg cfg.identityFile}
+      if [ -n "''${LH_LISTEN_PORT:-}" ]; then
+        printf '{"listen":{"port":%s}}\n' "$LH_LISTEN_PORT" > /run/nebula-lighthouse.d/10-identity.yml
+      fi
+    ''}
     ${lib.optionalString regCfg.enable consolePrepScript}
     ${lib.optionalString regCfg.enable lhRouteMetricFix}
     exec ${cfg.package}/bin/nebula -config ${
-      if regCfg.enable then "/run/nebula-lighthouse.d" else "/etc/nebula/lighthouse.yml"
+      if regCfg.enable || cfg.identityFile != null then
+        "/run/nebula-lighthouse.d"
+      else
+        "/etc/nebula/lighthouse.yml"
     }
   '';
 
@@ -421,10 +455,13 @@ let
 
   primaryRun = pkgs.writeScript "nebula-run" ''
     #!/bin/sh
-    mkdir -p /state/nebula
+    mkdir -p /state/nebula /run/nebula
     while [ ! -r ${lib.escapeShellArg cfg.ca} ] \
        || [ ! -r ${lib.escapeShellArg cfg.cert} ] \
        || [ ! -r ${lib.escapeShellArg cfg.key} ] \
+       ${
+         lib.optionalString (cfg.identityFile != null) "|| [ ! -r ${lib.escapeShellArg cfg.identityFile} ] "
+       } \
        || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
       sleep 1
     done
@@ -435,7 +472,22 @@ let
       waited=$((waited + 1))
     done
     ${lib.optionalString (cfg.role == "lighthouse") (lhCertGuard cfg.cert)}
-    exec ${cfg.package}/bin/nebula -config /etc/nebula/config.yml
+    nebula_conf=/etc/nebula/config.yml
+    ${lib.optionalString (cfg.identityFile != null) ''
+      # shellcheck disable=SC1090
+      . ${lib.escapeShellArg cfg.identityFile}
+      if [ -n "''${LH_ADDRESS:-}" ] && [ -n "''${LH_LISTEN_PORT:-}" ]; then
+        # Route the colocated lighthouse over loopback to avoid router NAT hairpinning.
+        awk -v ip="$LH_ADDRESS" -v ep="127.0.0.1:$LH_LISTEN_PORT" '
+          $0 ~ "^  " ip ":$" || $0 ~ "^  \"" ip "\":$" { hit=1; print; next }
+          hit && $0 ~ "^  - " { print "  - " ep; hit=0; next }
+          hit && $0 ~ "^    - " { print "    - " ep; hit=0; next }
+          { hit=0; print }
+        ' /etc/nebula/config.yml > /run/nebula/config.yml
+        nebula_conf=/run/nebula/config.yml
+      fi
+    ''}
+    exec ${cfg.package}/bin/nebula -config "$nebula_conf"
   '';
 in
 {
@@ -447,6 +499,16 @@ in
       default = slimNebula;
       defaultText = lib.literalExpression "slimNebula";
       description = "Nebula package installed and executed by Mycelium services.";
+    };
+
+    identityFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Optional runtime env file under /state (for example /state/nebula/identity.env)
+        defining LH_ADDRESS, LH_LISTEN_PORT, and LH_SITE so multiple boards share
+        an identical image hash.
+      '';
     };
 
     role = lib.mkOption {
@@ -586,6 +648,11 @@ in
           endpoint = "uz801-0.nebula.johnrinehart.dev:4242";
           relay = true;
         }
+        {
+          address = "10.77.0.12";
+          endpoint = "uz801-1.nebula.johnrinehart.dev:4243";
+          relay = true;
+        }
       ];
       description = "Additional Mycelium lighthouses contacted by peers.";
     };
@@ -652,7 +719,8 @@ in
 
       address = lib.mkOption {
         type = lib.types.str;
-        description = "Overlay IPv4 address of the lighthouse TUN interface to bind HTTPS and DNS.";
+        default = "__LH_ADDRESS__";
+        description = "Overlay IPv4 address of the lighthouse TUN interface to bind HTTPS and DNS (or __LH_ADDRESS__ when supplied by identityFile).";
       };
 
       interface = lib.mkOption {
@@ -669,7 +737,8 @@ in
 
       site = lib.mkOption {
         type = lib.types.str;
-        description = "HTTPS hostname for this host's registry view.";
+        default = "__LH_SITE__";
+        description = "HTTPS hostname for this host's registry view (or __LH_SITE__ when supplied by identityFile).";
       };
 
       domain = lib.mkOption {
