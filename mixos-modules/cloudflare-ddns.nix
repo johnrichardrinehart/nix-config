@@ -155,6 +155,53 @@ let
       exit 1
     fi
   '';
+  ddnsRun = pkgs.writeScript "cloudflare-ddns-run" ''
+    #!/bin/sh
+    while ( [ ! -r ${lib.escapeShellArg cfg.envFile} ] ${
+      lib.optionalString (cfg.tokenFile != null) "&& [ ! -r ${lib.escapeShellArg cfg.tokenFile} ]"
+    } ) \
+       || [ ! -s /etc/resolv.conf ] \
+       || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
+      sleep 2
+    done
+
+    # Wait briefly for ntpd so TLS certificate verification succeeds on RTC-less boot.
+    waited=0
+    while [ "$(date +%Y)" -lt 2025 ] && [ "$waited" -lt 20 ]; do
+      sleep 0.5
+      waited=$((waited + 1))
+    done
+
+    net_state() {
+      {
+        ip -4 -o addr show 2>/dev/null
+        ip -4 route show default 2>/dev/null
+      } | tr '\n' ';'
+    }
+
+    # Trigger immediately on startup.
+    last_net=$(net_state)
+    last_check=$(date +%s)
+    ${ddnsCli}/bin/uz801-cf-ddns --force || true
+
+    # Watch for local IPv4 address/route changes every 5s (zero network traffic)
+    # and poll upstream public IP every checkIntervalSec for ISP WAN IP changes.
+    while true; do
+      sleep 5
+      cur_net=$(net_state)
+      now=$(date +%s)
+      if [ "$cur_net" != "$last_net" ]; then
+        last_net="$cur_net"
+        if ip -4 route show default 2>/dev/null | grep -q '^default'; then
+          last_check="$now"
+          ${ddnsCli}/bin/uz801-cf-ddns --force || true
+        fi
+      elif [ $((now - last_check)) -ge ${toString cfg.checkIntervalSec} ]; then
+        last_check="$now"
+        ${ddnsCli}/bin/uz801-cf-ddns || true
+      fi
+    done
+  '';
 in
 {
   options.dev.johnrinehart.cloudflareDdns = {
@@ -228,58 +275,7 @@ in
     lib.mkMerge [
       {
         packages = [ ddnsCli ];
-
-        services.cloudflare-ddns.run = pkgs.writeScript "cloudflare-ddns-run" ''
-              #!/bin/sh
-              while ( [ ! -r ${lib.escapeShellArg cfg.envFile} ] ${
-                lib.optionalString (cfg.tokenFile != null) "&& [ ! -r ${lib.escapeShellArg cfg.tokenFile} ]"
-              } ) \
-                 || [ ! -s /etc/resolv.conf ] \
-                 || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
-                sleep 2
-              done
-
-          # Wait briefly for ntpd so TLS certificate verification succeeds on RTC-less boot.
-          waited=0
-          while [ "$(date +%Y)" -lt 2025 ] && [ "$waited" -lt 20 ]; do
-            sleep 0.5
-            waited=$((waited + 1))
-          done
-
-          # Trigger immediately on startup.
-          ${ddnsCli}/bin/uz801-cf-ddns --force || true
-
-          # Watch local IPv4 address/route changes (e.g., Wi-Fi reconnect or DHCP change)
-          # and also poll periodically for upstream WAN IP changes behind NAT.
-          fifo=/run/cf-ddns.events
-          rm -f "$fifo"
-          mkfifo "$fifo"
-
-          (
-            exec ip -4 monitor address route 2>/dev/null
-          ) > "$fifo" &
-          mon_pid=$!
-
-          (
-            while true; do
-              sleep ${toString cfg.checkIntervalSec}
-              printf 'tick\n'
-            done
-          ) > "$fifo" &
-          tick_pid=$!
-
-          trap 'kill "$mon_pid" "$tick_pid" 2>/dev/null || true; rm -f "$fifo"; exit 0' INT TERM
-
-          last_run=$(date +%s)
-          while IFS= read -r _event < "$fifo"; do
-            now=$(date +%s)
-            # Debounce bursty netlink events by 3 seconds.
-            if [ $((now - last_run)) -ge 3 ]; then
-              last_run="$now"
-              ${ddnsCli}/bin/uz801-cf-ddns || true
-            fi
-          done
-        '';
+        services.cloudflare-ddns.run = ddnsRun;
       }
       (lib.optionalAttrs (options ? sops) {
         sops.secrets = lib.mkIf (cfg.sopsFile != null) {

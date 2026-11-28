@@ -54,10 +54,11 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q 'nebula-cert print -json' ${nebulaRun}
   ${lib.concatMapStringsSep "\n" (fp: "grep -q ${lib.escapeShellArg fp} ${nebulaCfg}") blocklist}
 
-  # Cloudflare DDNS service wired for SOPS token + startup + network-change triggers
+  # Cloudflare DDNS service wired for SOPS token + valid shebang + network-change polling
+  head -n 1 ${ddnsRun} | grep -qx '#!/bin/sh'
   grep -q 'uz801-cf-ddns' ${ddnsRun}
   grep -q '/run/secrets/cloudflare-api-token' ${ddnsRun}
-  grep -q 'ip -4 monitor address route' ${ddnsRun}
+  grep -q 'ip -4 -o addr show' ${ddnsRun}
   grep -q 'uz801-0.nebula.johnrinehart.dev' ${cfg.services.cloudflare-ddns.run} || grep -q 'uz801-0.nebula.johnrinehart.dev' $(grep -o '/nix/store/[^ ]*-uz801-cf-ddns' ${ddnsRun} | head -n 1)/bin/uz801-cf-ddns
 
   # Mycelium TLS CA appended to system CA bundle
