@@ -391,6 +391,7 @@ let
         subnet=$(ip -4 route show dev ${lhTunDev} 2>/dev/null | awk 'NR==1 {print $1}')
         lh_ip=$(ip -4 -o addr show dev ${lhTunDev} 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')
         if [ -n "$subnet" ] && [ -n "$lh_ip" ]; then
+          [ -w /proc/sys/net/ipv4/conf/${lhTunDev}/rp_filter ] && echo 0 > /proc/sys/net/ipv4/conf/${lhTunDev}/rp_filter 2>/dev/null || true
           ip route replace "$subnet" dev ${lhTunDev} src "$lh_ip" metric 200 2>/dev/null || true
           ip route del "$subnet" dev ${lhTunDev} metric 0 2>/dev/null || true
           peer_ip=$(ip -4 -o addr show dev nebula.mycelium 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')
@@ -486,6 +487,13 @@ let
         ' /etc/nebula/config.yml > /run/nebula/config.yml
         nebula_conf=/run/nebula/config.yml
       fi
+    ''}
+    ${lib.optionalString cfg.ssh.trustPeers ''
+      # Enforce strict rp_filter on untrusted interfaces so spoofed overlay IPs
+      # cannot reach Dropbear's trusted-interface auth on nebula.mycelium.
+      for dev in wlan0 usb0; do
+        [ -w "/proc/sys/net/ipv4/conf/$dev/rp_filter" ] && echo 1 > "/proc/sys/net/ipv4/conf/$dev/rp_filter" 2>/dev/null || true
+      done
     ''}
     exec ${cfg.package}/bin/nebula -config "$nebula_conf"
   '';
@@ -621,6 +629,18 @@ in
       description = "Certificate group that permits connections between Mycelium peers.";
     };
 
+    ssh = {
+      trustPeers = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Allow passwordless SSH logins from Mycelium peers on nebula.mycelium,
+          relying on Nebula mutual certificate authentication and strict
+          rp_filter on untrusted interfaces (wlan0, usb0).
+        '';
+      };
+    };
+
     blocklist = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = import ../nixos-modules/nebula/mycelium/blocklist.nix;
@@ -674,7 +694,11 @@ in
       };
       peerSshPorts = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [ "22" ];
+        default = [
+          "22"
+          "2222"
+          "8022"
+        ];
         description = "TCP ports this host can open for SSH to Mycelium peers.";
       };
       allowPeerHTTPS = lib.mkOption {
@@ -849,6 +873,7 @@ in
     lib.mkMerge [
       {
         uz801.extraCaCertificates = lib.mkIf cfg.trustCA.enable [ cfg.trustCA.bundle ];
+        uz801.ssh.trustInterface = lib.mkIf cfg.ssh.trustPeers "nebula.mycelium";
 
         packages = [ cfg.package ];
         etc."nebula/config.yml".source = primaryConfig;

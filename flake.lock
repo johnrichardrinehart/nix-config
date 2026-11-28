@@ -459,11 +459,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1795869230,
-        "narHash": "sha256-Blz2ozvJ9HmxFDrobyzy5v5qFrDyvfDd1ezL/Y6QW1c=",
+        "lastModified": 1795875409,
+        "narHash": "sha256-hjhD5UIIKnRL5edGJe1YO8EH5YfQPYiyGHR+3/emnLI=",
         "ref": "refs/heads/main",
-        "rev": "b468675452c54216e37a21804e6622d394f91946",
-        "revCount": 33,
+        "rev": "b45fa41becd544fcd5b2907190cd1cf72c94badb",
+        "revCount": 34,
         "type": "git",
         "url": "ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801"
       },

@@ -63,6 +63,17 @@ let
       };
     }
   );
+  inboundTcpPorts = builtins.concatMap (
+    rule:
+    if rule.proto == "tcp" && builtins.match "[0-9]+" rule.port != null then
+      [ (lib.toInt rule.port) ]
+    else
+      [ ]
+  ) cfg.firewall.inbound;
+  myceliumPamAccess = pkgs.writeText "mycelium-sshd-access.conf" ''
+    +:ALL:${cfg.subnet}
+    -:ALL:ALL
+  '';
 in
 {
   imports = [
@@ -106,6 +117,22 @@ in
       type = lib.types.str;
       default = "peer";
       description = "Certificate group that permits connections between Mycelium peers.";
+    };
+    subnet = lib.mkOption {
+      type = lib.types.str;
+      default = "10.77.0.0/24";
+      description = "Overlay IPv4 CIDR of the Mycelium network.";
+    };
+    ssh = {
+      trustPeers = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Allow SSH logins from Mycelium peers without an SSH key or password,
+          relying on Nebula mutual certificate authentication and host firewall
+          anti-spoofing on non-overlay interfaces.
+        '';
+      };
     };
     blocklist = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -182,7 +209,11 @@ in
       };
       peerSshPorts = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [ "22" ];
+        default = [
+          "22"
+          "2222"
+          "8022"
+        ];
         description = "TCP ports this host can open for SSH to Mycelium peers.";
       };
       allowPeerHTTPS = lib.mkOption {
@@ -253,7 +284,60 @@ in
           settings = lib.optionalAttrs (cfg.blocklist != [ ]) { pki.blocklist = cfg.blocklist; };
         };
         security.pki.certificateFiles = lib.mkIf cfg.trustCA.enable [ cfg.trustCA.bundle ];
+        networking.firewall.interfaces."nebula.${network}".allowedTCPPorts = inboundTcpPorts;
       }
+      (lib.mkIf cfg.ssh.trustPeers {
+        services.openssh.enable = lib.mkDefault true;
+
+        # Drop overlay-subnet source addresses arriving outside nebula.mycelium
+        # or lo so LAN or WAN packets cannot spoof a peer to Match Address.
+        networking.firewall = lib.mkIf config.networking.firewall.enable (
+          lib.mkMerge [
+            (lib.mkIf config.networking.nftables.enable {
+              extraInputRules = ''
+                iifname != { "lo", "nebula.${network}" } ip saddr ${cfg.subnet} drop
+              '';
+            })
+            (lib.mkIf (!config.networking.nftables.enable) {
+              extraCommands = ''
+                iptables -w -N mycelium-antispoof 2>/dev/null || iptables -w -F mycelium-antispoof
+                iptables -w -A mycelium-antispoof -i lo -j RETURN
+                iptables -w -A mycelium-antispoof -i nebula.${network} -j RETURN
+                iptables -w -A mycelium-antispoof -s ${cfg.subnet} -j DROP
+                iptables -w -I nixos-fw 1 -j mycelium-antispoof
+              '';
+              extraStopCommands = ''
+                iptables -w -F mycelium-antispoof 2>/dev/null || true
+                iptables -w -X mycelium-antispoof 2>/dev/null || true
+              '';
+            })
+          ]
+        );
+
+        security.pam.services.sshd.rules.auth.mycelium-peer = lib.mkIf config.services.openssh.enable {
+          order = 10000;
+          control = "sufficient";
+          modulePath = "${pkgs.pam}/lib/security/pam_access.so";
+          args = [
+            "accessfile=${myceliumPamAccess}"
+            "nodefgroup"
+            "noaudit"
+            "nodns"
+          ];
+        };
+
+        services.openssh.extraConfig = lib.mkIf config.services.openssh.enable (
+          lib.mkAfter ''
+            Match Address ${cfg.subnet} LocalAddress ${cfg.subnet}
+              KbdInteractiveAuthentication yes
+              PasswordAuthentication yes
+              PermitEmptyPasswords yes
+              ${lib.optionalString (
+                (config.services.openssh.settings.PermitRootLogin or "prohibit-password") != "no"
+              ) "PermitRootLogin yes"}
+          ''
+        );
+      })
       # Hosts without sops-nix (the lighthouse) have no `sops` option to define.
       (lib.optionalAttrs (options ? sops) {
         sops.secrets = lib.mkIf (cfg.sopsFile != null) (

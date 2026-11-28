@@ -86,11 +86,17 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q '10.77.0.12' ${cfg1.sops.stateManifest}
   grep -q '4243' ${cfg1.sops.stateManifest}
 
-  # Key-only SSH, 6-bit LED mask, syntax checks, and zero bash in the shared closure
+  # Key-only SSH on LAN/USB, trusted Nebula peer SSH on nebula.mycelium,
+  # 6-bit LED mask, syntax checks, and zero bash in the shared closure
+  grep -q 'port: .*2222' ${nebulaCfg}
+  grep -q 'port: .*8022' ${nebulaCfg}
+  grep -q -- '-N nebula.mycelium' ${cfg0.services.dropbear.run}
+  grep -q 'rp_filter' ${nebulaRun}
   sh -n ${nebulaRun}
   sh -n ${lhRun}
   sh -n ${regRun}
   sh -n ${ddnsRun}
+  sh -n ${cfg0.services.dropbear.run}
   sh -n ${cfg0.services.uz801-led.run}
   for chk in wifi nebula lighthouse registry ddns system; do
     grep -q "''${chk}:" ${cfg0.services.uz801-led.run}
