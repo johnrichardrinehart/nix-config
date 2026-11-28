@@ -179,10 +179,18 @@ let
       } | tr '\n' ';'
     }
 
+    run_ddns() {
+      if ${ddnsCli}/bin/uz801-cf-ddns "$@"; then
+        echo ok > /run/cf-ddns.status
+      else
+        echo fail > /run/cf-ddns.status
+      fi
+    }
+
     # Trigger immediately on startup.
     last_net=$(net_state)
     last_check=$(date +%s)
-    ${ddnsCli}/bin/uz801-cf-ddns --force || true
+    run_ddns --force
 
     # Watch for local IPv4 address/route changes every 5s (zero network traffic)
     # and poll upstream public IP every checkIntervalSec for ISP WAN IP changes.
@@ -194,11 +202,11 @@ let
         last_net="$cur_net"
         if ip -4 route show default 2>/dev/null | grep -q '^default'; then
           last_check="$now"
-          ${ddnsCli}/bin/uz801-cf-ddns --force || true
+          run_ddns --force
         fi
       elif [ $((now - last_check)) -ge ${toString cfg.checkIntervalSec} ]; then
         last_check="$now"
-        ${ddnsCli}/bin/uz801-cf-ddns || true
+        run_ddns
       fi
     done
   '';
