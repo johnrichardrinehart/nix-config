@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -20,6 +21,7 @@ let
     fi
 
     ENV_FILE=${lib.escapeShellArg cfg.envFile}
+    TOKEN_FILE=${lib.escapeShellArg (if cfg.tokenFile != null then cfg.tokenFile else "")}
     CACHE_FILE="/run/cf-ddns.last_ip"
     CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
 
@@ -28,15 +30,15 @@ let
       logger -t uz801-cf-ddns "$1" 2>/dev/null || true
     }
 
-    if [ ! -r "$ENV_FILE" ]; then
-      log "missing $ENV_FILE; skipping update"
-      exit 0
+    if [ -r "$ENV_FILE" ]; then
+      # shellcheck disable=SC1090
+      . "$ENV_FILE"
     fi
 
-    # shellcheck disable=SC1090
-    . "$ENV_FILE"
-
     CF_API_TOKEN="''${CF_API_TOKEN:-}"
+    if [ -z "$CF_API_TOKEN" ] && [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then
+      CF_API_TOKEN=$(tr -d '[:space:]' < "$TOKEN_FILE")
+    fi
     CF_RECORD_NAME="''${CF_RECORD_NAME:-${if cfg.recordName != null then cfg.recordName else ""}}"
     CF_ZONE_ID="''${CF_ZONE_ID:-}"
     CF_ZONE_NAME="''${CF_ZONE_NAME:-${if cfg.zoneName != null then cfg.zoneName else ""}}"
@@ -44,8 +46,8 @@ let
     CF_PROXIED="''${CF_PROXIED:-${if cfg.proxied then "true" else "false"}}"
 
     if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_RECORD_NAME" ]; then
-      log "CF_API_TOKEN and CF_RECORD_NAME must be set in $ENV_FILE (or declaratively)"
-      exit 1
+      log "waiting for CF_API_TOKEN ($TOKEN_FILE / $ENV_FILE) and CF_RECORD_NAME"
+      exit 0
     fi
 
     is_ipv4() {
@@ -188,10 +190,28 @@ in
       description = "Periodic public-IP check interval in seconds (in addition to startup and network-change triggers).";
     };
 
+    sopsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Optional SOPS file providing the Cloudflare API token key decrypted into /run/secrets.";
+    };
+
+    sopsKey = lib.mkOption {
+      type = lib.types.str;
+      default = "cloudflare-api-token";
+      description = "Top-level YAML key inside sopsFile holding the Cloudflare API token.";
+    };
+
+    tokenFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Optional file containing only the Cloudflare API token (wired automatically when sopsFile is set).";
+    };
+
     envFile = lib.mkOption {
       type = lib.types.str;
       default = "/state/cloudflare-ddns.env";
-      description = "On-device 0600 shell env file providing CF_API_TOKEN and optional CF_RECORD_NAME/CF_ZONE_ID.";
+      description = "Optional on-device 0600 shell env file providing or overriding CF_API_TOKEN, CF_RECORD_NAME, or CF_ZONE_ID.";
     };
 
     ipUrls = lib.mkOption {
@@ -204,57 +224,82 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    packages = [ ddnsCli ];
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        packages = [ ddnsCli ];
 
-    services.cloudflare-ddns.run = pkgs.writeScript "cloudflare-ddns-run" ''
-      #!/bin/sh
-      while [ ! -r ${lib.escapeShellArg cfg.envFile} ] \
-         || [ ! -s /etc/resolv.conf ] \
-         || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
-        sleep 2
-      done
+        services.cloudflare-ddns.run = pkgs.writeScript "cloudflare-ddns-run" ''
+              #!/bin/sh
+              while ( [ ! -r ${lib.escapeShellArg cfg.envFile} ] ${
+                lib.optionalString (cfg.tokenFile != null) "&& [ ! -r ${lib.escapeShellArg cfg.tokenFile} ]"
+              } ) \
+                 || [ ! -s /etc/resolv.conf ] \
+                 || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
+                sleep 2
+              done
 
-      # Wait briefly for ntpd so TLS certificate verification succeeds on RTC-less boot.
-      waited=0
-      while [ "$(date +%Y)" -lt 2025 ] && [ "$waited" -lt 20 ]; do
-        sleep 0.5
-        waited=$((waited + 1))
-      done
+          # Wait briefly for ntpd so TLS certificate verification succeeds on RTC-less boot.
+          waited=0
+          while [ "$(date +%Y)" -lt 2025 ] && [ "$waited" -lt 20 ]; do
+            sleep 0.5
+            waited=$((waited + 1))
+          done
 
-      # Trigger immediately on startup.
-      ${ddnsCli}/bin/uz801-cf-ddns --force || true
+          # Trigger immediately on startup.
+          ${ddnsCli}/bin/uz801-cf-ddns --force || true
 
-      # Watch local IPv4 address/route changes (e.g., Wi-Fi reconnect or DHCP change)
-      # and also poll periodically for upstream WAN IP changes behind NAT.
-      fifo=/run/cf-ddns.events
-      rm -f "$fifo"
-      mkfifo "$fifo"
+          # Watch local IPv4 address/route changes (e.g., Wi-Fi reconnect or DHCP change)
+          # and also poll periodically for upstream WAN IP changes behind NAT.
+          fifo=/run/cf-ddns.events
+          rm -f "$fifo"
+          mkfifo "$fifo"
 
-      (
-        exec ip -4 monitor address route 2>/dev/null
-      ) > "$fifo" &
-      mon_pid=$!
+          (
+            exec ip -4 monitor address route 2>/dev/null
+          ) > "$fifo" &
+          mon_pid=$!
 
-      (
-        while true; do
-          sleep ${toString cfg.checkIntervalSec}
-          printf 'tick\n'
-        done
-      ) > "$fifo" &
-      tick_pid=$!
+          (
+            while true; do
+              sleep ${toString cfg.checkIntervalSec}
+              printf 'tick\n'
+            done
+          ) > "$fifo" &
+          tick_pid=$!
 
-      trap 'kill "$mon_pid" "$tick_pid" 2>/dev/null || true; rm -f "$fifo"; exit 0' INT TERM
+          trap 'kill "$mon_pid" "$tick_pid" 2>/dev/null || true; rm -f "$fifo"; exit 0' INT TERM
 
-      last_run=$(date +%s)
-      while IFS= read -r _event < "$fifo"; do
-        now=$(date +%s)
-        # Debounce bursty netlink events by 3 seconds.
-        if [ $((now - last_run)) -ge 3 ]; then
-          last_run="$now"
-          ${ddnsCli}/bin/uz801-cf-ddns || true
-        fi
-      done
-    '';
-  };
+          last_run=$(date +%s)
+          while IFS= read -r _event < "$fifo"; do
+            now=$(date +%s)
+            # Debounce bursty netlink events by 3 seconds.
+            if [ $((now - last_run)) -ge 3 ]; then
+              last_run="$now"
+              ${ddnsCli}/bin/uz801-cf-ddns || true
+            fi
+          done
+        '';
+      }
+      (lib.optionalAttrs (options ? sops) {
+        sops.secrets = lib.mkIf (cfg.sopsFile != null) {
+          cloudflare-api-token = {
+            inherit (cfg) sopsFile;
+            key = cfg.sopsKey;
+            mode = "0400";
+            optional = true;
+          };
+        };
+      })
+      (lib.mkIf (cfg.sopsFile != null) {
+        assertions = [
+          {
+            assertion = options ? sops;
+            message = "dev.johnrinehart.cloudflareDdns.sopsFile requires mixosModules.sops.";
+          }
+        ];
+        dev.johnrinehart.cloudflareDdns.tokenFile = config.sops.secrets.cloudflare-api-token.path;
+      })
+    ]
+  );
 }

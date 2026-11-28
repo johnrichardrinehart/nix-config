@@ -2,6 +2,7 @@
 keys:
   - &framework age1g4e49re2f34y0a2u2k69mumhy6cvv39ck6u4kmaahjtv0emh358s8fq67e
   - &thinkie age1yp4xpy849zmr0fzf7ekgsc5tsetx7qeert37jrvcelxxce5fuvhsenq2q2
+  - &uz801-0 age1rn7h5ewv5gprvjnsr6eclxz8scu4sftgx5gprzf98heectc95uwqa2vudu
 creation_rules:
   - path_regex: secrets/share-webdav\.yaml$
     key_groups:
@@ -24,6 +25,12 @@ creation_rules:
     key_groups:
       - age:
           - *framework
+          - *uz801-0
+  - path_regex: secrets/uz801-0\.yaml$
+    key_groups:
+      - age:
+          - *framework
+          - *uz801-0
   - path_regex: secrets/framework\.yaml$
     key_groups:
       - age:

@@ -8,6 +8,7 @@ lib.mapAttrs (
   inputs.nixos-uz801.lib.uz801System {
     buildSystem = "x86_64-linux";
     modules = [
+      mixosModules.sops
       mixosModules.cloudflare-ddns
       mixosModules.mycelium
       ./${dir}

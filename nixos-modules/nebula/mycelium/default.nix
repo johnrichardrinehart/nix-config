@@ -21,6 +21,18 @@ let
     inherit port proto;
     cidr = "${lighthouse}/32";
   };
+  toExtraLighthouses = lib.concatMap (lh: [
+    {
+      port = "any";
+      proto = "icmp";
+      cidr = "${lh.address}/32";
+    }
+    {
+      port = "22";
+      proto = "tcp";
+      cidr = "${lh.address}/32";
+    }
+  ]) cfg.extraLighthouses;
   portRules = lib.types.listOf (
     lib.types.submodule {
       options = {
@@ -274,6 +286,7 @@ in
               (toLighthouse "tcp" "53")
               (toLighthouse "tcp" "443")
             ]
+            ++ toExtraLighthouses
             ++ peerRules (
               [
                 {

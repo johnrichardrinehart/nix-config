@@ -331,6 +331,7 @@
         mixosModules = {
           cloudflare-ddns = ./mixos-modules/cloudflare-ddns.nix;
           mycelium = ./mixos-modules/mycelium.nix;
+          sops = ./mixos-modules/sops.nix;
         };
         mixosConfigurations = import ./mixos-configurations inputs;
 

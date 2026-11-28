@@ -1,9 +1,9 @@
 {
   # First Yiming UZ801 v3 stick: strict Mycelium lighthouse + relay
   # (`10.77.0.10/24`, no `peer` group, empty outbound rules).
-  # Nebula credentials are backed up in secrets/nebula-uz801-0.yaml and
-  # provisioned onto /state/nebula/{ca.crt,host.crt,host.key}.
-  # Cloudflare DDNS token and record name live in /state/cloudflare-ddns.env.
+  # Nebula credentials (`nebula-ca`, `nebula-cert`, `nebula-key`) and the
+  # Cloudflare DDNS token (`cloudflare-api-token`) live in secrets/uz801-0.yaml
+  # and are decrypted into /run/secrets at boot using /state/sops/age-key.txt.
   uz801 = {
     hostName = "uz801-0";
     lte.enable = false;
@@ -16,10 +16,14 @@
     enable = true;
     role = "lighthouse";
     relay.enable = true;
+    sopsFile = ../../secrets/uz801-0.yaml;
   };
 
   dev.johnrinehart.cloudflareDdns = {
     enable = true;
+    sopsFile = ../../secrets/uz801-0.yaml;
+    recordName = "uz801-0.nebula.johnrinehart.dev";
+    zoneName = "johnrinehart.dev";
     ttl = 120;
     proxied = false;
   };

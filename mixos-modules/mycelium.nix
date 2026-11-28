@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  options,
   ...
 }:
 let
@@ -22,6 +23,18 @@ let
     inherit port proto;
     cidr = "${lighthouse}/32";
   };
+  toExtraLighthouses = lib.concatMap (lh: [
+    {
+      port = "any";
+      proto = "icmp";
+      cidr = "${lh.address}/32";
+    }
+    {
+      port = "22";
+      proto = "tcp";
+      cidr = "${lh.address}/32";
+    }
+  ]) cfg.extraLighthouses;
   portRules = lib.types.listOf (
     lib.types.submodule {
       options = {
@@ -109,6 +122,7 @@ let
             (toLighthouse "tcp" "53")
             (toLighthouse "tcp" "443")
           ]
+          ++ toExtraLighthouses
           ++ peerRules (
             [
               {
@@ -170,6 +184,16 @@ in
       type = lib.types.bool;
       default = false;
       description = "When role is lighthouse, allow relaying peer traffic (am_relay).";
+    };
+
+    sopsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        SOPS file containing `nebula-ca`, `nebula-cert`, and `nebula-key`.
+        When set, mixos-modules/sops.nix decrypts them at boot into /run/secrets
+        and wires ca, cert, and key automatically.
+      '';
     };
 
     ca = lib.mkOption {
@@ -262,27 +286,60 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    uz801.extraCaCertificates = lib.mkIf cfg.trustCA.enable [ cfg.trustCA.bundle ];
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        uz801.extraCaCertificates = lib.mkIf cfg.trustCA.enable [ cfg.trustCA.bundle ];
 
-    uz801.nebula = {
-      enable = true;
-      inherit (cfg)
-        ca
-        cert
-        key
-        blocklist
-        ;
-      settings = lib.recursiveUpdate commonSettings roleSettings;
-      preStart = lib.optionalString (cfg.role == "lighthouse") ''
-        # Credentials arrive out of band on /state. Enforce that a strict
-        # lighthouse certificate never carries the peer group.
-        if ${config.uz801.nebula.package}/bin/nebula-cert print -json -path ${lib.escapeShellArg cfg.cert} \
-          | grep -Eq '"groups":\[[^]]*"${cfg.peerGroup}"'; then
-          echo "refusing to start: lighthouse certificate ${cfg.cert} is in group '${cfg.peerGroup}'; re-sign it without that group" >&2
-          exit 1
-        fi
-      '';
-    };
-  };
+        uz801.nebula = {
+          enable = true;
+          inherit (cfg)
+            ca
+            cert
+            key
+            blocklist
+            ;
+          settings = lib.recursiveUpdate commonSettings roleSettings;
+          preStart = lib.optionalString (cfg.role == "lighthouse") ''
+            # Credentials arrive out of band or via SOPS. Enforce that a strict
+            # lighthouse certificate never carries the peer group.
+            if ${config.uz801.nebula.package}/bin/nebula-cert print -json -path ${lib.escapeShellArg cfg.cert} \
+              | grep -Eq '"groups":\[[^]]*"${cfg.peerGroup}"'; then
+              echo "refusing to start: lighthouse certificate ${cfg.cert} is in group '${cfg.peerGroup}'; re-sign it without that group" >&2
+              exit 1
+            fi
+          '';
+        };
+      }
+      (lib.optionalAttrs (options ? sops) {
+        sops.secrets = lib.mkIf (cfg.sopsFile != null) {
+          nebula-ca = {
+            inherit (cfg) sopsFile;
+            mode = "0444";
+          };
+          nebula-cert = {
+            inherit (cfg) sopsFile;
+            mode = "0444";
+          };
+          nebula-key = {
+            inherit (cfg) sopsFile;
+            mode = "0400";
+          };
+        };
+      })
+      (lib.mkIf (cfg.sopsFile != null) {
+        assertions = [
+          {
+            assertion = options ? sops;
+            message = "dev.johnrinehart.mycelium.sopsFile requires mixosModules.sops.";
+          }
+        ];
+        dev.johnrinehart.mycelium = {
+          ca = config.sops.secrets.nebula-ca.path;
+          cert = config.sops.secrets.nebula-cert.path;
+          key = config.sops.secrets.nebula-key.path;
+        };
+      })
+    ]
+  );
 }

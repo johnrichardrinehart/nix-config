@@ -462,11 +462,11 @@
         "rmux-deck": "rmux-deck"
       },
       "locked": {
-        "lastModified": 1795827299,
-        "narHash": "sha256-c/7oLWD732j0qDiQxOl046rLkdw3kXmcQ/XmssQWX1Y=",
+        "lastModified": 1795829114,
+        "narHash": "sha256-WM9rO4hmu6uvmeOUJsY5A+hg9OtLuPvEVqVdxIud9wk=",
         "ref": "refs/heads/main",
-        "rev": "da11967f79f603e92af95504c4eb3855814c67a0",
-        "revCount": 28,
+        "rev": "104df51052eefa0243c4b7260487f4321121773a",
+        "revCount": 29,
         "type": "git",
         "url": "ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801"
       },
