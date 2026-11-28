@@ -134,6 +134,7 @@ typedef struct {
 	char iface[32];
 	int console_port;
 	int dns_port;
+	int local_dns_port;
 	char domain[256];
 	char site[256];
 	char aliases[NR_MAX_ALIASES][256];
@@ -210,6 +211,7 @@ nr_tls_server *nr_tls_server_new(const nr_tls_config *cfg);
 void nr_tls_server_free(nr_tls_server *s);
 int nr_keygen_ecdsa(const char *path);
 int nr_self_signed(const char *cert_path, const char *key_path, const char *hostname);
+int nr_sync_resolv_conf(const char *path, char upstreams[][64], int *n_upstreams, int max_upstreams);
 int nr_run_server(const nr_app_config *cfg);
 int nr_handle_http_request(const char *raw_req, size_t raw_len, const char *src_ip, const char *network, nr_registry *reg, const char admin_groups[][64], int n_admin_groups, double now, nr_buf *resp_out);
 int nr_tls_accept_and_serve_once(nr_tls_server *tls, int client_fd, const char *src_ip, const char *network, nr_registry *reg, const char admin_groups[][64], int n_admin_groups, double now);

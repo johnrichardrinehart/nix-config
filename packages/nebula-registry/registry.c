@@ -195,10 +195,13 @@ int nr_parse_config(const char *json_str_in, nr_app_config *out) {
 			copy_str(nc->domain, sizeof(nc->domain), json_str(net, "domain"));
 			copy_str(nc->site, sizeof(nc->site), json_str(net, "site"));
 			nc->dns_port = 53;
+			nc->local_dns_port = 0;
 			if ((v = cJSON_GetObjectItemCaseSensitive(net, "consolePort")) && cJSON_IsNumber(v))
 				nc->console_port = v->valueint;
 			if ((v = cJSON_GetObjectItemCaseSensitive(net, "dnsPort")) && cJSON_IsNumber(v))
 				nc->dns_port = v->valueint;
+			if ((v = cJSON_GetObjectItemCaseSensitive(net, "localDnsPort")) && cJSON_IsNumber(v))
+				nc->local_dns_port = v->valueint;
 			const cJSON *aliases = cJSON_GetObjectItemCaseSensitive(net, "aliases");
 			if (cJSON_IsArray(aliases)) {
 				const cJSON *a;

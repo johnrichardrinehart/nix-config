@@ -80,6 +80,7 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q '"10.77.0.10"' ${regCfg}
   grep -q '"nebula.lh"' ${regCfg}
   grep -q '"dnsPort":53' ${regCfg} || grep -q '"dnsPort": 53' ${regCfg}
+  grep -q '"localDnsPort":53' ${regCfg} || grep -q '"localDnsPort": 53' ${regCfg}
   grep -q '"lighthouse-uz801-0.mycelium.nebula.johnrinehart.dev"' ${regCfg}
   grep -q '"/state/secrets/nebula-registry-tls-cert"' ${regCfg}
   grep -q '"/state/secrets/nebula-registry-tls-key"' ${regCfg}

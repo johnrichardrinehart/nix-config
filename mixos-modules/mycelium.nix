@@ -224,6 +224,7 @@ let
         interface
         consolePort
         dnsPort
+        localDnsPort
         domain
         aliases
         site
@@ -658,7 +659,18 @@ in
       dnsPort = lib.mkOption {
         type = lib.types.int;
         default = 0;
-        description = "DNS port to serve (0 disables the DNS listener).";
+        description = "DNS port to serve on the overlay interface (0 disables the overlay DNS listener).";
+      };
+
+      localDnsPort = lib.mkOption {
+        type = lib.types.int;
+        default = 53;
+        description = ''
+          Loopback DNS port on 127.0.0.1 for local split DNS (0 disables).
+          When nonzero, nebula-registry prepends 127.0.0.1 to /etc/resolv.conf,
+          answers Mycelium zones locally, and forwards other names to the DHCP
+          resolvers and upstreamResolvers.
+        '';
       };
 
       adminGroups = lib.mkOption {
@@ -687,8 +699,11 @@ in
 
       upstreamResolvers = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = "Upstream DNS resolvers when dnsPort is nonzero.";
+        default = [
+          "1.1.1.1"
+          "9.9.9.9"
+        ];
+        description = "Fallback upstream DNS resolvers for queries outside the Mycelium zones.";
       };
 
       tls = {

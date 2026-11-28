@@ -814,6 +814,81 @@ static void poll_all_networks(const nr_app_config *cfg, nr_registry *reg, uint32
 	}
 }
 
+/* ---- Local Split-DNS resolv.conf Synchronizer ---- */
+
+int nr_sync_resolv_conf(const char *path, char upstreams[][64], int *n_upstreams, int max_upstreams) {
+	if (!path || !path[0])
+		return NR_ERR_IO;
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return NR_ERR_IO;
+
+	bool first_is_loopback = false;
+	bool saw_any_ns = false;
+	int found = 0;
+	char line[256];
+	while (fgets(line, sizeof(line), f)) {
+		char *p = line;
+		while (*p == ' ' || *p == '\t') p++;
+		if (strncmp(p, "nameserver", 10) != 0 || (p[10] != ' ' && p[10] != '\t'))
+			continue;
+		p += 10;
+		while (*p == ' ' || *p == '\t') p++;
+		char addr[64];
+		size_t n = 0;
+		while (p[n] && !isspace((unsigned char)p[n]) && n + 1 < sizeof(addr)) {
+			addr[n] = p[n];
+			n++;
+		}
+		addr[n] = '\0';
+		if (n == 0)
+			continue;
+		if (!saw_any_ns) {
+			saw_any_ns = true;
+			first_is_loopback = (strcmp(addr, "127.0.0.1") == 0);
+		}
+		if (strcmp(addr, "127.0.0.1") == 0)
+			continue;
+		bool dup = false;
+		for (int i = 0; i < found; i++) {
+			if (strcmp(upstreams[i], addr) == 0) {
+				dup = true;
+				break;
+			}
+		}
+		if (!dup && found < max_upstreams) {
+			snprintf(upstreams[found], 64, "%s", addr);
+			found++;
+		}
+	}
+	fclose(f);
+
+	if (found > 0)
+		*n_upstreams = found;
+
+	if (!first_is_loopback && *n_upstreams > 0) {
+		char tmp[528];
+		snprintf(tmp, sizeof(tmp), "%.512s.tmp", path);
+		int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (fd < 0)
+			return NR_ERR_IO;
+		nr_buf out;
+		nr_buf_init(&out, 256);
+		nr_buf_append(&out, "nameserver 127.0.0.1\n");
+		for (int i = 0; i < *n_upstreams; i++)
+			nr_buf_appendf(&out, "nameserver %s\n", upstreams[i]);
+		ssize_t wr = write(fd, out.data, out.len);
+		int cl = close(fd);
+		size_t want = out.len;
+		nr_buf_free(&out);
+		if (wr != (ssize_t)want || cl != 0 || rename(tmp, path) != 0) {
+			unlink(tmp);
+			return NR_ERR_IO;
+		}
+	}
+	return NR_OK;
+}
+
 /* ---- Socket Setup & Single-Process poll() Loop ---- */
 
 static int bind_socket(const char *addr, int port, int socktype, const char *iface) {
@@ -892,8 +967,9 @@ int nr_run_server(const nr_app_config *cfg) {
 
 	nr_zone zones[NR_MAX_NETWORKS];
 	memset(zones, 0, sizeof(zones));
-	listen_slot slots[NR_MAX_NETWORKS * 3];
+	listen_slot slots[NR_MAX_NETWORKS * 5];
 	int n_slots = 0;
+	bool use_local_dns = false;
 
 	for (int i = 0; i < cfg->n_nets; i++) {
 		const nr_net_config *nc = &cfg->nets[i];
@@ -918,6 +994,18 @@ int nr_run_server(const nr_app_config *cfg) {
 			slots[n_slots++] = (listen_slot){.fd = ufd, .kind = SOCK_DNS_UDP, .net_idx = i};
 			slots[n_slots++] = (listen_slot){.fd = tfd, .kind = SOCK_DNS_TCP, .net_idx = i};
 		}
+		if (nc->local_dns_port > 0) {
+			int ufd = bind_socket("127.0.0.1", nc->local_dns_port, SOCK_DGRAM, NULL);
+			int tfd = bind_socket("127.0.0.1", nc->local_dns_port, SOCK_STREAM, NULL);
+			if (ufd < 0 || tfd < 0) {
+				if (ufd >= 0) close(ufd);
+				if (tfd >= 0) close(tfd);
+				goto fail;
+			}
+			slots[n_slots++] = (listen_slot){.fd = ufd, .kind = SOCK_DNS_UDP, .net_idx = i};
+			slots[n_slots++] = (listen_slot){.fd = tfd, .kind = SOCK_DNS_TCP, .net_idx = i};
+			use_local_dns = true;
+		}
 		if (tls && cfg->tls.port > 0) {
 			int hfd = bind_socket(nc->address, cfg->tls.port, SOCK_STREAM, nc->iface);
 			if (hfd < 0)
@@ -925,6 +1013,13 @@ int nr_run_server(const nr_app_config *cfg) {
 			slots[n_slots++] = (listen_slot){.fd = hfd, .kind = SOCK_HTTPS, .net_idx = i};
 		}
 	}
+
+	char dhcp_upstreams[NR_MAX_UPSTREAMS][64];
+	int n_dhcp_upstreams = 0;
+	char eff_upstreams[NR_MAX_UPSTREAMS][64];
+	int n_eff_upstreams = 0;
+	if (use_local_dns)
+		(void)nr_sync_resolv_conf("/etc/resolv.conf", dhcp_upstreams, &n_dhcp_upstreams, NR_MAX_UPSTREAMS);
 
 	uint32_t serial = (uint32_t)time(NULL);
 	double last_prune = 0.0;
@@ -934,7 +1029,22 @@ int nr_run_server(const nr_app_config *cfg) {
 	fprintf(stderr, "nebula-registry: serving %d network(s) on %d socket(s)\n", cfg->n_nets, n_slots);
 
 	while (!g_stop) {
-		struct pollfd pfds[NR_MAX_NETWORKS * 3];
+		n_eff_upstreams = 0;
+		for (int u = 0; u < n_dhcp_upstreams && n_eff_upstreams < NR_MAX_UPSTREAMS; u++)
+			memcpy(eff_upstreams[n_eff_upstreams++], dhcp_upstreams[u], 64);
+		for (int u = 0; u < cfg->n_upstreams && n_eff_upstreams < NR_MAX_UPSTREAMS; u++) {
+			bool dup = false;
+			for (int k = 0; k < n_eff_upstreams; k++) {
+				if (strcmp(eff_upstreams[k], cfg->upstreams[u]) == 0) {
+					dup = true;
+					break;
+				}
+			}
+			if (!dup)
+				memcpy(eff_upstreams[n_eff_upstreams++], cfg->upstreams[u], 64);
+		}
+
+		struct pollfd pfds[NR_MAX_NETWORKS * 5];
 		for (int i = 0; i < n_slots; i++) {
 			pfds[i].fd = slots[i].fd;
 			pfds[i].events = POLLIN;
@@ -961,7 +1071,7 @@ int nr_run_server(const nr_app_config *cfg) {
 					                     (struct sockaddr *)&peer, &plen);
 					if (n > 0) {
 						size_t rn = nr_dns_respond(qbuf, (size_t)n, &zones[ni], &reg, nc->name,
-						                           serial, cfg->upstreams, cfg->n_upstreams,
+						                           serial, eff_upstreams, n_eff_upstreams,
 						                           false, rbuf, sizeof(rbuf));
 						if (rn > 0)
 							(void)sendto(slots[i].fd, rbuf, rn, 0, (struct sockaddr *)&peer, plen);
@@ -979,7 +1089,7 @@ int nr_run_server(const nr_app_config *cfg) {
 								uint8_t qbuf[4096], rbuf[4096];
 								if (recv(cfd, qbuf, qlen, MSG_WAITALL) == qlen) {
 									size_t rn = nr_dns_respond(qbuf, qlen, &zones[ni], &reg, nc->name,
-									                           serial, cfg->upstreams, cfg->n_upstreams,
+									                           serial, eff_upstreams, n_eff_upstreams,
 									                           true, rbuf, sizeof(rbuf));
 									if (rn > 0) {
 										uint8_t rh[2] = {(uint8_t)(rn >> 8), (uint8_t)(rn & 0xFF)};
@@ -1008,6 +1118,8 @@ int nr_run_server(const nr_app_config *cfg) {
 		}
 
 		if (now_mono() >= next_poll) {
+			if (use_local_dns)
+				(void)nr_sync_resolv_conf("/etc/resolv.conf", dhcp_upstreams, &n_dhcp_upstreams, NR_MAX_UPSTREAMS);
 			poll_all_networks(cfg, &reg, &serial, &last_prune);
 			next_poll = now_mono() + cfg->poll_interval;
 		}

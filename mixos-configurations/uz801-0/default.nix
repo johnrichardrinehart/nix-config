@@ -21,6 +21,7 @@
     enable = true;
     role = "peer";
     sopsFile = ../../secrets/uz801-0.yaml;
+    firewall.allowPeerHTTPS = true;
     extraLighthouses = [
       {
         address = "10.77.0.10";

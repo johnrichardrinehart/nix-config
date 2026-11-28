@@ -480,6 +480,27 @@ static void test_tls_sni_and_keygen(const char *tmpdir) {
 	nr_registry_free(&reg);
 }
 
+static void test_resolv_conf_sync(const char *tmpdir) {
+	char rpath[512];
+	snprintf(rpath, sizeof(rpath), "%s/resolv.conf", tmpdir);
+	FILE *f = fopen(rpath, "w");
+	assert(f != NULL);
+	fputs("nameserver 172.16.0.1\n", f);
+	fclose(f);
+
+	char ups[4][64];
+	int n_ups = 0;
+	assert(nr_sync_resolv_conf(rpath, ups, &n_ups, 4) == NR_OK);
+	assert(n_ups == 1 && strcmp(ups[0], "172.16.0.1") == 0);
+	char *content = read_fixture(rpath);
+	assert(strcmp(content, "nameserver 127.0.0.1\nnameserver 172.16.0.1\n") == 0);
+	free(content);
+
+	/* Second sync is idempotent and preserves upstream */
+	assert(nr_sync_resolv_conf(rpath, ups, &n_ups, 4) == NR_OK);
+	assert(n_ups == 1 && strcmp(ups[0], "172.16.0.1") == 0);
+}
+
 int main(void) {
 	char tmpl[] = "/tmp/nr-test-XXXXXX";
 	char *tmpdir = mkdtemp(tmpl);
@@ -492,6 +513,7 @@ int main(void) {
 	test_dns_answers();
 	test_http_and_xss();
 	test_tls_sni_and_keygen(tmpdir);
+	test_resolv_conf_sync(tmpdir);
 
 	printf("All nebula-registry C tests passed.\n");
 	return 0;
