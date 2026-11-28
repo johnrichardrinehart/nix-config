@@ -364,18 +364,21 @@ let
   };
 
   lhRouteMetricFix = ''
-    # Lower-priority metric on the lighthouse TUN route so general host traffic
-    # continues to originate from the colocated peer TUN (nebula.mycelium),
-    # while nebula-registry sockets bound via SO_BINDTODEVICE(${lhTunDev}) still
-    # reply cleanly through ${lhTunDev}.
+    # Move the lighthouse TUN route to metric 200 (using BusyBox-compatible ip
+    # syntax) and ensure the peer TUN (nebula.mycelium) owns the metric-0 route,
+    # regardless of which Nebula service opens its TUN first.
     (
       i=0
       while [ "$i" -lt 40 ]; do
         subnet=$(ip -4 route show dev ${lhTunDev} 2>/dev/null | awk 'NR==1 {print $1}')
         if [ -n "$subnet" ]; then
           ip route replace "$subnet" dev ${lhTunDev} src ${lib.escapeShellArg regCfg.address} metric 200 2>/dev/null || true
-          ip route del "$subnet" dev ${lhTunDev} proto kernel 2>/dev/null || true
-          break
+          ip route del "$subnet" dev ${lhTunDev} metric 0 2>/dev/null || true
+          peer_ip=$(ip -4 -o addr show dev nebula.mycelium 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')
+          if [ -n "$peer_ip" ]; then
+            ip route replace "$subnet" dev nebula.mycelium src "$peer_ip" metric 0 2>/dev/null || true
+            break
+          fi
         fi
         sleep 0.5
         i=$((i + 1))
