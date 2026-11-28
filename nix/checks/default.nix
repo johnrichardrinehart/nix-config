@@ -32,6 +32,7 @@ in
 }
 // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
   initrd-pkcs11 = import ./initrd-pkcs11.nix { inherit lib pkgs; };
+  neocache-module = import ./neocache-module.nix { inherit inputs lib pkgs; };
   slicemk-host-bluetooth = import ../../packages/slicemk-update/host-bluetooth-check.nix {
     inherit pkgs;
     firmwareSource = pkgs.dev.johnrinehart.slicemk-firmware.src;

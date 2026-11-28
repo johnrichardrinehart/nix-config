@@ -7,11 +7,6 @@
 let
   cfg = config.dev.johnrinehart.neocache;
   tokenPath = config.sops.secrets.${cfg.tokenSecret}.path;
-  stateDir = "/var/lib/neocache-push";
-  # The hook writes each batch here first, then renames it into the queue, so
-  # the pusher never reads a half-written batch.
-  spoolDir = "${stateDir}/spool";
-  queueDir = "${stateDir}/queue";
   profile = "push";
   toml = pkgs.formats.toml { };
 
@@ -27,18 +22,17 @@ let
     };
   };
 
-  # The daemon runs this after every build and blocks its build loop until it
-  # exits; a non-zero exit fails the build. So it only queues the outputs and
-  # always succeeds; neocache-push.service uploads them.
-  enqueue = pkgs.writeShellScript "neocache-push-enqueue" ''
-    set -f
-    [ -n "''${OUT_PATHS:-}" ] || exit 0
-    tmp="$(${pkgs.coreutils}/bin/mktemp -p ${spoolDir})" &&
-      printf '%s\n' $OUT_PATHS > "$tmp" &&
-      ${pkgs.coreutils}/bin/mv "$tmp" ${queueDir}/ ||
-      echo "neocache-push: failed to queue $OUT_PATHS" >&2
-    exit 0
-  '';
+  pushArgs = [
+    "--server"
+    cfg.server
+    "--namespace"
+    cfg.namespace
+    "--watch"
+    "--output"
+    "line"
+  ]
+  ++ lib.mapAttrsToList (k: v: "--tag=${k}=${v}") cfg.push.tags
+  ++ [ cfg.cache ];
 
   push = pkgs.writeShellApplication {
     name = "neocache-push";
@@ -47,32 +41,14 @@ let
       cfg.package
     ];
     text = ''
-      shopt -s nullglob
       config="$RUNTIME_DIRECTORY/config"
-      cache="$RUNTIME_DIRECTORY/cache"
       install -D -m 0600 ${clientConfig} "$config/neocache/neocache.toml"
-      install -D -m 0600 ${authConfig} "$cache/neocache/auth.toml"
-      export XDG_CONFIG_HOME="$config" XDG_CACHE_HOME="$cache"
+      install -D -m 0600 ${authConfig} "$CACHE_DIRECTORY/neocache/auth.toml"
+      export XDG_CONFIG_HOME="$config"
+      export XDG_CACHE_HOME="$CACHE_DIRECTORY"
+      export XDG_STATE_HOME="$STATE_DIRECTORY"
 
-      batches=(${queueDir}/*)
-      (( ''${#batches[@]} )) || exit 0
-
-      # Paths garbage-collected since their build can no longer be pushed.
-      paths=()
-      while IFS= read -r path; do
-        [[ -e $path ]] && paths+=("$path")
-      done < <(sort -u "''${batches[@]}")
-
-      if (( ''${#paths[@]} )); then
-        printf '%s\n' "''${paths[@]}" | neocache push \
-          --server ${lib.escapeShellArg cfg.server} \
-          --namespace ${lib.escapeShellArg cfg.namespace} \
-          --stdin \
-          --output silent \
-          ${lib.escapeShellArgs (lib.mapAttrsToList (k: v: "--tag=${k}=${v}") cfg.push.tags)} \
-          ${lib.escapeShellArg cfg.cache}
-      fi
-      rm -f -- "''${batches[@]}"
+      exec neocache push ${lib.escapeShellArgs pushArgs}
     '';
   };
 in
@@ -122,13 +98,13 @@ in
     };
 
     push = {
-      enable = lib.mkEnableOption "pushing every locally built store path to the neocache cache";
+      enable = lib.mkEnableOption "watching the Nix store and pushing every new store path to the neocache cache";
 
       tags = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         default.hostname = config.networking.hostName;
         defaultText = lib.literalExpression "{ hostname = config.networking.hostName; }";
-        description = "Tags attached to each pushed build output.";
+        description = "Tags attached to each pushed store path.";
       };
     };
   };
@@ -156,42 +132,36 @@ in
     })
 
     (lib.mkIf cfg.push.enable {
-      nix.settings.post-build-hook = enqueue;
-
-      systemd.tmpfiles.rules = [
-        "d ${stateDir} 0700 root root -"
-        "d ${spoolDir} 0700 root root -"
-        "d ${queueDir} 0700 root root -"
-      ];
-
-      systemd.paths.neocache-push = {
-        description = "Push queued Nix build outputs to neocache";
-        wantedBy = [ "paths.target" ];
-        pathConfig.DirectoryNotEmpty = queueDir;
-      };
-
       systemd.services.neocache-push = {
-        description = "Push queued Nix build outputs to neocache";
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
-        # A failed push leaves its batches queued; the auto-restart retries them
-        # without the path unit re-triggering in a tight loop.
+        description = "Watch the Nix store and push new store paths to neocache";
+        wantedBy = [ "multi-user.target" ];
+        after = [
+          "network-online.target"
+          "nix-daemon.socket"
+        ];
+        wants = [
+          "network-online.target"
+          "nix-daemon.socket"
+        ];
+        # Keep retrying across offline periods and transient server errors.
         startLimitIntervalSec = 0;
-        # switch-to-configuration waits for a restarted oneshot, so a long
-        # upload would block activation. The path unit starts it instead.
-        restartIfChanged = false;
-        # The protected client stub ignores `token-file` in auth.toml and reads
-        # only this variable or an inline token. %d is the credentials folder.
+        # The protected client stub ignores token-file in auth.toml and reads
+        # this variable first. %d is the credentials directory.
         environment.NEOCACHE_CLIENT_TOKEN_FILE = "%d/token";
         serviceConfig = {
-          Type = "oneshot";
+          Type = "simple";
           ExecStart = lib.getExe push;
           LoadCredential = "token:${tokenPath}";
           RuntimeDirectory = "neocache-push";
           RuntimeDirectoryMode = "0700";
+          CacheDirectory = "neocache-push";
+          CacheDirectoryMode = "0700";
+          StateDirectory = "neocache-push";
+          StateDirectoryMode = "0700";
           UMask = "0077";
-          Restart = "on-failure";
-          RestartSec = "1min";
+          KillSignal = "SIGINT";
+          Restart = "always";
+          RestartSec = "30s";
         };
       };
     })

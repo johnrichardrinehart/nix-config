@@ -7,7 +7,7 @@
 
   dev.johnrinehart.neocache = {
     # Substitute from fuzzybear3965/fuzzybear3965 (and the module's other
-    # default caches), and push every local build there.
+    # default caches), and push every new store path there.
     substitute.enable = true;
     push.enable = true;
   };
