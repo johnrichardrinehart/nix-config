@@ -456,17 +456,14 @@
     "nixos-uz801": {
       "inputs": {
         "mixos": "mixos",
-        "nixpkgs": "nixpkgs_2",
-        "psi": "psi",
-        "rmux": "rmux",
-        "rmux-deck": "rmux-deck"
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1795838974,
-        "narHash": "sha256-4gh0cM3L0Vq7xJUIyAw7CpjqXd52Dkd1rre+8zVwc28=",
+        "lastModified": 1795840106,
+        "narHash": "sha256-tnnjlMlTHY8WdKl8wW+la3MS7Yo6kONawLiM7hF+x/Y=",
         "ref": "refs/heads/main",
-        "rev": "b4a0d4deff7530c4511101f44f40b6f36b16bec9",
-        "revCount": 31,
+        "rev": "44f7448813971b819fe22f622a61a6ef3d0ced7f",
+        "revCount": 32,
         "type": "git",
         "url": "ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801"
       },
@@ -599,11 +596,11 @@
     "psi": {
       "flake": false,
       "locked": {
-        "lastModified": 1794541937,
-        "narHash": "sha256-UYbAhxUs0ZJnSj2Ueutae0F6KJI9vJpq0lWBnIBPG7M=",
+        "lastModified": 1795803711,
+        "narHash": "sha256-duQYXRYchQrNQQy7NzvxR8ZUs4qNTg+n66BcFebPQp8=",
         "owner": "siraben",
         "repo": "psi",
-        "rev": "1806c49459c9610de0b67e4a3266f147986e81e8",
+        "rev": "a2aae4a4e7cd5d3ef08f3898bfde84e6571d5aa3",
         "type": "github"
       },
       "original": {
@@ -728,7 +725,10 @@
         "nixos-uz801": "nixos-uz801",
         "nixpkgs": "nixpkgs_3",
         "pam-biometrics": "pam-biometrics",
+        "psi": "psi",
         "repo-manager": "repo-manager",
+        "rmux": "rmux",
+        "rmux-deck": "rmux-deck",
         "rock5c-nixos": "rock5c-nixos",
         "sops-nix": "sops-nix"
       }

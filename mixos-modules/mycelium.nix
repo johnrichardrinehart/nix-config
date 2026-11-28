@@ -181,7 +181,7 @@ let
   lhCertGuard = certPath: ''
     # Enforce that a strict lighthouse certificate never carries the peer group
     # when nebula-cert is present on-device (uz801-deploy also enforces this on the host).
-    if [ -x ${config.uz801.nebula.package}/bin/nebula-cert ] && ${config.uz801.nebula.package}/bin/nebula-cert print -json -path ${lib.escapeShellArg certPath} \
+    if [ -x ${cfg.package}/bin/nebula-cert ] && ${cfg.package}/bin/nebula-cert print -json -path ${lib.escapeShellArg certPath} \
       | grep -Eq '"groups":\[[^]]*"${cfg.peerGroup}"'; then
       echo "refusing to start: lighthouse certificate ${certPath} is in group '${cfg.peerGroup}'; re-sign it without that group" >&2
       exit 1
@@ -403,14 +403,51 @@ let
     ${lhCertGuard lhSvc.cert}
     ${lib.optionalString regCfg.enable consolePrepScript}
     ${lib.optionalString regCfg.enable lhRouteMetricFix}
-    exec ${config.uz801.nebula.package}/bin/nebula -config ${
+    exec ${cfg.package}/bin/nebula -config ${
       if regCfg.enable then "/run/nebula-lighthouse.d" else "/etc/nebula/lighthouse.yml"
     }
+  '';
+
+  primaryConfig = nebulaFormat.generate "nebula-config.yml" (
+    lib.recursiveUpdate (lib.recursiveUpdate commonSettings roleSettings) {
+      pki = {
+        inherit (cfg) ca cert key;
+      }
+      // lib.optionalAttrs (cfg.blocklist != [ ]) {
+        inherit (cfg) blocklist;
+      };
+    }
+  );
+
+  primaryRun = pkgs.writeScript "nebula-run" ''
+    #!/bin/sh
+    mkdir -p /state/nebula
+    while [ ! -r ${lib.escapeShellArg cfg.ca} ] \
+       || [ ! -r ${lib.escapeShellArg cfg.cert} ] \
+       || [ ! -r ${lib.escapeShellArg cfg.key} ] \
+       || ! ip -4 route show default 2>/dev/null | grep -q '^default'; do
+      sleep 1
+    done
+    # Wait briefly for ntpd to step the RTC-less clock so cert validity passes on first handshake.
+    waited=0
+    while [ "$(date +%Y)" -lt 2025 ] && [ "$waited" -lt 20 ]; do
+      sleep 0.5
+      waited=$((waited + 1))
+    done
+    ${lib.optionalString (cfg.role == "lighthouse") (lhCertGuard cfg.cert)}
+    exec ${cfg.package}/bin/nebula -config /etc/nebula/config.yml
   '';
 in
 {
   options.dev.johnrinehart.mycelium = {
     enable = lib.mkEnableOption "Mycelium Nebula policy for MixOS";
+
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = slimNebula;
+      defaultText = lib.literalExpression "slimNebula";
+      description = "Nebula package installed and executed by Mycelium services.";
+    };
 
     role = lib.mkOption {
       type = lib.types.enum [
@@ -744,18 +781,9 @@ in
       {
         uz801.extraCaCertificates = lib.mkIf cfg.trustCA.enable [ cfg.trustCA.bundle ];
 
-        uz801.nebula = {
-          enable = true;
-          package = lib.mkDefault slimNebula;
-          inherit (cfg)
-            ca
-            cert
-            key
-            blocklist
-            ;
-          settings = lib.recursiveUpdate commonSettings roleSettings;
-          preStart = lib.optionalString (cfg.role == "lighthouse") (lhCertGuard cfg.cert);
-        };
+        packages = [ cfg.package ];
+        etc."nebula/config.yml".source = primaryConfig;
+        services.nebula.run = primaryRun;
       }
       (lib.optionalAttrs (options ? sops) {
         sops.secrets = lib.mkMerge [

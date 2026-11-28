@@ -71,6 +71,21 @@
     # keeps its own nixpkgs.
     nixos-uz801.url = "git+ssh://git@git.sr.ht/~fuzzybear3965/nixos-uz801";
 
+    psi = {
+      url = "github:siraben/psi";
+      flake = false;
+    };
+
+    rmux = {
+      url = "git+ssh://forgejo@desktop.tail5ca7.ts.net/jrestivo/rmux?rev=69497e361989ef4f7760978d94c99abad1aa2610";
+      flake = false;
+    };
+
+    rmux-deck = {
+      url = "git+ssh://forgejo@desktop.tail5ca7.ts.net/fuzzybear3965/rmux-deck";
+      flake = false;
+    };
+
     pam-biometrics = {
       url = "github:johnrichardrinehart/pam-biometrics";
       inputs.nixpkgs.follows = "nixpkgs";

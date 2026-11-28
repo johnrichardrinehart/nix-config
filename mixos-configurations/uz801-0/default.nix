@@ -1,8 +1,21 @@
 {
+  inputs,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  psiPkg = pkgs.callPackage ../../packages/psi.nix { psiSrc = inputs.psi; };
+  rmuxDeckPkg = pkgs.callPackage ../../packages/rmux-deck.nix {
+    rmuxSrc = inputs.rmux;
+    rmuxDeckSrc = inputs.rmux-deck;
+  };
+in
+{
   # First Yiming UZ801 v3 stick running two isolated Nebula identities:
-  # - `nebula` (`peer-uz801-0`, 10.77.0.11/24, group `peer`, TUN
-  #   `nebula.mycelium`, SSH/ICMP peer).
-  # - `nebula-lighthouse` (`lighthouse-uz801-0`, strict lighthouse + relay,
+  # - `nebula` (`uz801`, 10.77.0.11/24, group `peer`, TUN `nebula.mycelium`,
+  #   SSH/ICMP peer).
+  # - `nebula-lighthouse` (`lighthouse-uz801`, strict lighthouse + relay,
   #   10.77.0.10/24, no `peer` group, TUN `nebula.lh`, UDP 4242 at
   #   `uz801-0.nebula.johnrinehart.dev:4242`, serving DNS :53 and the HTTPS
   #   peer registry on `10.77.0.10:443`).
@@ -12,8 +25,13 @@
   uz801 = {
     hostName = "uz801-0";
     lte.enable = false;
+    rootPassword = null;
     authorizedKeys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ61iahx0HtGVD0qtBFIr8nTPivNxQimrqaloBazYCPK john@nixos"
+    ];
+    ntp.servers = [
+      "time.cloudflare.com"
+      "pool.ntp.org"
     ];
     led = {
       # 6-bit status sequence (green = 1, blue = 0):
@@ -75,7 +93,7 @@
       enable = true;
       address = "10.77.0.10";
       dnsPort = 53;
-      site = "lighthouse-uz801-0.mycelium.nebula.johnrinehart.dev";
+      site = "lighthouse-uz801.mycelium.nebula.johnrinehart.dev";
       staticRecords.lighthouse = "10.77.0.1";
       tls.sopsFile = ../../secrets/uz801-0.yaml;
     };
@@ -89,4 +107,18 @@
     ttl = 120;
     proxied = false;
   };
+
+  packages = [
+    (lib.getBin psiPkg.curl)
+    psiPkg
+    rmuxDeckPkg
+    rmuxDeckPkg.rmux
+  ];
+
+  etc."profile".source = pkgs.writeText "profile" ''
+    export EDITOR="''${EDITOR:-vi}"
+    export VISUAL="''${VISUAL:-vi}"
+    export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+  '';
 }

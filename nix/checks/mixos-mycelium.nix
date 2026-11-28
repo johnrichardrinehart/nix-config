@@ -52,9 +52,16 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   ${lib.concatMapStringsSep "\n" (fp: "grep -q ${lib.escapeShellArg fp} ${nebulaCfg}") blocklist}
 
   # No sops binary on-device; nebula package is stripped cmd/nebula-only (no nebula-cert)
-  test ! -e ${cfg.uz801.nebula.package}/bin/nebula-cert
+  test ! -e ${cfg.dev.johnrinehart.mycelium.package}/bin/nebula-cert
   grep -q 'nebula-ca' ${cfg.sops.deployManifest}
   grep -q 'cloudflare-api-token' ${cfg.sops.deployManifest}
+
+  # Key-only SSH, 6-bit LED mask, and zero bash in the uz801-0 closure
+  sh -n ${cfg.services.uz801-led.run}
+  for chk in wifi nebula lighthouse registry ddns system; do
+    grep -q "''${chk}:" ${cfg.services.uz801-led.run}
+  done
+  ! grep -iq 'bash' ${cfg.system.build.manifest}
 
   # uz801-0 separate strict lighthouse+relay instance (10.77.0.10/24, TUN nebula.lh, outbound=[])
   head -n 1 ${lhRun} | grep -qx '#!/bin/sh'
@@ -81,7 +88,7 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q '"nebula.lh"' ${regCfg}
   grep -q '"dnsPort":53' ${regCfg} || grep -q '"dnsPort": 53' ${regCfg}
   grep -q '"localDnsPort":53' ${regCfg} || grep -q '"localDnsPort": 53' ${regCfg}
-  grep -q '"lighthouse-uz801-0.mycelium.nebula.johnrinehart.dev"' ${regCfg}
+  grep -q '"lighthouse-uz801.mycelium.nebula.johnrinehart.dev"' ${regCfg}
   grep -q '"/state/secrets/nebula-registry-tls-cert"' ${regCfg}
   grep -q '"/state/secrets/nebula-registry-tls-key"' ${regCfg}
   grep -q '"/sbin/dbclient"' ${regCfg}

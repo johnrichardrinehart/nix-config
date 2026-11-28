@@ -11,6 +11,8 @@ inputs: {
         "mbp-apple-silicon-qemu-vm.nix"
         "nixos-installer-boot.nix"
         "provision-mac.nix"
+        "psi.nix"
+        "rmux-deck.nix"
         "secretspec"
         "serial-provisioner.nix"
         "shotedit"
