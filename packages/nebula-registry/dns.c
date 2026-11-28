@@ -285,6 +285,15 @@ size_t nr_dns_answer(const uint8_t *pkt, size_t pkt_len, const nr_zone *zone, co
 							n_found++;
 					}
 					have_found = true;
+				} else {
+					for (int j = 0; j < zone->n_statics; j++) {
+						if (strcmp(zone->statics[j].label, label) == 0) {
+							snprintf(found_ips[0], 64, "%s", zone->statics[j].address);
+							n_found = 1;
+							have_found = true;
+							break;
+						}
+					}
 				}
 			}
 		}

@@ -13,6 +13,7 @@
 #define NR_MAX_ALIASES 8
 #define NR_MAX_UPSTREAMS 8
 #define NR_MAX_EXTRA_CERTS 16
+#define NR_MAX_STATIC_RECORDS 16
 #define NR_MAX_ACTION_BODY 4096
 #define NR_DNS_TTL 60
 #define NR_PERIODIC_FLUSH_SEC 300.0
@@ -98,11 +99,18 @@ typedef struct {
 } nr_registry;
 
 typedef struct {
+	char label[64];
+	char address[64];
+} nr_static_record;
+
+typedef struct {
 	char domain[256];
 	char address[64];
 	char site[256];
 	char aliases[NR_MAX_ALIASES][256];
 	int n_aliases;
+	nr_static_record statics[NR_MAX_STATIC_RECORDS];
+	int n_statics;
 } nr_zone;
 
 typedef struct {
@@ -123,6 +131,7 @@ typedef struct {
 typedef struct {
 	char name[64];
 	char address[64];
+	char iface[32];
 	int console_port;
 	int dns_port;
 	char domain[256];
@@ -131,6 +140,8 @@ typedef struct {
 	int n_aliases;
 	char admin_groups[NR_MAX_GROUPS][64];
 	int n_admin_groups;
+	nr_static_record statics[NR_MAX_STATIC_RECORDS];
+	int n_statics;
 } nr_net_config;
 
 typedef struct {

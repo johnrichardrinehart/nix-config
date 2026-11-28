@@ -215,12 +215,21 @@ static void test_dns_answers(void) {
 	snprintf(z.site, sizeof(z.site), "lighthouse.mycelium.nebula.johnrinehart.dev");
 	snprintf(z.aliases[0], 256, "mycelium.internal");
 	z.n_aliases = 1;
+	snprintf(z.statics[0].label, 64, "lighthouse-uz801-0");
+	snprintf(z.statics[0].address, 64, "10.77.0.10");
+	z.n_statics = 1;
 
 	uint8_t q[512], resp[1024];
-	/* Peer lookup in alias zone */
-	size_t qlen = build_dns_query("framework.mycelium.internal", 1, q, sizeof(q));
-	assert(nr_dns_is_local(q, qlen, &z));
+	/* Static record lookup (secondary lighthouse) */
+	size_t qlen = build_dns_query("lighthouse-uz801-0.mycelium.internal", 1, q, sizeof(q));
 	size_t rlen = nr_dns_answer(q, qlen, &z, &reg, "mycelium", 1, resp, sizeof(resp));
+	assert(rlen > qlen && (resp[3] & 0x0F) == 0);
+	assert(resp[rlen - 4] == 10 && resp[rlen - 3] == 77 && resp[rlen - 2] == 0 && resp[rlen - 1] == 10);
+
+	/* Peer lookup in alias zone */
+	qlen = build_dns_query("framework.mycelium.internal", 1, q, sizeof(q));
+	assert(nr_dns_is_local(q, qlen, &z));
+	rlen = nr_dns_answer(q, qlen, &z, &reg, "mycelium", 1, resp, sizeof(resp));
 	assert(rlen > qlen);
 	assert((resp[3] & 0x0F) == 0); /* NOERROR */
 	assert(((resp[6] << 8) | resp[7]) == 1); /* ANCOUNT = 1 */

@@ -46,7 +46,6 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q 'port: 0' ${nebulaCfg}
   grep -q 'nebula-lighthouse.johnrinehart.dev:4242' ${nebulaCfg}
   grep -q '127.0.0.1:4242' ${nebulaCfg}
-  grep -q "port: '443'" ${nebulaCfg} || grep -q 'port: "443"' ${nebulaCfg}
   grep -q '/state/secrets/nebula-ca' ${nebulaCfg}
   grep -q '/state/secrets/nebula-cert' ${nebulaCfg}
   grep -q '/state/secrets/nebula-key' ${nebulaCfg}
@@ -57,26 +56,31 @@ pkgs.runCommand "mixos-mycelium-check" { } ''
   grep -q 'nebula-ca' ${cfg.sops.deployManifest}
   grep -q 'cloudflare-api-token' ${cfg.sops.deployManifest}
 
-  # uz801-0 separate headless lighthouse+relay instance (10.77.0.10/24, tun.disabled=true)
+  # uz801-0 separate strict lighthouse+relay instance (10.77.0.10/24, TUN nebula.lh, outbound=[])
   head -n 1 ${lhRun} | grep -qx '#!/bin/sh'
   grep -q '/run/nebula-lighthouse.d' ${lhRun}
+  grep -q 'metric 200' ${lhRun}
   grep -q 'am_lighthouse: true' ${lhCfg}
   grep -q 'am_relay: true' ${lhCfg}
   grep -q 'use_relays: false' ${lhCfg}
-  grep -q 'disabled: true' ${lhCfg}
+  grep -q 'disabled: false' ${lhCfg}
+  grep -q 'dev: nebula.lh' ${lhCfg}
   grep -q 'port: 4242' ${lhCfg}
-  grep -q 'inbound: \[\]' ${lhCfg}
+  grep -q "port: '443'" ${lhCfg} || grep -q 'port: "443"' ${lhCfg}
+  grep -q "port: '53'" ${lhCfg} || grep -q 'port: "53"' ${lhCfg}
   grep -q 'outbound: \[\]' ${lhCfg}
   grep -q '/state/secrets/nebula-ca' ${lhCfg}
   grep -q '/state/secrets/nebula-lighthouse-cert' ${lhCfg}
   grep -q '/state/secrets/nebula-lighthouse-key' ${lhCfg}
   ${lib.concatMapStringsSep "\n" (fp: "grep -q ${lib.escapeShellArg fp} ${lhCfg}") blocklist}
 
-  # uz801-0 C nebula-registry dashboard bound on peer TUN 10.77.0.11:443
+  # uz801-0 C nebula-registry dashboard + DNS bound on lighthouse TUN 10.77.0.10 (nebula.lh)
   head -n 1 ${regRun} | grep -qx '#!/bin/sh'
   grep -q 'nebula-registry --config /etc/nebula/registry.json' ${regRun}
-  grep -q '"10.77.0.11"' ${regCfg}
-  grep -q '"peer-uz801-0.mycelium.internal"' ${regCfg}
+  grep -q '"10.77.0.10"' ${regCfg}
+  grep -q '"nebula.lh"' ${regCfg}
+  grep -q '"dnsPort":53' ${regCfg} || grep -q '"dnsPort": 53' ${regCfg}
+  grep -q '"lighthouse-uz801-0.mycelium.nebula.johnrinehart.dev"' ${regCfg}
   grep -q '"/state/secrets/nebula-registry-tls-cert"' ${regCfg}
   grep -q '"/state/secrets/nebula-registry-tls-key"' ${regCfg}
   grep -q '"/sbin/dbclient"' ${regCfg}

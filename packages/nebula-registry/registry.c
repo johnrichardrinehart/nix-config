@@ -191,6 +191,7 @@ int nr_parse_config(const char *json_str_in, nr_app_config *out) {
 			nr_net_config *nc = &out->nets[out->n_nets++];
 			copy_str(nc->name, sizeof(nc->name), net->string);
 			copy_str(nc->address, sizeof(nc->address), json_str(net, "address"));
+			copy_str(nc->iface, sizeof(nc->iface), json_str(net, "interface"));
 			copy_str(nc->domain, sizeof(nc->domain), json_str(net, "domain"));
 			copy_str(nc->site, sizeof(nc->site), json_str(net, "site"));
 			nc->dns_port = 53;
@@ -212,6 +213,20 @@ int nr_parse_config(const char *json_str_in, nr_app_config *out) {
 				cJSON_ArrayForEach(g, admins) {
 					if (cJSON_IsString(g) && nc->n_admin_groups < NR_MAX_GROUPS)
 						copy_str(nc->admin_groups[nc->n_admin_groups++], 64, g->valuestring);
+				}
+			}
+			const cJSON *srecs = cJSON_GetObjectItemCaseSensitive(net, "staticRecords");
+			if (cJSON_IsObject(srecs)) {
+				const cJSON *sr;
+				cJSON_ArrayForEach(sr, srecs) {
+					if (cJSON_IsString(sr) && sr->string && nc->n_statics < NR_MAX_STATIC_RECORDS) {
+						char lbl[64];
+						if (nr_dns_label(sr->string, lbl, sizeof(lbl))) {
+							copy_str(nc->statics[nc->n_statics].label, 64, lbl);
+							copy_str(nc->statics[nc->n_statics].address, 64, sr->valuestring);
+							nc->n_statics++;
+						}
+					}
 				}
 			}
 		}

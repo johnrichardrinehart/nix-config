@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 
 #include "registry.h"
 
@@ -33,6 +33,9 @@
 
 #ifndef IP_FREEBIND
 #define IP_FREEBIND 15
+#endif
+#ifndef SO_BINDTODEVICE
+#define SO_BINDTODEVICE 25
 #endif
 
 static volatile sig_atomic_t g_stop = 0;
@@ -813,7 +816,7 @@ static void poll_all_networks(const nr_app_config *cfg, nr_registry *reg, uint32
 
 /* ---- Socket Setup & Single-Process poll() Loop ---- */
 
-static int bind_socket(const char *addr, int port, int socktype) {
+static int bind_socket(const char *addr, int port, int socktype, const char *iface) {
 	struct sockaddr_in sa;
 	memset(&sa, 0, sizeof(sa));
 	sa.sin_family = AF_INET;
@@ -827,6 +830,13 @@ static int bind_socket(const char *addr, int port, int socktype) {
 	int one = 1;
 	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
 	setsockopt(fd, IPPROTO_IP, IP_FREEBIND, &one, sizeof(one));
+	if (iface && iface[0]) {
+		if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, iface, (socklen_t)strlen(iface) + 1) != 0) {
+			fprintf(stderr, "nebula-registry: SO_BINDTODEVICE(%s): %s\n", iface, strerror(errno));
+			close(fd);
+			return -1;
+		}
+	}
 
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) != 0) {
 		fprintf(stderr, "nebula-registry: bind %s:%d (%s): %s\n",
@@ -893,10 +903,13 @@ int nr_run_server(const nr_app_config *cfg) {
 		zones[i].n_aliases = nc->n_aliases;
 		for (int a = 0; a < nc->n_aliases; a++)
 			snprintf(zones[i].aliases[a], 256, "%s", nc->aliases[a]);
+		zones[i].n_statics = nc->n_statics;
+		for (int s = 0; s < nc->n_statics; s++)
+			zones[i].statics[s] = nc->statics[s];
 
 		if (nc->dns_port > 0) {
-			int ufd = bind_socket(nc->address, nc->dns_port, SOCK_DGRAM);
-			int tfd = bind_socket(nc->address, nc->dns_port, SOCK_STREAM);
+			int ufd = bind_socket(nc->address, nc->dns_port, SOCK_DGRAM, nc->iface);
+			int tfd = bind_socket(nc->address, nc->dns_port, SOCK_STREAM, nc->iface);
 			if (ufd < 0 || tfd < 0) {
 				if (ufd >= 0) close(ufd);
 				if (tfd >= 0) close(tfd);
@@ -906,7 +919,7 @@ int nr_run_server(const nr_app_config *cfg) {
 			slots[n_slots++] = (listen_slot){.fd = tfd, .kind = SOCK_DNS_TCP, .net_idx = i};
 		}
 		if (tls && cfg->tls.port > 0) {
-			int hfd = bind_socket(nc->address, cfg->tls.port, SOCK_STREAM);
+			int hfd = bind_socket(nc->address, cfg->tls.port, SOCK_STREAM, nc->iface);
 			if (hfd < 0)
 				goto fail;
 			slots[n_slots++] = (listen_slot){.fd = hfd, .kind = SOCK_HTTPS, .net_idx = i};

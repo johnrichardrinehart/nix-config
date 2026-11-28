@@ -13,7 +13,12 @@ in
           enable = lib.mkEnableOption "per-link DNS routing for this Nebula network";
           server = lib.mkOption {
             type = lib.types.str;
-            description = "DNS server address on this Nebula network.";
+            description = "Primary DNS server address on this Nebula network.";
+          };
+          extraServers = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ ];
+            description = "Additional DNS server addresses on this Nebula network.";
           };
           domains = lib.mkOption {
             type = lib.types.listOf lib.types.str;
@@ -32,6 +37,7 @@ in
         configured = config.services.nebula.networks.${name}.tun.device;
         device = if configured != null then configured else "nebula.${name}";
         resolvectl = "${config.systemd.package}/bin/resolvectl";
+        servers = lib.escapeShellArgs ([ net.dns.server ] ++ net.dns.extraServers);
         domains = lib.escapeShellArgs (map (domain: "~${domain}") net.dns.domains);
       in
       lib.nameValuePair "nebula@${name}" {
@@ -40,7 +46,7 @@ in
         # Resolved drops link settings when Nebula removes its interface.
         # The privileged commands restore them after each interface creation.
         serviceConfig.ExecStartPost = [
-          "+${resolvectl} dns ${device} ${net.dns.server}"
+          "+${resolvectl} dns ${device} ${servers}"
           "+${resolvectl} domain ${device} ${domains}"
           "+${resolvectl} default-route ${device} false"
         ];

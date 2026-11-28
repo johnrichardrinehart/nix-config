@@ -40,7 +40,12 @@ let
       inherit (cfg.tls) extraCertificates;
     };
     networks = lib.mapAttrs (name: net: {
-      inherit (net) address consolePort adminGroups;
+      inherit (net)
+        address
+        consolePort
+        adminGroups
+        staticRecords
+        ;
       domain = zone name;
       inherit (net) aliases;
       site = site name;
@@ -128,6 +133,11 @@ in
                 restore peers from the HTTPS view. Empty makes the view
                 read-only.
               '';
+            };
+            staticRecords = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              default = { };
+              description = "Static DNS label-to-IPv4 records served alongside live Nebula peers.";
             };
           };
         }

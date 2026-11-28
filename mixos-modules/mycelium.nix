@@ -37,6 +37,21 @@ let
       proto = "tcp";
       cidr = "${lh.address}/32";
     }
+    {
+      port = "53";
+      proto = "udp";
+      cidr = "${lh.address}/32";
+    }
+    {
+      port = "53";
+      proto = "tcp";
+      cidr = "${lh.address}/32";
+    }
+    {
+      port = "443";
+      proto = "tcp";
+      cidr = "${lh.address}/32";
+    }
   ]) cfg.extraLighthouses;
   portRules = lib.types.listOf (
     lib.types.submodule {
@@ -107,27 +122,7 @@ let
         udp_timeout = "3m";
         default_timeout = "10m";
       };
-      inbound = peerRules (
-        cfg.firewall.inbound
-        ++ lib.optionals regCfg.enable (
-          [
-            {
-              port = toString regCfg.httpsPort;
-              proto = "tcp";
-            }
-          ]
-          ++ lib.optionals (regCfg.dnsPort > 0) [
-            {
-              port = toString regCfg.dnsPort;
-              proto = "udp";
-            }
-            {
-              port = toString regCfg.dnsPort;
-              proto = "tcp";
-            }
-          ]
-        )
-      );
+      inbound = peerRules cfg.firewall.inbound;
       outbound =
         if cfg.role == "lighthouse" then
           [ ]
@@ -226,12 +221,14 @@ let
     networks.mycelium = {
       inherit (regCfg)
         address
+        interface
         consolePort
         dnsPort
         domain
         aliases
         site
         adminGroups
+        staticRecords
         ;
     };
   };
@@ -268,12 +265,18 @@ let
     ''}
     while [ ! -r ${lib.escapeShellArg regCfg.tls.certFile} ] \
        || [ ! -r ${lib.escapeShellArg regCfg.tls.keyFile} ] \
-       || [ ! -r ${regStateDir}/client_key ]; do
+       || [ ! -r ${regStateDir}/client_key ] \
+       ${
+         lib.optionalString (
+           regCfg.interface != ""
+         ) "|| ! ip link show ${lib.escapeShellArg regCfg.interface} >/dev/null 2>&1"
+       }; do
       sleep 1
     done
     exec ${regPackage}/bin/nebula-registry --config /etc/nebula/registry.json
   '';
 
+  lhTunDev = "nebula.lh";
   lhServiceConfig = nebulaFormat.generate "nebula-lighthouse.yml" {
     pki = {
       inherit (lhSvc) ca cert key;
@@ -302,11 +305,23 @@ let
       connection_alive_interval = 2;
       pending_deletion_interval = 3;
     };
-    # Headless lighthouse/relay: no TUN interface so it never conflicts with
-    # the host's peer TUN route on 10.77.0.0/24.
-    tun = {
-      disabled = true;
-    };
+    # When the peer registry is enabled on the lighthouse, open a dedicated
+    # lighthouse TUN (nebula.lh) so peers reach HTTPS/DNS on the lighthouse's
+    # own overlay IP rather than the colocated peer identity.
+    tun =
+      if regCfg.enable then
+        {
+          disabled = false;
+          dev = lhTunDev;
+          drop_local_broadcast = false;
+          drop_multicast = false;
+          tx_queue = 500;
+          mtu = 1300;
+        }
+      else
+        {
+          disabled = true;
+        };
     logging = {
       level = "info";
       format = "text";
@@ -319,10 +334,53 @@ let
         udp_timeout = "3m";
         default_timeout = "10m";
       };
-      inbound = [ ];
+      inbound = lib.optionals regCfg.enable (
+        peerRules (
+          [
+            {
+              port = "any";
+              proto = "icmp";
+            }
+            {
+              port = toString regCfg.httpsPort;
+              proto = "tcp";
+            }
+          ]
+          ++ lib.optionals (regCfg.dnsPort > 0) [
+            {
+              port = toString regCfg.dnsPort;
+              proto = "udp";
+            }
+            {
+              port = toString regCfg.dnsPort;
+              proto = "tcp";
+            }
+          ]
+        )
+      );
       outbound = [ ];
     };
   };
+
+  lhRouteMetricFix = ''
+    # Lower-priority metric on the lighthouse TUN route so general host traffic
+    # continues to originate from the colocated peer TUN (nebula.mycelium),
+    # while nebula-registry sockets bound via SO_BINDTODEVICE(${lhTunDev}) still
+    # reply cleanly through ${lhTunDev}.
+    (
+      i=0
+      while [ "$i" -lt 40 ]; do
+        subnet=$(ip -4 route show dev ${lhTunDev} 2>/dev/null | awk 'NR==1 {print $1}')
+        if [ -n "$subnet" ]; then
+          ip route replace "$subnet" dev ${lhTunDev} src ${lib.escapeShellArg regCfg.address} metric 200 2>/dev/null || true
+          ip route del "$subnet" dev ${lhTunDev} proto kernel 2>/dev/null || true
+          break
+        fi
+        sleep 0.5
+        i=$((i + 1))
+      done
+    ) &
+  '';
 
   lhServiceRun = pkgs.writeScript "nebula-lighthouse-run" ''
     #!/bin/sh
@@ -340,6 +398,7 @@ let
     done
     ${lhCertGuard lhSvc.cert}
     ${lib.optionalString regCfg.enable consolePrepScript}
+    ${lib.optionalString regCfg.enable lhRouteMetricFix}
     exec ${config.uz801.nebula.package}/bin/nebula -config ${
       if regCfg.enable then "/run/nebula-lighthouse.d" else "/etc/nebula/lighthouse.yml"
     }
@@ -480,7 +539,13 @@ in
 
     extraLighthouses = lib.mkOption {
       type = lib.types.listOf extraLighthouseType;
-      default = [ ];
+      default = [
+        {
+          address = "10.77.0.10";
+          endpoint = "uz801-0.nebula.johnrinehart.dev:4242";
+          relay = true;
+        }
+      ];
       description = "Additional Mycelium lighthouses contacted by peers.";
     };
 
@@ -546,7 +611,19 @@ in
 
       address = lib.mkOption {
         type = lib.types.str;
-        description = "Overlay IPv4 address on this host's TUN interface to bind HTTPS (and optional DNS).";
+        description = "Overlay IPv4 address of the lighthouse TUN interface to bind HTTPS and DNS.";
+      };
+
+      interface = lib.mkOption {
+        type = lib.types.str;
+        default = lhTunDev;
+        description = "Network interface bound via SO_BINDTODEVICE so replies leave via the lighthouse TUN.";
+      };
+
+      staticRecords = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
+        description = "Static DNS label-to-IPv4 records served alongside live Nebula peers.";
       };
 
       site = lib.mkOption {

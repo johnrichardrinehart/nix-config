@@ -34,6 +34,7 @@ let
       enable = true;
       peerGroup = "workstation";
       lighthouse.address = "10.88.0.1";
+      extraLighthouses = [ ];
       firewall = {
         inbound = [
           {
@@ -180,6 +181,7 @@ pkgs.runCommand "mycelium-module"
         'peer': ('10.77.0.2', {'peer'}),
         'workstation': ('10.88.0.2', {'workstation'}),
         'lighthouse': ('10.77.0.1', set()),
+        'extra-lighthouse': ('10.77.0.10', set()),
         'custom-lighthouse': ('10.88.0.1', set()),
         'stranger': ('10.77.0.3', set()),
     }
@@ -201,11 +203,11 @@ pkgs.runCommand "mycelium-module"
 
     def peer_policy(direction, identity, proto, port, *, custom=False):
         group = 'workstation' if custom else 'peer'
-        lighthouse = 'custom-lighthouse' if custom else 'lighthouse'
+        lighthouses = {'custom-lighthouse'} if custom else {'lighthouse', 'extra-lighthouse'}
         if direction == 'inbound':
             paths = [('udp', 5353), ('tcp', 8080)] if custom else [('tcp', 22)]
             return identity == group and ((not custom and proto == 'icmp') or (proto, port) in paths)
-        if identity == lighthouse:
+        if identity in lighthouses:
             return proto == 'icmp' or (proto, port) in [('tcp', 22), ('udp', 53), ('tcp', 53), ('tcp', 443)]
         ports = [22, 2222, 8022, 443] if custom else [22]
         return identity == group and (proto == 'icmp' or (proto == 'tcp' and port in ports))

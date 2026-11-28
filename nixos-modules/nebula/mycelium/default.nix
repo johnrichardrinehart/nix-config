@@ -32,6 +32,21 @@ let
       proto = "tcp";
       cidr = "${lh.address}/32";
     }
+    {
+      port = "53";
+      proto = "udp";
+      cidr = "${lh.address}/32";
+    }
+    {
+      port = "53";
+      proto = "tcp";
+      cidr = "${lh.address}/32";
+    }
+    {
+      port = "443";
+      proto = "tcp";
+      cidr = "${lh.address}/32";
+    }
   ]) cfg.extraLighthouses;
   portRules = lib.types.listOf (
     lib.types.submodule {
@@ -113,6 +128,11 @@ in
       type = lib.types.listOf (
         lib.types.submodule {
           options = {
+            name = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Optional DNS label for this secondary lighthouse in the Mycelium zones.";
+            };
             address = lib.mkOption {
               type = lib.types.str;
               description = "Secondary lighthouse overlay IPv4 address.";
@@ -129,7 +149,14 @@ in
           };
         }
       );
-      default = [ ];
+      default = [
+        {
+          name = "lighthouse-uz801-0";
+          address = "10.77.0.10";
+          endpoint = "uz801-0.nebula.johnrinehart.dev:4242";
+          relay = true;
+        }
+      ];
       description = "Additional Mycelium lighthouses contacted by peers.";
     };
     firewall = {
@@ -185,6 +212,16 @@ in
         type = lib.types.listOf lib.types.str;
         default = [ ];
         description = "Resolvers for DNS queries outside the private Mycelium zones.";
+      };
+      staticRecords = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = builtins.listToAttrs (
+          map (lh: {
+            inherit (lh) name;
+            value = lh.address;
+          }) (builtins.filter (lh: lh.name != null) cfg.extraLighthouses)
+        );
+        description = "Static DNS label-to-IPv4 records served alongside live peers (defaults to named extraLighthouses).";
       };
       acme = {
         dnsProvider = lib.mkOption {
@@ -303,11 +340,21 @@ in
         dev.johnrinehart.nebula.networks.${network}.dns = {
           enable = true;
           server = lighthouse;
+          extraServers = map (lh: lh.address) cfg.extraLighthouses;
           domains = [
             "mycelium.nebula.johnrinehart.dev"
             "mycelium.internal"
           ];
         };
+        networking.hosts = builtins.listToAttrs (
+          map (lh: {
+            name = lh.address;
+            value = [
+              "${lh.name}.mycelium.internal"
+              "${lh.name}.mycelium.nebula.johnrinehart.dev"
+            ];
+          }) (builtins.filter (lh: lh.name != null) cfg.extraLighthouses)
+        );
       })
       (lib.mkIf (cfg.role == "lighthouse") {
         services.nebula.networks.${network} = {
@@ -339,7 +386,7 @@ in
           inherit (cfg.registry) acme upstreamResolvers;
           networks.${network} = {
             address = lighthouse;
-            inherit (cfg.registry) consolePort adminGroups;
+            inherit (cfg.registry) consolePort adminGroups staticRecords;
             aliases = [ "mycelium.internal" ];
           };
         };
