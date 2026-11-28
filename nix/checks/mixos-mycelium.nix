@@ -43,6 +43,9 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   cfg0.system.build.slotImage.name == "uz801-wifi.img"
 ) "shared fleet slotImage name mismatch: ${cfg0.system.build.slotImage.name}";
+assert lib.assertMsg (
+  cfg0.uz801.authorizedKeys == [ ]
+) "uz801 fleet must not bake static authorizedKeys (Nebula peer auth only)";
 pkgs.runCommand "mixos-mycelium-check" { } ''
   # Shared fleet image checks (identical for uz801-0 and uz801-1)
   grep -q '^uz801$' ${hostNameFile}

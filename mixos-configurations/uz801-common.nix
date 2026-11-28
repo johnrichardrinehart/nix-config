@@ -20,9 +20,7 @@ in
     hostName = "uz801";
     lte.enable = false;
     rootPassword = null;
-    authorizedKeys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ61iahx0HtGVD0qtBFIr8nTPivNxQimrqaloBazYCPK john@nixos"
-    ];
+    authorizedKeys = [ ];
     ntp.servers = [
       "time.cloudflare.com"
       "pool.ntp.org"
