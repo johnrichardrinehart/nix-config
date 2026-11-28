@@ -789,15 +789,18 @@ uses the lighthouse, also a Nebula relay, when a direct tunnel fails.
 `thinkpad_w510` (`thinkie`, `10.77.0.8/24`) uses the module defaults. It
 accepts ICMP and TCP 22 from peers and sends ICMP and SSH on TCP 22 to peers.
 
-`uz801-0` (`10.77.0.10/24`, `uz801-0.nebula.johnrinehart.dev:4242`) is a Yiming
-UZ801 v3 MixOS stick declared under `mixosConfigurations.uz801-0` using
-`mixosModules.sops`, `mixosModules.mycelium` (`role = "lighthouse"`,
-`relay.enable = true`, strict empty outbound rules), and
-`nixos-uz801` flake input. Its declarative Nebula config lives at
-`/etc/nebula/config.yml`; its Nebula credentials (`nebula-ca`, `nebula-cert`,
-`nebula-key`) and Cloudflare API token (`cloudflare-api-token`) live encrypted
-in `secrets/uz801-0.yaml` and are decrypted into `/run/secrets/` at boot using
-the stick's persistent age key at `/state/sops/age-key.txt`. `uz801-cf-ddns`
+`uz801-0` (`10.77.0.11/24` peer + `10.77.0.10/24` headless lighthouse/relay at
+`uz801-0.nebula.johnrinehart.dev:4242`) is a Yiming UZ801 v3 MixOS stick
+declared under `mixosConfigurations.uz801-0` using `mixosModules.sops`,
+`mixosModules.mycelium` (`role = "peer"`, `lighthouseService.enable = true`,
+`lighthouseService.relay.enable = true`), and `mixosModules.cloudflare-ddns`
+via the `nixos-uz801` flake input. Its peer Nebula config lives at
+`/etc/nebula/config.yml`, its headless strict lighthouse config
+(`tun.disabled = true`, no `peer` group, empty firewall rules) lives at
+`/etc/nebula/lighthouse.yml`, and its credentials (`nebula-ca`, `nebula-cert`,
+`nebula-key`, `nebula-lighthouse-cert`, `nebula-lighthouse-key`,
+`cloudflare-api-token`) live encrypted in `secrets/uz801-0.yaml` and decrypt
+into `/run/secrets/` at boot using `/state/sops/age-key.txt`. `uz801-cf-ddns`
 updates the DNS `A` record at startup, on IPv4 network changes, and every 5
 minutes.
 
